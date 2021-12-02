@@ -138,7 +138,7 @@ impl Node<0, 1> for ReadStdinIterator {
                 "_thread_control",
                 format!("thread_{}::ThreadControl", thread_id),
             )
-            .ret(def.impl_sync_stream);
+            .ret(def.impl_fallible_iterator);
         datapet_codegen::chain::fn_body(
             format!(
                 r#"

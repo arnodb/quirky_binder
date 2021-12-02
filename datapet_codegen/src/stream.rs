@@ -65,7 +65,7 @@ impl NodeStream {
     ) -> RecordDefinitionFragments {
         let prefix = format!("{}::{}::", module_prefix, self.record_type);
         let record = format!("{}Record{}", prefix, self.variant_id);
-        let impl_sync_stream = format!(
+        let impl_fallible_iterator = format!(
             "impl FallibleIterator<Item = {record}::<{{ {prefix}MAX_SIZE }}>, Error = DatapetError>",
             record = record,
             prefix = prefix
@@ -76,7 +76,7 @@ impl NodeStream {
         RecordDefinitionFragments {
             prefix,
             record,
-            impl_sync_stream,
+            impl_fallible_iterator,
             unpacked_record,
             unpacked_record_in,
             record_and_unpacked_out,
@@ -87,7 +87,7 @@ impl NodeStream {
 pub struct RecordDefinitionFragments {
     pub prefix: String,
     pub record: String,
-    pub impl_sync_stream: String,
+    pub impl_fallible_iterator: String,
     pub unpacked_record: String,
     pub unpacked_record_in: String,
     pub record_and_unpacked_out: String,

@@ -36,7 +36,7 @@ impl InPlaceFilter {
                 "#[allow(unused_mut)] mut thread_control",
                 format!("thread_{}::ThreadControl", thread.thread_id),
             )
-            .ret(def.impl_sync_stream);
+            .ret(def.impl_fallible_iterator);
         let input = thread.format_input(
             self.inputs[0].source(),
             graph.chain_customizer(),
