@@ -1,0 +1,12 @@
+[package]
+name = "datapet_support"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+derive-new = "0.5"
+fallible-iterator = "0.2"
+thiserror = "1"
+
+[dev-dependencies]
+assert_matches = "1"

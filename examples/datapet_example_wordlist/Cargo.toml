@@ -1,0 +1,13 @@
+[package]
+name = "datapet_example_wordlist"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+datapet_support = { path = "../../datapet_support" }
+fallible-iterator = "0.2"
+static_assertions = "1"
+truc_runtime = { git = "https://github.com/arnodb/truc.git" }
+
+[build-dependencies]
+datapet_codegen = { path = "../../datapet_codegen" }
