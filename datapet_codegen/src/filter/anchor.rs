@@ -41,8 +41,8 @@ impl Node<1, 1> for Anchorize {
             .new_fn(local_name)
             .vis("pub")
             .arg(
-                "thread_control",
-                format!("&mut thread_{}::ThreadControl", thread.thread_id),
+                "#[allow(unused_mut)] mut thread_control",
+                format!("thread_{}::ThreadControl", thread.thread_id),
             )
             .ret(def.impl_sync_stream);
         let input = thread.format_input(

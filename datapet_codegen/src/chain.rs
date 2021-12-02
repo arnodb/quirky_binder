@@ -212,7 +212,7 @@ impl<'a> Chain<'a> {
             let pipe_fn = scope
                 .new_fn("datapet_pipe")
                 .vis("pub")
-                .arg("thread_control", "&mut ThreadControl")
+                .arg("mut thread_control", "ThreadControl")
                 .ret(format!(
                     "impl FnOnce() -> Result<(), {error_type}>",
                     error_type = self.customizer.error_type_name(),
@@ -220,10 +220,10 @@ impl<'a> Chain<'a> {
             let input = source_thread.format_input(source, self.customizer, &mut import_scope);
             fn_body(
                 format!(
-                    r#"let tx = thread_control.output_0.take().expect("output 0");
-{input}
-let mut input = input;
-move || {{
+                    r#"move || {{
+    let tx = thread_control.output_0.take().expect("output 0");
+    {input}
+    let mut input = input;
     while let Some(record) = input.next()? {{
         tx.send(Some(record))?;
     }}
@@ -300,7 +300,7 @@ move || {{
         }
         for thread in &self.threads {
             main_fn.line(format!(
-                r#"let mut thread_control_{thread_id} = thread_{thread_id}::ThreadControl {{"#,
+                r#"let thread_control_{thread_id} = thread_{thread_id}::ThreadControl {{"#,
                 thread_id = thread.id
             ));
             if let Some(input_pipes) = &thread.input_pipes {
@@ -323,7 +323,7 @@ move || {{
             }
             main_fn.line("};");
             main_fn.line(format!(
-                "let join_{thread_id} = std::thread::spawn({thread_main}(&mut thread_control_{thread_id}));",
+                "let join_{thread_id} = std::thread::spawn({thread_main}(thread_control_{thread_id}));",
                 thread_id = thread.id,
                 thread_main = thread.main.as_ref().expect("main"),
             ));

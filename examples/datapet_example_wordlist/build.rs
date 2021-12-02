@@ -50,8 +50,8 @@ impl Node<0, 1> for ReadStdin {
             .new_fn(local_name)
             .vis("pub")
             .arg(
-                "thread_control",
-                format!("&mut thread_{}::ThreadControl", thread_id),
+                "mut thread_control",
+                format!("thread_{}::ThreadControl", thread_id),
             )
             .ret(format!(
                 "impl FnOnce() -> Result<(), {error_type}>",
@@ -59,8 +59,8 @@ impl Node<0, 1> for ReadStdin {
             ));
         datapet_codegen::chain::fn_body(
             format!(
-                r#"let tx = thread_control.output_0.take().expect("output");
-move || {{
+                r#"move || {{
+    let tx = thread_control.output_0.take().expect("output");
     use std::io::BufRead;
 
     let stdin = std::io::stdin();
@@ -96,7 +96,81 @@ move || {{
 
 dyn_node!(ReadStdin);
 
-fn read_stdin(graph: &mut GraphBuilder, name: FullyQualifiedName, field: &str) -> ReadStdin {
+struct ReadStdinIterator {
+    name: FullyQualifiedName,
+    field: String,
+    outputs: [NodeStream; 1],
+}
+
+impl Node<0, 1> for ReadStdinIterator {
+    fn inputs(&self) -> &[NodeStream; 0] {
+        &[]
+    }
+
+    fn outputs(&self) -> &[NodeStream; 1] {
+        &self.outputs
+    }
+
+    fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
+        let thread_id = chain.new_thread(
+            self.name.clone(),
+            Box::new([]),
+            self.outputs.to_vec().into_boxed_slice(),
+            None,
+            false,
+            None,
+        );
+
+        let local_name = self.name.last().expect("local name");
+        let def =
+            self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
+        let scope = chain.get_or_new_module_scope(
+            self.name.iter().take(self.name.len() - 1),
+            graph.chain_customizer(),
+            thread_id,
+        );
+        let mut import_scope = ImportScope::default();
+        import_scope.add_error_type();
+        let node_fn = scope
+            .new_fn(local_name)
+            .vis("pub")
+            .arg(
+                "_thread_control",
+                format!("thread_{}::ThreadControl", thread_id),
+            )
+            .ret(def.impl_sync_stream);
+        datapet_codegen::chain::fn_body(
+            format!(
+                r#"
+    datapet_support::iterator::io::buf::ReadStdinLines::new()
+        .map(|line| {{
+            let record = {record}::<
+                {{ {prefix}MAX_SIZE }},
+            >::new(
+                {unpacked_record} {{ {field}: line.to_string().into_boxed_str() }},
+            );
+            Ok(record)
+        }})
+        .map_err(|err| DatapetError::Custom(err.to_string()))
+"#,
+                field = self.field,
+                prefix = def.prefix,
+                record = def.record,
+                unpacked_record = def.unpacked_record,
+            ),
+            node_fn,
+        );
+        import_scope.import(scope, graph.chain_customizer());
+    }
+}
+
+dyn_node!(ReadStdinIterator);
+
+fn read_stdin(
+    graph: &mut GraphBuilder,
+    name: FullyQualifiedName,
+    field: &str,
+) -> ReadStdinIterator {
     let record_type = StreamRecordType::from(name.sub("read"));
     graph.new_stream(record_type.clone());
 
@@ -110,7 +184,7 @@ fn read_stdin(graph: &mut GraphBuilder, name: FullyQualifiedName, field: &str) -
         stream.close_record_variant()
     };
 
-    ReadStdin {
+    ReadStdinIterator {
         name: name.clone(),
         field: field.to_string(),
         outputs: [NodeStream::new(

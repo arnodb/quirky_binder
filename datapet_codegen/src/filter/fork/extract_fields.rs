@@ -47,15 +47,15 @@ impl Node<1, 2> for ExtractFields {
             .new_fn(local_name)
             .vis("pub")
             .arg(
-                "thread_control",
-                format!("&mut thread_{}::ThreadControl", thread_id),
+                "mut thread_control",
+                format!("thread_{}::ThreadControl", thread_id),
             )
             .ret("impl FnOnce() -> Result<(), DatapetError>");
         crate::chain::fn_body(
-            r#"let rx = thread_control.input_0.take().expect("input 0");
-let tx_0 = thread_control.output_0.take().expect("output 0");
-let tx_1 = thread_control.output_1.take().expect("output 1");
-move || {
+            r#"move || {
+    let rx = thread_control.input_0.take().expect("input 0");
+    let tx_0 = thread_control.output_0.take().expect("output 0");
+    let tx_1 = thread_control.output_1.take().expect("output 1");
     while let Some(record) = rx.recv()? {"#,
             node_fn,
         );

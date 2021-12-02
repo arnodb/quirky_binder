@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 derive-new = "0.5"
 fallible-iterator = "0.2"
+lazy_static = "1"
 thiserror = "1"
 
 [dev-dependencies]

@@ -4,6 +4,8 @@ extern crate assert_matches;
 #[macro_use]
 extern crate derive_new;
 #[macro_use]
+extern crate lazy_static;
+#[macro_use]
 extern crate thiserror;
 
 pub mod iterator;
