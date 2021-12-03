@@ -1,0 +1,15 @@
+[package]
+name = "datapet_example_index_first_char"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+datapet_support = { path = "../../datapet_support" }
+derive-new = "0.5"
+fallible-iterator = "0.2"
+itertools = "0.10"
+static_assertions = "1"
+truc_runtime = { git = "https://github.com/arnodb/truc.git" }
+
+[build-dependencies]
+datapet_codegen = { path = "../../datapet_codegen" }

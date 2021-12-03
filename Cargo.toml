@@ -2,5 +2,6 @@
 members = [
     "datapet_codegen",
     "datapet_support",
-    "examples/datapet_example_wordlist"
+    "examples/datapet_example_index_first_char",
+    "examples/datapet_example_wordlist",
 ]
