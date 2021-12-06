@@ -58,15 +58,12 @@ input
     .map(move |record| {{
         let anchor = seq;
         seq = anchor + 1;
-        Ok({record}::<
-            {{ {prefix}MAX_SIZE }},
-        >::from((
+        Ok({record}::from((
             record,
             {unpacked_record_in} {{ {anchor_field}: datapet_support::AnchorId::new(anchor) }},
         )))
     }})"#,
                 input = input,
-                prefix = def.prefix,
                 record = def.record,
                 unpacked_record_in = def.unpacked_record_in,
                 anchor_field = self.anchor_field,

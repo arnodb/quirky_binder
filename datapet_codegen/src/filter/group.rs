@@ -167,7 +167,7 @@ pub fn group(
             rs_field,
             DatumDefinitionOverride {
                 type_name: Some(format!(
-                    "Vec<{module_name}::Record{rs_variant_id}<{{ {module_name}::MAX_SIZE }}>>",
+                    "Vec<{module_name}::Record{rs_variant_id}>",
                     module_name = module_name,
                     rs_variant_id = rs_variant_id,
                 )),

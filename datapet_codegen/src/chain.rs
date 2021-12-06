@@ -265,11 +265,7 @@ impl<'a> Chain<'a> {
                 let def = input_stream.definition_fragments(&self.customizer.streams_module_name);
                 thread_struct.field(
                     &format!("pub input_{}", i),
-                    format!(
-                        "Option<Receiver<Option<{record}<{{ {prefix}MAX_SIZE }}>>>>",
-                        prefix = def.prefix,
-                        record = def.record,
-                    ),
+                    format!("Option<Receiver<Option<{record}>>>", record = def.record),
                 );
             }
             if thread.output_pipes.is_some() {
@@ -278,11 +274,7 @@ impl<'a> Chain<'a> {
                         output_stream.definition_fragments(&self.customizer.streams_module_name);
                     thread_struct.field(
                         &format!("pub output_{}", i),
-                        format!(
-                            "Option<SyncSender<Option<{record}<{{ {prefix}MAX_SIZE }}>>>>",
-                            prefix = def.prefix,
-                            record = def.record,
-                        ),
+                        format!("Option<SyncSender<Option<{record}>>>", record = def.record),
                     );
                 }
             }

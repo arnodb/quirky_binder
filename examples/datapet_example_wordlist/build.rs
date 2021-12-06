@@ -71,9 +71,7 @@ impl Node<0, 1> for ReadStdin {
         if read > 0 {{
             let value = std::mem::take(&mut buffer);
             let value = value.trim_end_matches('\n');
-            let record = {record}::<
-                {{ {prefix}MAX_SIZE }},
-            >::new(
+            let record = {record}::new(
                 {unpacked_record} {{ {field}: value.to_string().into_boxed_str() }},
             );
             tx.send(Some(record))?;
@@ -84,7 +82,6 @@ impl Node<0, 1> for ReadStdin {
     }}
 }}"#,
                 field = self.field,
-                prefix = def.prefix,
                 record = def.record,
                 unpacked_record = def.unpacked_record,
             ),
@@ -144,9 +141,7 @@ impl Node<0, 1> for ReadStdinIterator {
                 r#"
     datapet_support::iterator::io::buf::ReadStdinLines::new()
         .map(|line| {{
-            let record = {record}::<
-                {{ {prefix}MAX_SIZE }},
-            >::new(
+            let record = {record}::new(
                 {unpacked_record} {{ {field}: line.to_string().into_boxed_str() }},
             );
             Ok(record)
@@ -154,7 +149,6 @@ impl Node<0, 1> for ReadStdinIterator {
         .map_err(|err| DatapetError::Custom(err.to_string()))
 "#,
                 field = self.field,
-                prefix = def.prefix,
                 record = def.record,
                 unpacked_record = def.unpacked_record,
             ),

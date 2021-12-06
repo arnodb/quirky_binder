@@ -5,33 +5,21 @@ pub mod streams {
 include!(concat!(env!("OUT_DIR"), "/chain.rs"));
 
 pub mod tokenize {
+    use crate::chain::streams::read_input::read::Record0 as RecordIn;
+    use crate::chain::streams::read_input::read::Record1 as RecordOut;
+    use crate::chain::streams::read_input::read::UnpackedRecord1 as UnpackedRecordOut;
     use fallible_iterator::FallibleIterator;
     use std::collections::VecDeque;
 
-    type RecordIn = crate::chain::streams::read_input::read::Record0<
-        { crate::chain::streams::read_input::read::MAX_SIZE },
-    >;
-
-    type RecordOut = crate::chain::streams::read_input::read::Record1<
-        { crate::chain::streams::read_input::read::MAX_SIZE },
-    >;
-    type UnpackedRecordOut = crate::chain::streams::read_input::read::UnpackedRecord1;
-
-    #[derive(new)]
-    pub struct Tokenize<I: FallibleIterator<Item = RecordIn, Error = E>, E> {
-        input: I,
-        #[new(default)]
-        buffer: VecDeque<Box<str>>,
-    }
-
-    impl<I: FallibleIterator<Item = RecordIn, Error = E>, E> FallibleIterator for Tokenize<I, E> {
-        type Item = RecordOut;
-        type Error = E;
-
-        fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-            self.buffer.pop_front().map_or_else(
+    pub fn tokenize<I, E>(mut input: I) -> impl FallibleIterator<Item = RecordOut, Error = E>
+    where
+        I: FallibleIterator<Item = RecordIn, Error = E>,
+    {
+        let mut buffer = VecDeque::<Box<str>>::new();
+        datapet_support::iterator::from_fn(move || {
+            buffer.pop_front().map_or_else(
                 || loop {
-                    let record_0 = if let Some(rec) = self.input.next()? {
+                    let record_0 = if let Some(rec) = input.next()? {
                         rec
                     } else {
                         return Ok(None);
@@ -39,7 +27,7 @@ pub mod tokenize {
                     let mut words = record_0.words().split_whitespace();
                     if let Some(first) = words.next() {
                         for w in words {
-                            self.buffer.push_back(w.into())
+                            buffer.push_back(w.into())
                         }
                         let first_char = first.chars().next().expect("first char");
                         return Ok(Some(RecordOut::new(UnpackedRecordOut {
@@ -53,6 +41,6 @@ pub mod tokenize {
                     Ok(Some(RecordOut::new(UnpackedRecordOut { word, first_char })))
                 },
             )
-        }
+        })
     }
 }

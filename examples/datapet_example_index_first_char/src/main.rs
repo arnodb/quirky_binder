@@ -1,6 +1,4 @@
 #[macro_use]
-extern crate derive_new;
-#[macro_use]
 extern crate static_assertions;
 
 #[allow(dead_code)]

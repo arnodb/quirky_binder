@@ -87,9 +87,7 @@ impl Node<1, 2> for ExtractFields {
             .join(", ");
         crate::chain::fn_body(
             format!(
-                r#"        let record_1 = {record_1}::<
-            {{ {prefix_1}MAX_SIZE }},
-        >::new(
+                r#"        let record_1 = {record_1}::new(
             {unpacked_record_1} {{ {fields} }}
         );
         tx_0.send(Some(record))?;
@@ -99,7 +97,6 @@ impl Node<1, 2> for ExtractFields {
     tx_1.send(None)?;
     Ok(())
 }}"#,
-                prefix_1 = def_1.prefix,
                 record_1 = def_1.record,
                 unpacked_record_1 = def_1.unpacked_record,
                 fields = fields,

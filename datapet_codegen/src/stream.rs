@@ -66,15 +66,13 @@ impl NodeStream {
         let prefix = format!("{}::{}::", module_prefix, self.record_type);
         let record = format!("{}Record{}", prefix, self.variant_id);
         let impl_fallible_iterator = format!(
-            "impl FallibleIterator<Item = {record}::<{{ {prefix}MAX_SIZE }}>, Error = DatapetError>",
+            "impl FallibleIterator<Item = {record}, Error = DatapetError>",
             record = record,
-            prefix = prefix
         );
         let unpacked_record = format!("{}UnpackedRecord{}", prefix, self.variant_id);
         let unpacked_record_in = format!("{}UnpackedRecordIn{}", prefix, self.variant_id);
         let record_and_unpacked_out = format!("{}Record{}AndUnpackedOut", prefix, self.variant_id);
         RecordDefinitionFragments {
-            prefix,
             record,
             impl_fallible_iterator,
             unpacked_record,
@@ -85,7 +83,6 @@ impl NodeStream {
 }
 
 pub struct RecordDefinitionFragments {
-    pub prefix: String,
     pub record: String,
     pub impl_fallible_iterator: String,
     pub unpacked_record: String,

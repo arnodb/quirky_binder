@@ -56,9 +56,7 @@ impl Node<0, 1> for ReadStdinIterator {
                 r#"
     datapet_support::iterator::io::buf::ReadStdinLines::new()
         .map(|line| {{
-            let record = {record}::<
-                {{ {prefix}MAX_SIZE }},
-            >::new(
+            let record = {record}::new(
                 {unpacked_record} {{ {field}: line.to_string().into_boxed_str() }},
             );
             Ok(record)
@@ -66,7 +64,6 @@ impl Node<0, 1> for ReadStdinIterator {
         .map_err(|err| DatapetError::Custom(err.to_string()))
 "#,
                 field = self.field,
-                prefix = def.prefix,
                 record = def.record,
                 unpacked_record = def.unpacked_record,
             ),
@@ -151,7 +148,7 @@ impl Node<1, 1> for Tokenize {
         datapet_codegen::chain::fn_body(
             format!(
                 r#"{input}
-crate::chain::tokenize::Tokenize::new(input)"#,
+crate::chain::tokenize::tokenize(input)"#,
                 input = input,
             ),
             node_fn,
