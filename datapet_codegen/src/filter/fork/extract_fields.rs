@@ -5,7 +5,6 @@ use crate::{
     stream::{NodeStream, NodeStreamSource, StreamRecordType},
     support::FullyQualifiedName,
 };
-use itertools::Itertools;
 
 pub struct ExtractFields {
     name: FullyQualifiedName,
@@ -25,7 +24,6 @@ impl Node<1, 2> for ExtractFields {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let input_pipe = chain.pipe_single_thread(self.inputs[0].source());
 
-        let local_name = self.name.last().expect("local name");
         let thread_id = chain.new_thread(
             self.name.clone(),
             self.inputs.to_vec().into_boxed_slice(),
@@ -38,71 +36,69 @@ impl Node<1, 2> for ExtractFields {
             false,
             Some(self.name.clone()),
         );
+
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
             graph.chain_customizer(),
             thread_id,
         );
-        let node_fn = scope
-            .new_fn(local_name)
-            .vis("pub")
-            .arg(
-                "mut thread_control",
-                format!("thread_{}::ThreadControl", thread_id),
-            )
-            .ret("impl FnOnce() -> Result<(), DatapetError>");
-        crate::chain::fn_body(
-            r#"move || {
-    let rx = thread_control.input_0.take().expect("input 0");
-    let tx_0 = thread_control.output_0.take().expect("output 0");
-    let tx_1 = thread_control.output_1.take().expect("output 1");
-    while let Some(record) = rx.recv()? {"#,
-            node_fn,
-        );
-        let record_definition = &graph.record_definitions()[self.outputs[1].record_type()];
-        let variant = record_definition
-            .get_variant(self.outputs[1].variant_id())
-            .unwrap_or_else(|| panic!("variant #{}", self.outputs[1].variant_id()));
-        for d in variant.data() {
-            let datum = record_definition
-                .get_datum_definition(d)
-                .unwrap_or_else(|| panic!("datum #{}", d));
-            node_fn.line(format!(
-                "        let {name} = {deref}record.{name}(){clone};",
-                name = datum.name(),
-                deref = if datum.allow_uninit() { "*" } else { "" },
-                clone = if datum.allow_uninit() { "" } else { ".clone()" },
-            ));
-        }
-        let def_1 =
-            self.outputs[1].definition_fragments(&graph.chain_customizer().streams_module_name);
-        let fields = variant
-            .data()
-            .map(|d| {
+
+        {
+            let fn_name = format_ident!("{}", **self.name.last().expect("local name"));
+            let thread_module = format_ident!("thread_{}", thread_id);
+            let error_type = graph.chain_customizer().error_type.to_name();
+
+            let record_definition = &graph.record_definitions()[self.outputs[1].record_type()];
+            let variant = record_definition
+                .get_variant(self.outputs[1].variant_id())
+                .unwrap_or_else(|| panic!("variant #{}", self.outputs[1].variant_id()));
+            let datum_clones = variant.data().map(|d| {
                 let datum = record_definition
                     .get_datum_definition(d)
                     .unwrap_or_else(|| panic!("datum #{}", d));
-                datum.name()
-            })
-            .join(", ");
-        crate::chain::fn_body(
-            format!(
-                r#"        let record_1 = {record_1}::new(
-            {unpacked_record_1} {{ {fields} }}
-        );
-        tx_0.send(Some(record))?;
-        tx_1.send(Some(record_1))?;
-    }}
-    tx_0.send(None)?;
-    tx_1.send(None)?;
-    Ok(())
-}}"#,
-                record_1 = def_1.record,
-                unpacked_record_1 = def_1.unpacked_record,
-                fields = fields,
-            ),
-            node_fn,
-        );
+                syn::parse_str::<syn::Stmt>(&format!(
+                    "let {name} = {deref}record.{name}(){clone};",
+                    name = datum.name(),
+                    deref = if datum.allow_uninit() { "*" } else { "" },
+                    clone = if datum.allow_uninit() { "" } else { ".clone()" },
+                ))
+                .expect("clone")
+            });
+
+            let def_output_1 =
+                self.outputs[1].definition_fragments(&graph.chain_customizer().streams_module_name);
+            let output_record_1 = def_output_1.record();
+            let output_unpacked_record_1 = def_output_1.unpacked_record();
+
+            let fields = variant.data().map(|d| {
+                let datum = record_definition
+                    .get_datum_definition(d)
+                    .unwrap_or_else(|| panic!("datum #{}", d));
+                format_ident!("{}", datum.name())
+            });
+
+            let fn_def = quote! {
+                pub fn #fn_name(mut thread_control: #thread_module::ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
+                    move || {
+                        let rx = thread_control.input_0.take().expect("input 0");
+                        let tx_0 = thread_control.output_0.take().expect("output 0");
+                        let tx_1 = thread_control.output_1.take().expect("output 1");
+                        while let Some(record) = rx.recv()? {
+                            #(#datum_clones)*
+                            let record_1 = #output_record_1::new(
+                                #output_unpacked_record_1 { #(#fields),* }
+                            );
+                            tx_0.send(Some(record))?;
+                            tx_1.send(Some(record_1))?;
+                        }
+                        tx_0.send(None)?;
+                        tx_1.send(None)?;
+                        Ok(())
+                    }
+                }
+            };
+            scope.raw(&fn_def.to_string());
+        }
     }
 }
 

@@ -3,9 +3,8 @@ use crate::{
     dyn_node,
     graph::{DynNode, Graph, GraphBuilder, Node},
     stream::{NodeStream, NodeStreamSource},
-    support::FullyQualifiedName,
+    support::{fields_cmp, FullyQualifiedName},
 };
-use std::fmt::Write;
 
 pub struct Sort {
     name: FullyQualifiedName,
@@ -26,9 +25,6 @@ impl Node<1, 1> for Sort {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread = chain.get_thread_id_and_module_by_source(self.inputs[0].source(), &self.name);
 
-        let local_name = self.name.last().expect("local name");
-        let def =
-            self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
             graph.chain_customizer(),
@@ -36,41 +32,36 @@ impl Node<1, 1> for Sort {
         );
         let mut import_scope = ImportScope::default();
         import_scope.add_import_with_error_type("fallible_iterator", "FallibleIterator");
-        let node_fn = scope
-            .new_fn(local_name)
-            .vis("pub")
-            .arg(
-                "#[allow(unused_mut)] mut thread_control",
-                format!("thread_{}::ThreadControl", thread.thread_id),
-            )
-            .ret(def.impl_fallible_iterator);
-        let input = thread.format_input(
-            self.inputs[0].source(),
-            graph.chain_customizer(),
-            &mut import_scope,
-        );
-        let mut cmp = "|a, b| ".to_string();
-        for (i, field) in self.fields.iter().enumerate() {
-            if i > 0 {
-                write!(cmp, "\n         .then_with(|| ").expect("write");
-            }
-            write!(cmp, "a.{field}().cmp(b.{field}())", field = field).expect("write");
-            if i > 0 {
-                write!(cmp, ")").expect("write");
-            }
+
+        {
+            let fn_name = format_ident!("{}", **self.name.last().expect("local name"));
+            let thread_module = format_ident!("thread_{}", thread.thread_id);
+            let error_type = graph.chain_customizer().error_type.to_name();
+
+            let def =
+                self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
+            let record = def.record();
+
+            let input = thread.format_input(
+                self.inputs[0].source(),
+                graph.chain_customizer(),
+                &mut import_scope,
+            );
+
+            let cmp = fields_cmp(self.fields.iter().map(String::as_str));
+
+            let fn_def = quote! {
+                  pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
+                      #input
+                      datapet_support::iterator::sort::Sort::new(
+                          input,
+                          #cmp,
+                      )
+                  }
+            };
+            scope.raw(&fn_def.to_string());
         }
-        crate::chain::fn_body(
-            format!(
-                r#"{input}
-datapet_support::iterator::sort::Sort::new(
-    input,
-    {cmp},
-)"#,
-                input = input,
-                cmp = cmp,
-            ),
-            node_fn,
-        );
+
         import_scope.import(scope, graph.chain_customizer());
 
         chain.update_thread_single_stream(thread.thread_id, &self.outputs[0]);

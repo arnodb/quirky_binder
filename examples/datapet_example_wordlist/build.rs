@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate quote;
+
 use datapet_codegen::{
     chain::{Chain, ChainCustomizer, ImportScope},
     dyn_node,
@@ -36,9 +39,6 @@ impl Node<0, 1> for ReadStdin {
             Some(self.name.clone()),
         );
 
-        let local_name = self.name.last().expect("local name");
-        let def =
-            self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
             graph.chain_customizer(),
@@ -46,47 +46,48 @@ impl Node<0, 1> for ReadStdin {
         );
         let mut import_scope = ImportScope::default();
         import_scope.add_error_type();
-        let node_fn = scope
-            .new_fn(local_name)
-            .vis("pub")
-            .arg(
-                "mut thread_control",
-                format!("thread_{}::ThreadControl", thread_id),
-            )
-            .ret(format!(
-                "impl FnOnce() -> Result<(), {error_type}>",
-                error_type = graph.chain_customizer().error_type_name()
-            ));
-        datapet_codegen::chain::fn_body(
-            format!(
-                r#"move || {{
-    let tx = thread_control.output_0.take().expect("output");
-    use std::io::BufRead;
 
-    let stdin = std::io::stdin();
-    let mut input = stdin.lock();
-    let mut buffer = String::new();
-    loop {{
-        let read = input.read_line(&mut buffer).map_err(|err| DatapetError::Custom(err.to_string()))?;
-        if read > 0 {{
-            let value = std::mem::take(&mut buffer);
-            let value = value.trim_end_matches('\n');
-            let record = {record}::new(
-                {unpacked_record} {{ {field}: value.to_string().into_boxed_str() }},
-            );
-            tx.send(Some(record))?;
-        }} else {{
-            tx.send(None)?;
-            return Ok(());
-        }}
-    }}
-}}"#,
-                field = self.field,
-                record = def.record,
-                unpacked_record = def.unpacked_record,
-            ),
-            node_fn,
-        );
+        {
+            let fn_name = format_ident!("{}", **self.name.last().expect("local name"));
+            let thread_module = format_ident!("thread_{}", thread_id);
+            let error_type = graph.chain_customizer().error_type.to_name();
+
+            let def =
+                self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
+            let record = def.record();
+            let unpacked_record = def.unpacked_record();
+
+            let field = format_ident!("{}", self.field);
+
+            let fn_def = quote! {
+                pub fn #fn_name(mut thread_control: #thread_module::ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
+                    move || {
+                        let tx = thread_control.output_0.take().expect("output");
+                        use std::io::BufRead;
+
+                        let stdin = std::io::stdin();
+                        let mut input = stdin.lock();
+                        let mut buffer = String::new();
+                        loop {
+                            let read = input.read_line(&mut buffer).map_err(|err| DatapetError::Custom(err.to_string()))?;
+                            if read > 0 {
+                                let value = std::mem::take(&mut buffer);
+                                let value = value.trim_end_matches('\n');
+                                let record = #record::new(
+                                    #unpacked_record { #field: value.to_string().into_boxed_str() },
+                                );
+                                tx.send(Some(record))?;
+                            } else {
+                                tx.send(None)?;
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+            };
+            scope.raw(&fn_def.to_string());
+        }
+
         import_scope.import(scope, graph.chain_customizer());
     }
 }
@@ -118,9 +119,6 @@ impl Node<0, 1> for ReadStdinIterator {
             None,
         );
 
-        let local_name = self.name.last().expect("local name");
-        let def =
-            self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
             graph.chain_customizer(),
@@ -128,32 +126,34 @@ impl Node<0, 1> for ReadStdinIterator {
         );
         let mut import_scope = ImportScope::default();
         import_scope.add_error_type();
-        let node_fn = scope
-            .new_fn(local_name)
-            .vis("pub")
-            .arg(
-                "_thread_control",
-                format!("thread_{}::ThreadControl", thread_id),
-            )
-            .ret(def.impl_fallible_iterator);
-        datapet_codegen::chain::fn_body(
-            format!(
-                r#"
-    datapet_support::iterator::io::buf::ReadStdinLines::new()
-        .map(|line| {{
-            let record = {record}::new(
-                {unpacked_record} {{ {field}: line.to_string().into_boxed_str() }},
-            );
-            Ok(record)
-        }})
-        .map_err(|err| DatapetError::Custom(err.to_string()))
-"#,
-                field = self.field,
-                record = def.record,
-                unpacked_record = def.unpacked_record,
-            ),
-            node_fn,
-        );
+
+        {
+            let fn_name = format_ident!("{}", **self.name.last().expect("local name"));
+            let thread_module = format_ident!("thread_{}", thread_id);
+            let error_type = graph.chain_customizer().error_type.to_name();
+
+            let def =
+                self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
+            let record = def.record();
+            let unpacked_record = def.unpacked_record();
+
+            let field = format_ident!("{}", self.field);
+
+            let fn_def = quote! {
+                pub fn #fn_name(_thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
+                    datapet_support::iterator::io::buf::ReadStdinLines::new()
+                        .map(|line| {{
+                            let record = #record::new(
+                                #unpacked_record { #field: line.to_string().into_boxed_str() },
+                            );
+                            Ok(record)
+                        }})
+                    .map_err(|err| DatapetError::Custom(err.to_string()))
+                }
+            };
+            scope.raw(&fn_def.to_string());
+        }
+
         import_scope.import(scope, graph.chain_customizer());
     }
 }

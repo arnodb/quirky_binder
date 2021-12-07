@@ -4,7 +4,7 @@ use crate::{
     stream::NodeStream,
     support::FullyQualifiedName,
 };
-use codegen::Function;
+use proc_macro2::TokenStream;
 
 struct InPlaceFilter {
     name: FullyQualifiedName,
@@ -13,15 +13,9 @@ struct InPlaceFilter {
 }
 
 impl InPlaceFilter {
-    fn gen_chain<F>(&self, graph: &Graph, chain: &mut Chain, f: F)
-    where
-        F: FnOnce(&mut Function),
-    {
+    fn gen_chain(&self, graph: &Graph, chain: &mut Chain, body: TokenStream) {
         let thread = chain.get_thread_id_and_module_by_source(self.inputs[0].source(), &self.name);
 
-        let local_name = self.name.last().expect("local name");
-        let def =
-            self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
             graph.chain_customizer(),
@@ -29,34 +23,34 @@ impl InPlaceFilter {
         );
         let mut import_scope = ImportScope::default();
         import_scope.add_import_with_error_type("fallible_iterator", "FallibleIterator");
-        let node_fn = scope
-            .new_fn(local_name)
-            .vis("pub")
-            .arg(
-                "#[allow(unused_mut)] mut thread_control",
-                format!("thread_{}::ThreadControl", thread.thread_id),
-            )
-            .ret(def.impl_fallible_iterator);
-        let input = thread.format_input(
-            self.inputs[0].source(),
-            graph.chain_customizer(),
-            &mut import_scope,
-        );
-        crate::chain::fn_body(
-            format!(
-                r#"{input}
-input
-    .map(|mut record| {{"#,
-                input = input,
-            ),
-            node_fn,
-        );
-        f(node_fn);
-        crate::chain::fn_body(
-            r#"Ok(record)
-    })"#,
-            node_fn,
-        );
+
+        {
+            let fn_name = format_ident!("{}", **self.name.last().expect("local name"));
+            let thread_module = format_ident!("thread_{}", thread.thread_id);
+            let error_type = graph.chain_customizer().error_type.to_name();
+
+            let def =
+                self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
+            let record = def.record();
+
+            let input = thread.format_input(
+                self.inputs[0].source(),
+                graph.chain_customizer(),
+                &mut import_scope,
+            );
+
+            let fn_def = quote! {
+                pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
+                    #input
+                    input.map(|mut record| {
+                        #body
+                        Ok(record)
+                    })
+                }
+            };
+            scope.raw(&fn_def.to_string());
+        }
+
         import_scope.import(scope, graph.chain_customizer());
 
         chain.update_thread_single_stream(thread.thread_id, &self.outputs[0]);
@@ -74,11 +68,12 @@ pub mod string {
         graph::{Graph, Node},
         stream::NodeStream,
     };
+    use proc_macro2::TokenStream;
 
     pub struct ToLowercase {
         in_place: InPlaceFilter,
         fields: Box<[Box<str>]>,
-        string_to_type: Option<Box<str>>,
+        string_to_type: Option<TokenStream>,
     }
 
     impl Node<1, 1> for ToLowercase {
@@ -91,26 +86,19 @@ pub mod string {
         }
 
         fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-            self.in_place.gen_chain(graph, chain, |node_fn| {
-                for field in &*self.fields {
-                    crate::chain::fn_body(
-                        format!(
-                            concat!(
-                                "*record.{field}_mut() = ",
-                                "record.{field}()",
-                                ".to_lowercase(){string_to_type};"
-                            ),
-                            field = field,
-                            string_to_type = if let Some(stt) = &self.string_to_type {
-                                stt
-                            } else {
-                                ""
-                            },
-                        ),
-                        node_fn,
-                    );
-                }
-            });
+            let mut_fields = self
+                .fields
+                .iter()
+                .map(|field| format_ident!("{}_mut", **field));
+            let fields = self.fields.iter().map(|field| format_ident!("{}", **field));
+            let string_to_type = &self.string_to_type;
+            self.in_place.gen_chain(
+                graph,
+                chain,
+                quote! {
+                    #(*record.#mut_fields() = record.#fields().to_lowercase()#string_to_type;)*
+                },
+            );
         }
     }
 
@@ -166,14 +154,14 @@ pub mod string {
                 .map(Into::into)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
-            string_to_type: Some(".into_boxed_str()".to_string().into_boxed_str()),
+            string_to_type: Some(quote! {.into_boxed_str()}),
         }
     }
 
     pub struct ReverseChars {
         in_place: InPlaceFilter,
         fields: Box<[Box<str>]>,
-        string_to_type: Option<Box<str>>,
+        string_to_type: Option<TokenStream>,
     }
 
     impl Node<1, 1> for ReverseChars {
@@ -186,26 +174,19 @@ pub mod string {
         }
 
         fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-            self.in_place.gen_chain(graph, chain, |node_fn| {
-                for field in &*self.fields {
-                    crate::chain::fn_body(
-                        format!(
-                            concat!(
-                                "*record.{field}_mut() = ",
-                                "record.{field}()",
-                                ".chars().rev().collect::<String>(){string_to_type};"
-                            ),
-                            field = field,
-                            string_to_type = if let Some(stt) = &self.string_to_type {
-                                stt
-                            } else {
-                                ""
-                            },
-                        ),
-                        node_fn,
-                    );
-                }
-            });
+            let mut_fields = self
+                .fields
+                .iter()
+                .map(|field| format_ident!("{}_mut", **field));
+            let fields = self.fields.iter().map(|field| format_ident!("{}", **field));
+            let string_to_type = &self.string_to_type;
+            self.in_place.gen_chain(
+                graph,
+                chain,
+                quote! {
+                    #(*record.#mut_fields() = record.#fields().chars().rev().collect::<String>()#string_to_type;)*
+                },
+            );
         }
     }
 
@@ -261,7 +242,7 @@ pub mod string {
                 .map(Into::into)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
-            string_to_type: Some(".into_boxed_str()".to_string().into_boxed_str()),
+            string_to_type: Some(quote! {.into_boxed_str()}),
         }
     }
 }

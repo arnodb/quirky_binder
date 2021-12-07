@@ -4,6 +4,7 @@ use crate::{
 };
 use codegen::{Function, Module, Scope};
 use itertools::Itertools;
+use proc_macro2::TokenStream;
 use std::{collections::HashMap, ops::Deref};
 
 struct ChainThread {
@@ -29,23 +30,26 @@ impl ChainSourceThread {
         source_name: &NodeStreamSource,
         customizer: &ChainCustomizer,
         import_scope: &mut ImportScope,
-    ) -> String {
+    ) -> TokenStream {
         if self.pipe.is_none() {
-            format!(
-                "let input = {chain_module}::{source_name}(thread_control);",
-                chain_module = customizer.module_name,
-                source_name = source_name
-            )
+            let input = syn::parse_str::<syn::Path>(&format!(
+                "{}::{}",
+                customizer.module_name, source_name
+            ))
+            .expect("chain_module");
+            quote! {
+                let input = #input(thread_control);
+            }
         } else {
             import_scope.add_error_type();
-            format!(
-                r#"let input = {{
-    let rx = thread_control.input_{stream_index}.take().expect("input {stream_index}");
-    datapet_support::iterator::sync::mpsc::Receive::<_, {error_type}>::new(rx)
-}};"#,
-                stream_index = self.stream_index,
-                error_type = customizer.error_type,
-            )
+            let input = format_ident!("input_{}", self.stream_index);
+            let error_type = customizer.error_type.to_name();
+            quote! {
+                let input = {
+                    let rx = thread_control.#input.take().expect("input {stream_index}");
+                    datapet_support::iterator::sync::mpsc::Receive::<_, #error_type>::new(rx)
+                };
+            }
         }
     }
 }
@@ -260,24 +264,36 @@ impl<'a> Chain<'a> {
             if thread.output_pipes.is_some() && thread.output_streams.len() > 0 {
                 scope.import("std::sync::mpsc", "SyncSender");
             }
-            let thread_struct = scope.new_struct("ThreadControl").vis("pub");
-            for (i, input_stream) in thread.input_streams.iter().enumerate() {
+            let inputs = (0..thread.input_streams.len()).map(|i| format_ident!("input_{}", i));
+            let input_types = thread.input_streams.iter().map(|input_stream| {
                 let def = input_stream.definition_fragments(&self.customizer.streams_module_name);
-                thread_struct.field(
-                    &format!("pub input_{}", i),
-                    format!("Option<Receiver<Option<{record}>>>", record = def.record),
-                );
+                def.record()
+            });
+            let outputs = if thread.output_pipes.is_some() {
+                Some((0..thread.output_streams.len()).map(|i| format_ident!("output_{}", i)))
+            } else {
+                None
             }
-            if thread.output_pipes.is_some() {
-                for (i, output_stream) in thread.output_streams.iter().enumerate() {
+            .into_iter()
+            .flatten();
+            let output_types = if thread.output_pipes.is_some() {
+                Some(thread.output_streams.iter().map(|output_stream| {
                     let def =
                         output_stream.definition_fragments(&self.customizer.streams_module_name);
-                    thread_struct.field(
-                        &format!("pub output_{}", i),
-                        format!("Option<SyncSender<Option<{record}>>>", record = def.record),
-                    );
-                }
+                    def.record()
+                }))
+            } else {
+                None
             }
+            .into_iter()
+            .flatten();
+            let struct_def = quote! {
+                pub struct ThreadControl {
+                    #(pub #inputs: Option<Receiver<Option<#input_types>>>,)*
+                    #(pub #outputs: Option<SyncSender<Option<#output_types>>>,)*
+                }
+            };
+            scope.raw(&struct_def.to_string());
         }
 
         let main_fn = self.scope.new_fn("main").vis("pub").ret(format!(

@@ -100,6 +100,10 @@ impl FullyQualifiedName {
                 .into_boxed_slice(),
         )
     }
+
+    pub fn to_name(&self) -> proc_macro2::Ident {
+        format_ident!("{}", **self.last().expect("last"))
+    }
 }
 
 impl Display for FullyQualifiedName {
@@ -120,4 +124,41 @@ impl Deref for FullyQualifiedName {
     fn deref(&self) -> &Self::Target {
         &self.0
     }
+}
+
+pub fn fields_eq<'f, F>(fields: F) -> syn::Expr
+where
+    F: IntoIterator<Item = &'f str>,
+{
+    let eq = Some("|a, b| ".to_string())
+        .into_iter()
+        .chain(fields.into_iter().enumerate().map(|(i, field)| {
+            let and = if i > 0 { " && " } else { "" };
+            format!("{and}a.{field}().eq(b.{field}())", and = and, field = field)
+        }))
+        .collect::<String>();
+    syn::parse_str::<syn::Expr>(&eq).expect("eq")
+}
+
+pub fn fields_cmp<'f, F>(fields: F) -> syn::Expr
+where
+    F: IntoIterator<Item = &'f str>,
+{
+    let cmp = Some("|a, b| ".to_string())
+        .into_iter()
+        .chain(fields.into_iter().enumerate().map(|(i, field)| {
+            let (then, end_then) = if i > 0 {
+                (".then_with(|| ", ")")
+            } else {
+                ("", "")
+            };
+            format!(
+                "{then}a.{field}().cmp(b.{field}(){end_then})",
+                then = then,
+                end_then = end_then,
+                field = field
+            )
+        }))
+        .collect::<String>();
+    syn::parse_str::<syn::Expr>(&cmp).expect("cmp")
 }

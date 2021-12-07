@@ -58,34 +58,52 @@ impl NodeStream {
         }
     }
 
-    /// Hack, hopefully temporary.
-    pub fn definition_fragments(
-        &self,
-        module_prefix: &FullyQualifiedName,
-    ) -> RecordDefinitionFragments {
-        let prefix = format!("{}::{}::", module_prefix, self.record_type);
-        let record = format!("{}Record{}", prefix, self.variant_id);
-        let impl_fallible_iterator = format!(
-            "impl FallibleIterator<Item = {record}, Error = DatapetError>",
-            record = record,
-        );
-        let unpacked_record = format!("{}UnpackedRecord{}", prefix, self.variant_id);
-        let unpacked_record_in = format!("{}UnpackedRecordIn{}", prefix, self.variant_id);
-        let record_and_unpacked_out = format!("{}Record{}AndUnpackedOut", prefix, self.variant_id);
+    pub fn definition_fragments<'a>(
+        &'a self,
+        module_prefix: &'a FullyQualifiedName,
+    ) -> RecordDefinitionFragments<'a> {
         RecordDefinitionFragments {
-            record,
-            impl_fallible_iterator,
-            unpacked_record,
-            unpacked_record_in,
-            record_and_unpacked_out,
+            stream: self,
+            module_prefix,
         }
     }
 }
 
-pub struct RecordDefinitionFragments {
-    pub record: String,
-    pub impl_fallible_iterator: String,
-    pub unpacked_record: String,
-    pub unpacked_record_in: String,
-    pub record_and_unpacked_out: String,
+pub struct RecordDefinitionFragments<'a> {
+    stream: &'a NodeStream,
+    module_prefix: &'a FullyQualifiedName,
+}
+
+impl<'a> RecordDefinitionFragments<'a> {
+    pub fn record(&self) -> syn::Type {
+        syn::parse_str::<syn::Type>(&format!(
+            "{}::{}::Record{}",
+            self.module_prefix, self.stream.record_type, self.stream.variant_id
+        ))
+        .expect("record")
+    }
+
+    pub fn unpacked_record(&self) -> syn::Type {
+        syn::parse_str::<syn::Type>(&format!(
+            "{}::{}::UnpackedRecord{}",
+            self.module_prefix, self.stream.record_type, self.stream.variant_id
+        ))
+        .expect("unpacked_record")
+    }
+
+    pub fn unpacked_record_in(&self) -> syn::Type {
+        syn::parse_str::<syn::Type>(&format!(
+            "{}::{}::UnpackedRecordIn{}",
+            self.module_prefix, self.stream.record_type, self.stream.variant_id
+        ))
+        .expect("unpacked_record_in")
+    }
+
+    pub fn record_and_unpacked_out(&self) -> syn::Type {
+        syn::parse_str::<syn::Type>(&format!(
+            "{}::{}::Record{}AndUnpackedOut",
+            self.module_prefix, self.stream.record_type, self.stream.variant_id
+        ))
+        .expect("record_and_unpacked_out")
+    }
 }

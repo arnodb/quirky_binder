@@ -12,3 +12,4 @@ truc_runtime = { git = "https://github.com/arnodb/truc.git" }
 
 [build-dependencies]
 datapet_codegen = { path = "../../datapet_codegen" }
+quote = "1"

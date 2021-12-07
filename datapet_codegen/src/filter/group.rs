@@ -3,10 +3,9 @@ use crate::{
     dyn_node,
     graph::{DynNode, Graph, GraphBuilder, Node},
     stream::{NodeStream, NodeStreamSource, StreamRecordType},
-    support::FullyQualifiedName,
+    support::{fields_eq, FullyQualifiedName},
 };
 use itertools::Itertools;
-use std::fmt::Write;
 use truc::record::definition::DatumDefinitionOverride;
 
 pub struct Group {
@@ -30,14 +29,6 @@ impl Node<1, 1> for Group {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread = chain.get_thread_id_and_module_by_source(self.inputs[0].source(), &self.name);
 
-        let local_name = self.name.last().expect("local name");
-        let def_input =
-            self.inputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
-        let def =
-            self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
-        let def_rs = self
-            .rs_stream
-            .definition_fragments(&graph.chain_customizer().streams_module_name);
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
             graph.chain_customizer(),
@@ -45,79 +36,76 @@ impl Node<1, 1> for Group {
         );
         let mut import_scope = ImportScope::default();
         import_scope.add_import_with_error_type("fallible_iterator", "FallibleIterator");
-        let node_fn = scope
-            .new_fn(local_name)
-            .vis("pub")
-            .arg(
-                "#[allow(unused_mut)] mut thread_control",
-                format!("thread_{}::ThreadControl", thread.thread_id),
-            )
-            .ret(def.impl_fallible_iterator);
-        let input = thread.format_input(
-            self.inputs[0].source(),
-            graph.chain_customizer(),
-            &mut import_scope,
-        );
-        let fields = self.fields.iter().join(", ");
-        let record_definition = &graph.record_definitions()[self.outputs[0].record_type()];
-        let variant = record_definition
-            .get_variant(self.outputs[0].variant_id())
-            .unwrap_or_else(|| panic!("variant #{}", self.outputs[0].variant_id()));
-        let mut eq = "|group, rec| ".to_string();
-        for (i, datum) in variant
-            .data()
-            .filter_map(|d| {
+
+        {
+            let fn_name = format_ident!("{}", **self.name.last().expect("local name"));
+            let thread_module = format_ident!("thread_{}", thread.thread_id);
+            let error_type = graph.chain_customizer().error_type.to_name();
+
+            let def_input =
+                self.inputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
+            let def =
+                self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
+            let def_rs = self
+                .rs_stream
+                .definition_fragments(&graph.chain_customizer().streams_module_name);
+            let input_unpacked_record = def_input.unpacked_record();
+            let record = def.record();
+            let unpacked_record_in = def.unpacked_record_in();
+            let record_and_unpacked_out = def.record_and_unpacked_out();
+            let rs_record = def_rs.record();
+            let rs_unpacked_record = def_rs.unpacked_record();
+
+            let input = thread.format_input(
+                self.inputs[0].source(),
+                graph.chain_customizer(),
+                &mut import_scope,
+            );
+
+            let fields =
+                syn::parse_str::<syn::Expr>(&self.fields.iter().join(", ")).expect("fields");
+
+            let rs_field = format_ident!("{}", self.rs_field);
+            let mut_rs_field = format_ident!("{}_mut", self.rs_field);
+
+            let record_definition = &graph.record_definitions()[self.inputs[0].record_type()];
+            let variant = record_definition
+                .get_variant(self.inputs[0].variant_id())
+                .unwrap_or_else(|| panic!("variant #{}", self.inputs[0].variant_id()));
+            let eq = fields_eq(variant.data().filter_map(|d| {
                 let datum = record_definition
                     .get_datum_definition(d)
                     .unwrap_or_else(|| panic!("datum #{}", d));
                 if !self.fields.iter().any(|f| f == datum.name()) && datum.name() != self.rs_field {
-                    Some(datum)
+                    Some(datum.name())
                 } else {
                     None
                 }
-            })
-            .enumerate()
-        {
-            if i > 0 {
-                write!(eq, " &&\n        ").expect("write");
-            }
-            write!(
-                eq,
-                "group.{field}().eq(rec.{field}())",
-                field = datum.name()
-            )
-            .expect("write");
+            }));
+
+            let fn_def = quote! {
+                  pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
+                      #input
+                      datapet_support::iterator::group::Group::new(
+                          input,
+                          |rec| {{
+                              let #record_and_unpacked_out { mut record, #fields } = #record_and_unpacked_out::from((rec, #unpacked_record_in { #rs_field: Vec::new() }));
+                              let rs_record = #rs_record::new(#rs_unpacked_record { #fields });
+                              record.#mut_rs_field().push(rs_record);
+                              record
+                          }},
+                          #eq,
+                          |group, rec| {
+                              let #input_unpacked_record{ #fields, .. } = rec.unpack();
+                              let rs_record = #rs_record::new(#rs_unpacked_record { #fields });
+                              group.#mut_rs_field().push(rs_record);
+                          },
+                      )
+                  }
+            };
+            scope.raw(&fn_def.to_string());
         }
-        crate::chain::fn_body(
-            format!(
-                r#"{input}
-datapet_support::iterator::group::Group::new(
-    input,
-    |rec| {{
-        let {record_and_unpacked_out} {{ mut record, {fields} }} = {record_and_unpacked_out}::from((rec, {unpacked_record_in} {{ {rs_field}: Vec::new() }}));
-        let rs_record = {record_rs}::new({unpacked_record_rs} {{ {fields} }});
-        record.{rs_field}_mut().push(rs_record);
-        record
-    }},
-    {eq},
-    |group, rec| {{
-        let {unpacked_record_input}{{ {fields}, .. }} = rec.unpack();
-        let rs_record = {record_rs}::new({unpacked_record_rs} {{ {fields} }});
-        group.{rs_field}_mut().push(rs_record);
-    }},
-)"#,
-                input = input,
-                unpacked_record_input = def_input.unpacked_record,
-                record_and_unpacked_out = def.record_and_unpacked_out,
-                unpacked_record_in = def.unpacked_record_in,
-                record_rs = def_rs.record,
-                unpacked_record_rs = def_rs.unpacked_record,
-                fields = fields,
-                rs_field = self.rs_field,
-                eq = eq,
-            ),
-            node_fn,
-        );
+
         import_scope.import(scope, graph.chain_customizer());
 
         chain.update_thread_single_stream(thread.thread_id, &self.outputs[0]);
