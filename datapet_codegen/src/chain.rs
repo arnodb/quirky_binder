@@ -213,31 +213,28 @@ impl<'a> Chain<'a> {
         if thread.output_pipes.is_none() {
             assert_eq!(thread.output_streams.len(), 1);
             import_scope.add_import_with_error_type("fallible_iterator", "FallibleIterator");
-            let pipe_fn = scope
-                .new_fn("datapet_pipe")
-                .vis("pub")
-                .arg("mut thread_control", "ThreadControl")
-                .ret(format!(
-                    "impl FnOnce() -> Result<(), {error_type}>",
-                    error_type = self.customizer.error_type_name(),
-                ));
-            let input = source_thread.format_input(source, self.customizer, &mut import_scope);
-            fn_body(
-                format!(
-                    r#"move || {{
-    let tx = thread_control.output_0.take().expect("output 0");
-    {input}
-    let mut input = input;
-    while let Some(record) = input.next()? {{
-        tx.send(Some(record))?;
-    }}
-    tx.send(None)?;
-    Ok(())
-}}"#,
-                    input = input,
-                ),
-                pipe_fn,
-            );
+
+            {
+                let error_type = self.customizer.error_type.to_name();
+
+                let input = source_thread.format_input(source, self.customizer, &mut import_scope);
+
+                let pipe_def = quote! {
+                    pub fn datapet_pipe(mut thread_control: ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
+                        move || {
+                            let tx = thread_control.output_0.take().expect("output 0");
+                            #input
+                            let mut input = input;
+                            while let Some(record) = input.next()? {
+                                tx.send(Some(record))?;
+                            }
+                            tx.send(None)?;
+                            Ok(())
+                        }
+                    }
+                };
+                scope.raw(&pipe_def.to_string());
+            }
 
             thread.output_pipes = Some(Box::new([pipe]));
             thread.main = Some(FullyQualifiedName::new(name).sub("datapet_pipe"));
@@ -296,53 +293,81 @@ impl<'a> Chain<'a> {
             scope.raw(&struct_def.to_string());
         }
 
-        let main_fn = self.scope.new_fn("main").vis("pub").ret(format!(
-            "Result<(), {error_type}>",
-            error_type = self.customizer.error_type,
-        ));
-        for pipe in 0..self.pipe_count {
-            main_fn.line(format!(
-                "let (tx_{pipe}, rx_{pipe}) = std::sync::mpsc::sync_channel(42);",
-                pipe = pipe
-            ));
-        }
-        for thread in &self.threads {
-            main_fn.line(format!(
-                r#"let thread_control_{thread_id} = thread_{thread_id}::ThreadControl {{"#,
-                thread_id = thread.id
-            ));
-            if let Some(input_pipes) = &thread.input_pipes {
-                for (index, pipe) in input_pipes.iter().enumerate() {
-                    main_fn.line(format!(
-                        "    input_{index}: Some(rx_{pipe}),",
-                        index = index,
-                        pipe = pipe
-                    ));
+        {
+            let error_type = self.customizer.error_type.to_name();
+
+            let channels = (0..self.pipe_count).into_iter().map(|pipe| {
+                let tx = format_ident!("tx_{}", pipe);
+                let rx = format_ident!("rx_{}", pipe);
+                quote! {
+                    let (#tx, #rx) = std::sync::mpsc::sync_channel(42);
                 }
-            }
-            if let Some(output_pipes) = &thread.output_pipes {
-                for (index, pipe) in output_pipes.iter().enumerate() {
-                    main_fn.line(format!(
-                        "    output_{index}: Some(tx_{pipe}),",
-                        index = index,
-                        pipe = pipe
-                    ));
+            });
+
+            let thread_controls = self.threads.iter().map(|thread| {
+                let thread_control = format_ident!("thread_control_{}", thread.id);
+                let thread_module = format_ident!("thread_{}", thread.id);
+                let inputs = thread
+                    .input_pipes
+                    .as_ref()
+                    .map(|input_pipes| {
+                        input_pipes.iter().enumerate().map(|(index, pipe)| {
+                            let input = format_ident!("input_{}", index);
+                            let rx = format_ident!("rx_{}", pipe);
+                            quote! { #input: Some(#rx), }
+                        })
+                    })
+                    .into_iter()
+                    .flatten();
+                let outputs = thread
+                    .output_pipes
+                    .as_ref()
+                    .map(|output_pipes| {
+                        output_pipes.iter().enumerate().map(|(index, pipe)| {
+                            let output = format_ident!("output_{}", index);
+                            let tx = format_ident!("tx_{}", pipe);
+                            quote! { #output: Some(#tx), }
+                        })
+                    })
+                    .into_iter()
+                    .flatten();
+                quote! {
+                    let #thread_control = #thread_module::ThreadControl {
+                        #(#inputs)*
+                        #(#outputs)*
+                    };
                 }
-            }
-            main_fn.line("};");
-            main_fn.line(format!(
-                "let join_{thread_id} = std::thread::spawn({thread_main}(thread_control_{thread_id}));",
-                thread_id = thread.id,
-                thread_main = thread.main.as_ref().expect("main"),
-            ));
+            });
+
+            let spawn_threads = self.threads.iter().map(|thread| {
+                let join_thread = format_ident!("join_{}", thread.id);
+                let thread_main =
+                    syn::parse_str::<syn::Expr>(&thread.main.as_ref().expect("main").to_string())
+                        .expect("thread_main");
+                let thread_control = format_ident!("thread_control_{}", thread.id);
+                quote! { let #join_thread = std::thread::spawn(#thread_main(#thread_control)); }
+            });
+
+            let join_threads = self.threads.iter().map(|thread| {
+                let join_thread = format_ident!("join_{}", thread.id);
+                quote! { #join_thread.join().unwrap()?; }
+            });
+
+            let main_def = quote! {
+                pub fn main() -> Result<(), #error_type> {
+                    #(#channels)*
+
+                    #(#thread_controls)*
+
+                    #(#spawn_threads)*
+
+                    #(#join_threads)*
+
+                    Ok(())
+                }
+            };
+            self.scope.raw(&main_def.to_string());
         }
-        for thread in &self.threads {
-            main_fn.line(format!(
-                "join_{thread_id}.join().unwrap()?;",
-                thread_id = thread.id,
-            ));
-        }
-        main_fn.line("Ok(())");
     }
 
     pub fn get_or_new_module_scope<'i>(

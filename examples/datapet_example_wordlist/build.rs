@@ -227,33 +227,31 @@ fn main() {
         &mut graph,
         root.sub("sink_1"),
         word_list.outputs()[0].clone(),
-        Some(r#"println!("sink_1 {} (id = {:?})", record.token(), record.anchor());"#.to_string()),
+        Some(quote! { println!("sink_1 {} (id = {:?})", record.token(), record.anchor()); }),
     );
     let sink_2 = sink(
         &mut graph,
         root.sub("sink_2"),
         word_list.outputs()[1].clone(),
-        Some(r#"println!("sink_2 {} (id = {:?})", record.token(), record.anchor());"#.to_string()),
+        Some(quote! { println!("sink_2 {} (id = {:?})", record.token(), record.anchor()); }),
     );
     let sink_3 = sink(
         &mut graph,
         root.sub("sink_3"),
         word_list.outputs()[2].clone(),
-        Some(
-            r#"println!("sink_3 {} (sim id = {:?}) == {}", record.token(), record.sim_anchor(), record.sim_rs().len());
-for r in record.sim_rs().iter() {
-    println!("    {:?}", r.anchor());
-}"#
-            .to_string(),
-        ),
+        Some(quote! {
+            println!("sink_3 {} (sim id = {:?}) == {}", record.token(), record.sim_anchor(), record.sim_rs().len());
+            for r in record.sim_rs().iter() {
+                println!("    {:?}", r.anchor());
+            }
+        }),
     );
     let sink_4 = sink(
         &mut graph,
         root.sub("sink_4"),
         word_list.outputs()[3].clone(),
         Some(
-            r#"println!("sink_4 {} (sim id = {:?})", record.token(), record.sim_anchor());"#
-                .to_string(),
+            quote! { println!("sink_4 {} (sim id = {:?})", record.token(), record.sim_anchor()); },
         ),
     );
 

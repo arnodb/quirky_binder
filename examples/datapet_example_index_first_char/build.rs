@@ -228,22 +228,21 @@ fn main() {
         &mut graph,
         root.sub("sink"),
         group.outputs()[0].clone(),
-        Some(
-            r#"use itertools::Itertools;
+        Some(quote! {
+            use itertools::Itertools;
 
-println!(
-    "{} - {}",
-    record.first_char(),
-    format!(
-        "[{}]",
-        record.words()
-            .iter()
-            .map(|word|word.word())
-            .join(", ")
-    )
-);"#
-            .to_string(),
-        ),
+            println!(
+                "{} - {}",
+                record.first_char(),
+                format!(
+                    "[{}]",
+                    record.words()
+                    .iter()
+                    .map(|word|word.word())
+                    .join(", ")
+                )
+            );
+        }),
     );
 
     let graph = graph.build(vec![
