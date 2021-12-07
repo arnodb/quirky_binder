@@ -161,6 +161,7 @@ impl Graph {
             }
             write!(file, "{}", scope.to_string()).unwrap();
         }
+        rustfmt_generated_file(output.join("chain_streams.rs").as_path()).unwrap();
         {
             let mut scope = Scope::new();
             scope.import("fallible_iterator", "FallibleIterator");
@@ -179,6 +180,49 @@ impl Graph {
             let mut file = File::create(&output.join("chain.rs")).unwrap();
             write!(file, "{}", scope.to_string()).unwrap();
         }
+        rustfmt_generated_file(output.join("chain.rs").as_path()).unwrap();
         Ok(())
+    }
+}
+
+fn rustfmt_generated_file(file: &Path) -> std::io::Result<()> {
+    use std::process::Command;
+
+    let rustfmt = if let Ok(rustfmt) = which::which("rustfmt") {
+        rustfmt
+    } else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Rustfmt activated, but it could not be found in global path.",
+        ));
+    };
+
+    let mut cmd = Command::new(rustfmt);
+
+    if let Ok(output) = cmd.arg(file).output() {
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            match output.status.code() {
+                Some(2) => Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Rustfmt parsing errors:\n{}", stderr),
+                )),
+                Some(3) => {
+                    println!("Rustfmt could not format some lines:\n{}", stderr);
+                    Ok(())
+                }
+                _ => Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Internal rustfmt error:\n{}", stderr),
+                )),
+            }
+        } else {
+            Ok(())
+        }
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Error executing rustfmt!",
+        ))
     }
 }

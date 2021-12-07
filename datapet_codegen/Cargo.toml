@@ -13,3 +13,4 @@ proc-macro2 = "1"
 quote = "1"
 syn = "1"
 truc = { git = "https://github.com/arnodb/truc.git" }
+which = "4"
