@@ -118,7 +118,11 @@ pub fn datapet_node(args: TokenStream, input: TokenStream) -> TokenStream {
         });
     }
     for (output, mutable) in &parsed_args.outputs {
-        let output_ident = if output == "-" { "" } else { &output };
+        let output_ident = if output == "-" {
+            "datapet_main"
+        } else {
+            &output
+        };
         let input_index = parsed_args.inputs.iter().position(|input| input == output);
         if let Some(input_index) = input_index {
             if *mutable {
@@ -145,7 +149,7 @@ pub fn datapet_node(args: TokenStream, input: TokenStream) -> TokenStream {
             let stream_name = format_ident!("{}_stream_name", output_ident);
             let record_type = format_ident!("{}_record_type", output_ident);
             new_streams.push(Some(quote! {
-                let #stream_name = name.sub(#output);
+                let #stream_name = name.sub(#output_ident);
                 let #record_type = StreamRecordType::from(#stream_name.clone());
                 graph.new_stream(#record_type.clone());
             }));
@@ -156,11 +160,16 @@ pub fn datapet_node(args: TokenStream, input: TokenStream) -> TokenStream {
             });
             let variant_id = format_ident!("{}_variant_id", output_ident);
             variant_ids.push(variant_id.clone());
+            let source = if output == "-" {
+                quote! { name.clone() }
+            } else {
+                quote! { #stream_name }
+            };
             outputs.push(quote! {
                 NodeStream::new(
                     #record_type,
                     #variant_id,
-                    NodeStreamSource::from(#stream_name),
+                    NodeStreamSource::from(#source),
                 )
             });
         }

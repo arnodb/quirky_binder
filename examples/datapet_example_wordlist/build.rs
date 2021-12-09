@@ -1,31 +1,39 @@
 #[macro_use]
+extern crate datapet_codegen;
+#[macro_use]
 extern crate quote;
 
 use datapet::{
-    chain::{Chain, ChainCustomizer, ImportScope},
     filter::{
         anchor::anchorize, dedup::dedup, hof::index::wordlist::build_word_list, sink::sink,
         sort::sort,
     },
-    graph::{DynNode, Graph, GraphBuilder, Node},
-    stream::{NodeStream, NodeStreamSource, StreamRecordType},
-    support::FullyQualifiedName,
+    prelude::*,
 };
-use std::path::Path;
+use std::{cell::RefCell, path::Path};
+use truc::record::definition::{RecordDefinitionBuilder, RecordVariantId};
 
+#[datapet_node(
+    out_mut = "-",
+    arg = "field: &str",
+    init = "streams",
+    fields = "field: field.to_string()"
+)]
 struct ReadStdin {
     name: FullyQualifiedName,
-    field: String,
+    inputs: [NodeStream; 0],
     outputs: [NodeStream; 1],
+    field: String,
 }
 
-impl Node<0, 1> for ReadStdin {
-    fn inputs(&self) -> &[NodeStream; 0] {
-        &[]
-    }
-
-    fn outputs(&self) -> &[NodeStream; 1] {
-        &self.outputs
+impl ReadStdin {
+    fn initialize_streams(
+        output_stream: &RefCell<RecordDefinitionBuilder>,
+        _field: &str,
+    ) -> [RecordVariantId; 1] {
+        let mut output_stream = output_stream.borrow_mut();
+        output_stream.add_datum::<Box<str>, _>("token");
+        [output_stream.close_record_variant()]
     }
 }
 
@@ -93,19 +101,27 @@ impl DynNode for ReadStdin {
     }
 }
 
+#[datapet_node(
+    out_mut = "-",
+    arg = "field: &str",
+    init = "streams",
+    fields = "field: field.to_string()"
+)]
 struct ReadStdinIterator {
     name: FullyQualifiedName,
-    field: String,
+    inputs: [NodeStream; 0],
     outputs: [NodeStream; 1],
+    field: String,
 }
 
-impl Node<0, 1> for ReadStdinIterator {
-    fn inputs(&self) -> &[NodeStream; 0] {
-        &[]
-    }
-
-    fn outputs(&self) -> &[NodeStream; 1] {
-        &self.outputs
+impl ReadStdinIterator {
+    fn initialize_streams(
+        output_stream: &RefCell<RecordDefinitionBuilder>,
+        _field: &str,
+    ) -> [RecordVariantId; 1] {
+        let mut output_stream = output_stream.borrow_mut();
+        output_stream.add_datum::<Box<str>, _>("token");
+        [output_stream.close_record_variant()]
     }
 }
 
@@ -159,33 +175,17 @@ impl DynNode for ReadStdinIterator {
     }
 }
 
+#[allow(dead_code)]
+fn read_stdin_old(graph: &mut GraphBuilder, name: FullyQualifiedName, field: &str) -> ReadStdin {
+    ReadStdin::new(graph, name, [], field)
+}
+
 fn read_stdin(
     graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     field: &str,
 ) -> ReadStdinIterator {
-    let record_type = StreamRecordType::from(name.sub("read"));
-    graph.new_stream(record_type.clone());
-
-    let variant_id = {
-        let mut stream = graph
-            .get_stream(&record_type)
-            .unwrap_or_else(|| panic!(r#"stream "{}""#, record_type))
-            .borrow_mut();
-
-        stream.add_datum::<Box<str>, _>("token");
-        stream.close_record_variant()
-    };
-
-    ReadStdinIterator {
-        name: name.clone(),
-        field: field.to_string(),
-        outputs: [NodeStream::new(
-            record_type,
-            variant_id,
-            NodeStreamSource::from(name),
-        )],
-    }
+    ReadStdinIterator::new(graph, name, [], field)
 }
 
 fn main() {
