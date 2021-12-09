@@ -15,22 +15,10 @@ use truc::record::definition::{RecordDefinition, RecordDefinitionBuilder};
 pub trait Node<const IN: usize, const OUT: usize> {
     fn inputs(&self) -> &[NodeStream; IN];
     fn outputs(&self) -> &[NodeStream; OUT];
-    fn gen_chain(&self, graph: &Graph, chain: &mut Chain);
 }
 
 pub trait DynNode {
-    fn dyn_gen_chain(&self, graph: &Graph, chain: &mut Chain);
-}
-
-#[macro_export]
-macro_rules! dyn_node {
-    ($t:ty) => {
-        impl DynNode for $t {
-            fn dyn_gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-                self.gen_chain(graph, chain)
-            }
-        }
-    };
+    fn gen_chain(&self, graph: &Graph, chain: &mut Chain);
 }
 
 #[derive(new)]
@@ -63,17 +51,13 @@ impl<const IN: usize, const OUT: usize> Node<IN, OUT> for NodeCluster<IN, OUT> {
     fn outputs(&self) -> &[NodeStream; OUT] {
         &self.outputs
     }
-
-    fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        for node in &self.nodes {
-            node.dyn_gen_chain(graph, chain);
-        }
-    }
 }
 
 impl<const IN: usize, const OUT: usize> DynNode for NodeCluster<IN, OUT> {
-    fn dyn_gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        self.gen_chain(graph, chain)
+    fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
+        for node in &self.nodes {
+            node.gen_chain(graph, chain);
+        }
     }
 }
 
@@ -172,7 +156,7 @@ impl Graph {
             let mut chain = Chain::new(&self.chain_customizer, &mut scope);
 
             for node in &self.entry_nodes {
-                node.dyn_gen_chain(self, &mut chain);
+                node.gen_chain(self, &mut chain);
             }
 
             chain.gen_chain();

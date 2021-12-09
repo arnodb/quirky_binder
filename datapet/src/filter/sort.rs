@@ -1,11 +1,11 @@
-use crate::{
-    chain::{Chain, ImportScope},
-    dyn_node,
-    graph::{DynNode, Graph, GraphBuilder, Node},
-    stream::{NodeStream, NodeStreamSource},
-    support::{fields_cmp, FullyQualifiedName},
-};
+use crate::{prelude::*, support::fields_cmp};
 
+#[datapet_node(
+    in = "-",
+    out = "-",
+    arg = "fields: &[&str]",
+    fields = "fields: fields.iter().map(ToString::to_string).collect::<Vec<_>>()"
+)]
 pub struct Sort {
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
@@ -13,15 +13,7 @@ pub struct Sort {
     fields: Vec<String>,
 }
 
-impl Node<1, 1> for Sort {
-    fn inputs(&self) -> &[NodeStream; 1] {
-        &self.inputs
-    }
-
-    fn outputs(&self) -> &[NodeStream; 1] {
-        &self.outputs
-    }
-
+impl DynNode for Sort {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread = chain.get_thread_id_and_module_by_source(self.inputs[0].source(), &self.name);
 
@@ -68,20 +60,11 @@ impl Node<1, 1> for Sort {
     }
 }
 
-dyn_node!(Sort);
-
 pub fn sort(
-    _graph: &mut GraphBuilder,
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     fields: &[&str],
 ) -> Sort {
-    let [input] = inputs;
-    let output = input.with_source(NodeStreamSource::from(name.clone()));
-    Sort {
-        name,
-        inputs: [input],
-        outputs: [output],
-        fields: fields.iter().map(ToString::to_string).collect::<Vec<_>>(),
-    }
+    Sort::new(graph, name, inputs, fields)
 }

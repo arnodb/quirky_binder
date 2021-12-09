@@ -1,26 +1,13 @@
-use crate::{
-    chain::{Chain, ImportScope},
-    dyn_node,
-    graph::{DynNode, Graph, GraphBuilder, Node},
-    stream::{NodeStream, NodeStreamSource},
-    support::{fields_eq, FullyQualifiedName},
-};
+use crate::{prelude::*, support::fields_eq};
 
+#[datapet_node(in = "-", out = "-")]
 pub struct Dedup {
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     outputs: [NodeStream; 1],
 }
 
-impl Node<1, 1> for Dedup {
-    fn inputs(&self) -> &[NodeStream; 1] {
-        &self.inputs
-    }
-
-    fn outputs(&self) -> &[NodeStream; 1] {
-        &self.outputs
-    }
-
+impl DynNode for Dedup {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread = chain.get_thread_id_and_module_by_source(self.inputs[0].source(), &self.name);
 
@@ -76,18 +63,6 @@ impl Node<1, 1> for Dedup {
     }
 }
 
-dyn_node!(Dedup);
-
-pub fn dedup(
-    _graph: &mut GraphBuilder,
-    name: FullyQualifiedName,
-    inputs: [NodeStream; 1],
-) -> Dedup {
-    let [input] = inputs;
-    let output = input.with_source(NodeStreamSource::from(name.clone()));
-    Dedup {
-        name,
-        inputs: [input],
-        outputs: [output],
-    }
+pub fn dedup(graph: &mut GraphBuilder, name: FullyQualifiedName, inputs: [NodeStream; 1]) -> Dedup {
+    Dedup::new(graph, name, inputs)
 }

@@ -1,9 +1,8 @@
 #[macro_use]
 extern crate quote;
 
-use datapet_codegen::{
+use datapet::{
     chain::{Chain, ChainCustomizer, ImportScope},
-    dyn_node,
     filter::{
         anchor::anchorize, dedup::dedup, hof::index::wordlist::build_word_list, sink::sink,
         sort::sort,
@@ -28,7 +27,9 @@ impl Node<0, 1> for ReadStdin {
     fn outputs(&self) -> &[NodeStream; 1] {
         &self.outputs
     }
+}
 
+impl DynNode for ReadStdin {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.new_thread(
             self.name.clone(),
@@ -92,8 +93,6 @@ impl Node<0, 1> for ReadStdin {
     }
 }
 
-dyn_node!(ReadStdin);
-
 struct ReadStdinIterator {
     name: FullyQualifiedName,
     field: String,
@@ -108,7 +107,9 @@ impl Node<0, 1> for ReadStdinIterator {
     fn outputs(&self) -> &[NodeStream; 1] {
         &self.outputs
     }
+}
 
+impl DynNode for ReadStdinIterator {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.new_thread(
             self.name.clone(),
@@ -157,8 +158,6 @@ impl Node<0, 1> for ReadStdinIterator {
         import_scope.import(scope, graph.chain_customizer());
     }
 }
-
-dyn_node!(ReadStdinIterator);
 
 fn read_stdin(
     graph: &mut GraphBuilder,
@@ -226,19 +225,19 @@ fn main() {
     let sink_1 = sink(
         &mut graph,
         root.sub("sink_1"),
-        word_list.outputs()[0].clone(),
+        [word_list.outputs()[0].clone()],
         Some(quote! { println!("sink_1 {} (id = {:?})", record.token(), record.anchor()); }),
     );
     let sink_2 = sink(
         &mut graph,
         root.sub("sink_2"),
-        word_list.outputs()[1].clone(),
+        [word_list.outputs()[1].clone()],
         Some(quote! { println!("sink_2 {} (id = {:?})", record.token(), record.anchor()); }),
     );
     let sink_3 = sink(
         &mut graph,
         root.sub("sink_3"),
-        word_list.outputs()[2].clone(),
+        [word_list.outputs()[2].clone()],
         Some(quote! {
             println!("sink_3 {} (sim id = {:?}) == {}", record.token(), record.sim_anchor(), record.sim_rs().len());
             for r in record.sim_rs().iter() {
@@ -249,7 +248,7 @@ fn main() {
     let sink_4 = sink(
         &mut graph,
         root.sub("sink_4"),
-        word_list.outputs()[3].clone(),
+        [word_list.outputs()[3].clone()],
         Some(
             quote! { println!("sink_4 {} (sim id = {:?})", record.token(), record.sim_anchor()); },
         ),

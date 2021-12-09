@@ -11,5 +11,5 @@ static_assertions = "1"
 truc_runtime = { git = "https://github.com/arnodb/truc.git" }
 
 [build-dependencies]
-datapet_codegen = { path = "../../datapet_codegen" }
+datapet = { path = "../../datapet" }
 quote = "1"

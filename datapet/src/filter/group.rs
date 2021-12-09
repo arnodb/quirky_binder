@@ -1,6 +1,5 @@
 use crate::{
     chain::{Chain, ImportScope},
-    dyn_node,
     graph::{DynNode, Graph, GraphBuilder, Node},
     stream::{NodeStream, NodeStreamSource, StreamRecordType},
     support::{fields_eq, FullyQualifiedName},
@@ -25,7 +24,9 @@ impl Node<1, 1> for Group {
     fn outputs(&self) -> &[NodeStream; 1] {
         &self.outputs
     }
+}
 
+impl DynNode for Group {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread = chain.get_thread_id_and_module_by_source(self.inputs[0].source(), &self.name);
 
@@ -111,8 +112,6 @@ impl Node<1, 1> for Group {
         chain.update_thread_single_stream(thread.thread_id, &self.outputs[0]);
     }
 }
-
-dyn_node!(Group);
 
 pub fn group(
     graph: &mut GraphBuilder,

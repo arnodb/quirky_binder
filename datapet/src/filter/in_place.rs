@@ -1,11 +1,7 @@
-use crate::{
-    chain::{Chain, ImportScope},
-    graph::Graph,
-    stream::NodeStream,
-    support::FullyQualifiedName,
-};
+use crate::prelude::*;
 use proc_macro2::TokenStream;
 
+#[datapet_node(in = "-", out = "-")]
 struct InPlaceFilter {
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
@@ -59,9 +55,7 @@ impl InPlaceFilter {
 
 pub mod string {
     use super::InPlaceFilter;
-    use crate::dyn_node;
     use crate::graph::{DynNode, GraphBuilder};
-    use crate::stream::NodeStreamSource;
     use crate::support::FullyQualifiedName;
     use crate::{
         chain::Chain,
@@ -84,7 +78,9 @@ pub mod string {
         fn outputs(&self) -> &[NodeStream; 1] {
             &self.in_place.outputs
         }
+    }
 
+    impl DynNode for ToLowercase {
         fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
             let mut_fields = self
                 .fields
@@ -102,10 +98,8 @@ pub mod string {
         }
     }
 
-    dyn_node!(ToLowercase);
-
     pub fn to_lowercase<I, F>(
-        _graph: &mut GraphBuilder,
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         fields: I,
@@ -114,14 +108,8 @@ pub mod string {
         I: IntoIterator<Item = F>,
         F: Into<Box<str>>,
     {
-        let [input] = inputs;
-        let output = input.with_source(NodeStreamSource::from(name.clone()));
         ToLowercase {
-            in_place: InPlaceFilter {
-                name,
-                inputs: [input],
-                outputs: [output],
-            },
+            in_place: InPlaceFilter::new(graph, name, inputs),
             fields: fields
                 .into_iter()
                 .map(Into::into)
@@ -132,7 +120,7 @@ pub mod string {
     }
 
     pub fn to_lowercase_boxed_str<I, F>(
-        _graph: &mut GraphBuilder,
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         fields: I,
@@ -141,14 +129,8 @@ pub mod string {
         I: IntoIterator<Item = F>,
         F: Into<Box<str>>,
     {
-        let [input] = inputs;
-        let output = input.with_source(NodeStreamSource::from(name.clone()));
         ToLowercase {
-            in_place: InPlaceFilter {
-                name,
-                inputs: [input],
-                outputs: [output],
-            },
+            in_place: InPlaceFilter::new(graph, name, inputs),
             fields: fields
                 .into_iter()
                 .map(Into::into)
@@ -172,7 +154,9 @@ pub mod string {
         fn outputs(&self) -> &[NodeStream; 1] {
             &self.in_place.outputs
         }
+    }
 
+    impl DynNode for ReverseChars {
         fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
             let mut_fields = self
                 .fields
@@ -190,10 +174,8 @@ pub mod string {
         }
     }
 
-    dyn_node!(ReverseChars);
-
     pub fn reverse_chars<I, F>(
-        _graph: &mut GraphBuilder,
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         fields: I,
@@ -202,14 +184,8 @@ pub mod string {
         I: IntoIterator<Item = F>,
         F: Into<Box<str>>,
     {
-        let [input] = inputs;
-        let output = input.with_source(NodeStreamSource::from(name.clone()));
         ReverseChars {
-            in_place: InPlaceFilter {
-                name,
-                inputs: [input],
-                outputs: [output],
-            },
+            in_place: InPlaceFilter::new(graph, name, inputs),
             fields: fields
                 .into_iter()
                 .map(Into::into)
@@ -220,7 +196,7 @@ pub mod string {
     }
 
     pub fn reverse_chars_boxed_str<I, F>(
-        _graph: &mut GraphBuilder,
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         fields: I,
@@ -229,14 +205,8 @@ pub mod string {
         I: IntoIterator<Item = F>,
         F: Into<Box<str>>,
     {
-        let [input] = inputs;
-        let output = input.with_source(NodeStreamSource::from(name.clone()));
         ReverseChars {
-            in_place: InPlaceFilter {
-                name,
-                inputs: [input],
-                outputs: [output],
-            },
+            in_place: InPlaceFilter::new(graph, name, inputs),
             fields: fields
                 .into_iter()
                 .map(Into::into)

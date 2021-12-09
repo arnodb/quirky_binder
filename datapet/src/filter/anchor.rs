@@ -1,13 +1,15 @@
-use crate::{
-    chain::{Chain, ImportScope},
-    dyn_node,
-    graph::{DynNode, Graph, GraphBuilder, Node},
-    stream::{NodeStream, NodeStreamSource},
-    support::FullyQualifiedName,
-};
+use crate::prelude::*;
 use datapet_support::AnchorId;
-use truc::record::definition::DatumDefinitionOverride;
+use std::cell::RefCell;
+use truc::record::definition::{DatumDefinitionOverride, RecordDefinitionBuilder, RecordVariantId};
 
+#[datapet_node(
+    in = "-",
+    out_mut = "-",
+    init = "graph_and_streams",
+    arg = "anchor_field: &str",
+    fields = "anchor_field: anchor_field.to_string()"
+)]
 pub struct Anchorize {
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
@@ -15,15 +17,31 @@ pub struct Anchorize {
     anchor_field: String,
 }
 
-impl Node<1, 1> for Anchorize {
-    fn inputs(&self) -> &[NodeStream; 1] {
-        &self.inputs
+impl Anchorize {
+    fn initialize_graph(graph: &mut GraphBuilder) -> usize {
+        graph.new_anchor_table()
     }
 
-    fn outputs(&self) -> &[NodeStream; 1] {
-        &self.outputs
+    fn initialize_streams(
+        (_, _): (&RefCell<RecordDefinitionBuilder>, RecordVariantId),
+        output_stream: &RefCell<RecordDefinitionBuilder>,
+        anchor_field: &str,
+        anchor_table_id: usize,
+    ) -> [RecordVariantId; 1] {
+        let mut output_stream = output_stream.borrow_mut();
+        output_stream.add_datum_override::<AnchorId<0>, _>(
+            anchor_field,
+            DatumDefinitionOverride {
+                type_name: Some(format!("datapet_support::AnchorId<{}>", anchor_table_id)),
+                size: None,
+                allow_uninit: Some(true),
+            },
+        );
+        [output_stream.close_record_variant()]
     }
+}
 
+impl DynNode for Anchorize {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread = chain.get_thread_id_and_module_by_source(self.inputs[0].source(), &self.name);
 
@@ -77,44 +95,11 @@ impl Node<1, 1> for Anchorize {
     }
 }
 
-dyn_node!(Anchorize);
-
 pub fn anchorize(
     graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     anchor_field: &str,
 ) -> Anchorize {
-    let [input] = inputs;
-
-    let anchor_table_id = graph.new_anchor_table();
-
-    let variant_id = {
-        let mut stream = graph
-            .get_stream(input.record_type())
-            .unwrap_or_else(|| panic!(r#"stream "{}""#, input.record_type()))
-            .borrow_mut();
-
-        stream.add_datum_override::<AnchorId<0>, _>(
-            anchor_field,
-            DatumDefinitionOverride {
-                type_name: Some(format!("datapet_support::AnchorId<{}>", anchor_table_id)),
-                size: None,
-                allow_uninit: Some(true),
-            },
-        );
-        stream.close_record_variant()
-    };
-
-    let record_type = input.record_type().clone();
-    Anchorize {
-        name: name.clone(),
-        inputs: [input],
-        outputs: [NodeStream::new(
-            record_type,
-            variant_id,
-            NodeStreamSource::from(name),
-        )],
-        anchor_field: anchor_field.to_string(),
-    }
+    Anchorize::new(graph, name, inputs, anchor_field)
 }

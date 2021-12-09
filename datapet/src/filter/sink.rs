@@ -1,28 +1,15 @@
+use crate::prelude::*;
 use proc_macro2::TokenStream;
 
-use crate::{
-    chain::{Chain, ImportScope},
-    dyn_node,
-    graph::{DynNode, Graph, GraphBuilder, Node},
-    stream::NodeStream,
-    support::FullyQualifiedName,
-};
-
+#[datapet_node(in = "-", arg = "debug: Option<TokenStream>", fields = "debug")]
 pub struct Sink {
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
+    outputs: [NodeStream; 0],
     debug: Option<TokenStream>,
 }
 
-impl Node<1, 0> for Sink {
-    fn inputs(&self) -> &[NodeStream; 1] {
-        &self.inputs
-    }
-
-    fn outputs(&self) -> &[NodeStream; 0] {
-        &[]
-    }
-
+impl DynNode for Sink {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread = chain.get_thread_id_and_module_by_source(self.inputs[0].source(), &self.name);
 
@@ -70,17 +57,11 @@ impl Node<1, 0> for Sink {
     }
 }
 
-dyn_node!(Sink);
-
 pub fn sink(
-    _graph: &mut GraphBuilder,
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
-    input: NodeStream,
+    inputs: [NodeStream; 1],
     debug: Option<TokenStream>,
 ) -> Sink {
-    Sink {
-        name,
-        inputs: [input],
-        debug,
-    }
+    Sink::new(graph, name, inputs, debug)
 }

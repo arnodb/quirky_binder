@@ -1,26 +1,40 @@
-use crate::{
-    chain::Chain,
-    dyn_node,
-    graph::{DynNode, Graph, GraphBuilder, Node},
-    stream::{NodeStream, NodeStreamSource, StreamRecordType},
-    support::FullyQualifiedName,
-};
+use crate::prelude::*;
+use std::cell::RefCell;
+use truc::record::definition::{RecordDefinitionBuilder, RecordVariantId};
 
+#[datapet_node(
+    in = "-",
+    out = "-",
+    out = "extracted",
+    init = "streams",
+    arg = "fields: &[&str]"
+)]
 pub struct ExtractFields {
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     outputs: [NodeStream; 2],
 }
 
-impl Node<1, 2> for ExtractFields {
-    fn inputs(&self) -> &[NodeStream; 1] {
-        &self.inputs
+impl ExtractFields {
+    fn initialize_streams(
+        (input_stream, input_variant_id): (&RefCell<RecordDefinitionBuilder>, RecordVariantId),
+        output_extracted_stream: &RefCell<RecordDefinitionBuilder>,
+        fields: &[&str],
+    ) -> [RecordVariantId; 1] {
+        let mut output_extracted_stream = output_extracted_stream.borrow_mut();
+        for field in fields.iter() {
+            output_extracted_stream.copy_datum(
+                input_stream
+                    .borrow()
+                    .get_variant_datum_definition_by_name(input_variant_id, field)
+                    .unwrap_or_else(|| panic!(r#"datum "{}""#, field)),
+            );
+        }
+        [output_extracted_stream.close_record_variant()]
     }
+}
 
-    fn outputs(&self) -> &[NodeStream; 2] {
-        &self.outputs
-    }
-
+impl DynNode for ExtractFields {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let input_pipe = chain.pipe_single_thread(self.inputs[0].source());
 
@@ -102,50 +116,11 @@ impl Node<1, 2> for ExtractFields {
     }
 }
 
-dyn_node!(ExtractFields);
-
 pub fn extract_fields(
     graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     fields: &[&str],
 ) -> ExtractFields {
-    let [input] = inputs;
-
-    let extracted_stream_name = name.sub("extracted");
-    let extracted_record_type = StreamRecordType::from(extracted_stream_name.clone());
-    graph.new_stream(extracted_record_type.clone());
-
-    let extracted_variant_id = {
-        let stream = graph
-            .get_stream(input.record_type())
-            .unwrap_or_else(|| panic!(r#"stream "{}""#, input.record_type()))
-            .borrow_mut();
-
-        let mut extracted_stream = graph
-            .get_stream(&extracted_record_type)
-            .unwrap_or_else(|| panic!(r#"stream "{}""#, extracted_record_type))
-            .borrow_mut();
-
-        for field in fields {
-            extracted_stream.copy_datum(
-                stream
-                    .get_variant_datum_definition_by_name(input.variant_id(), field)
-                    .unwrap_or_else(|| panic!(r#"datum "{}""#, field)),
-            );
-        }
-        extracted_stream.close_record_variant()
-    };
-
-    let output_0 = input.with_source(NodeStreamSource::from(name.clone()));
-    let output_1 = NodeStream::new(
-        extracted_record_type,
-        extracted_variant_id,
-        NodeStreamSource::from(extracted_stream_name),
-    );
-    ExtractFields {
-        name,
-        inputs: [input],
-        outputs: [output_0, output_1],
-    }
+    ExtractFields::new(graph, name, inputs, fields)
 }

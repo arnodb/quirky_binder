@@ -1,9 +1,8 @@
 #[macro_use]
 extern crate quote;
 
-use datapet_codegen::{
+use datapet::{
     chain::{Chain, ChainCustomizer, ImportScope},
-    dyn_node,
     filter::{group::group, sink::sink, sort::sort},
     graph::{DynNode, Graph, GraphBuilder, Node},
     stream::{NodeStream, NodeStreamSource, StreamRecordType},
@@ -25,7 +24,9 @@ impl Node<0, 1> for ReadStdinIterator {
     fn outputs(&self) -> &[NodeStream; 1] {
         &self.outputs
     }
+}
 
+impl DynNode for ReadStdinIterator {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.new_thread(
             self.name.clone(),
@@ -75,8 +76,6 @@ impl Node<0, 1> for ReadStdinIterator {
     }
 }
 
-dyn_node!(ReadStdinIterator);
-
 fn read_stdin(
     graph: &mut GraphBuilder,
     name: FullyQualifiedName,
@@ -120,7 +119,9 @@ impl Node<1, 1> for Tokenize {
     fn outputs(&self) -> &[NodeStream; 1] {
         &self.outputs
     }
+}
 
+impl DynNode for Tokenize {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread = chain.get_thread_id_and_module_by_source(self.inputs[0].source(), &self.name);
 
@@ -161,8 +162,6 @@ impl Node<1, 1> for Tokenize {
         chain.update_thread_single_stream(thread.thread_id, &self.outputs[0]);
     }
 }
-
-dyn_node!(Tokenize);
 
 pub fn tokenize(
     graph: &mut GraphBuilder,
@@ -227,7 +226,7 @@ fn main() {
     let sink = sink(
         &mut graph,
         root.sub("sink"),
-        group.outputs()[0].clone(),
+        [group.outputs()[0].clone()],
         Some(quote! {
             use itertools::Itertools;
 

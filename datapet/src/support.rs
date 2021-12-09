@@ -11,7 +11,7 @@ impl FullyQualifiedName {
     /// # Example
     ///
     /// ```
-    /// use datapet_codegen::support::FullyQualifiedName;
+    /// use datapet::support::FullyQualifiedName;
     ///
     /// let name = FullyQualifiedName::new("foo");
     /// assert_eq!(name.to_string(), "foo");
@@ -26,7 +26,7 @@ impl FullyQualifiedName {
     /// # Example
     ///
     /// ```
-    /// use datapet_codegen::support::FullyQualifiedName;
+    /// use datapet::support::FullyQualifiedName;
     ///
     /// let name = FullyQualifiedName::new_n(&["foo", "bar"]);
     /// assert_eq!(name.to_string(), "foo::bar");
@@ -54,7 +54,7 @@ impl FullyQualifiedName {
     /// # Example
     ///
     /// ```
-    /// use datapet_codegen::support::FullyQualifiedName;
+    /// use datapet::support::FullyQualifiedName;
     ///
     /// let name = FullyQualifiedName::new("foo");
     /// let sub = name.sub("bar");
@@ -70,7 +70,7 @@ impl FullyQualifiedName {
     /// # Example
     ///
     /// ```
-    /// use datapet_codegen::support::FullyQualifiedName;
+    /// use datapet::support::FullyQualifiedName;
     ///
     /// let name = FullyQualifiedName::new("foo");
     /// let sub = name.sub_n(&["bar", "more"]);
