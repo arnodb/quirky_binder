@@ -33,6 +33,8 @@ impl DynNode for Sink {
 
             let debug = &self.debug;
 
+            let full_name = &self.name.to_string();
+
             let fn_def = quote! {
                   pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
                       move || {
@@ -43,7 +45,7 @@ impl DynNode for Sink {
                               #debug
                               read += 1;
                           }
-                          println!("read #full_name {}", read);
+                          println!("read {} {}", #full_name, read);
                           Ok(())
                       }
                   }
