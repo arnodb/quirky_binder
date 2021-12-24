@@ -1,14 +1,27 @@
 use crate::prelude::*;
 use proc_macro2::TokenStream;
 
-#[datapet_node(in = "-", out = "-")]
+#[derive(Getters)]
 struct InPlaceFilter {
     name: FullyQualifiedName,
+    #[getset(get = "pub")]
     inputs: [NodeStream; 1],
+    #[getset(get = "pub")]
     outputs: [NodeStream; 1],
 }
 
 impl InPlaceFilter {
+    fn new(graph: &mut GraphBuilder, name: FullyQualifiedName, inputs: [NodeStream; 1]) -> Self {
+        let mut streams = StreamsBuilder::new(&name, &inputs);
+        streams.output_from_input(0, graph).pass_through();
+        let outputs = streams.build();
+        Self {
+            name,
+            inputs,
+            outputs,
+        }
+    }
+
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain, body: TokenStream) {
         let thread = chain.get_thread_id_and_module_by_source(self.inputs[0].source(), &self.name);
 
@@ -57,11 +70,7 @@ pub mod string {
     use super::InPlaceFilter;
     use crate::graph::{DynNode, GraphBuilder};
     use crate::support::FullyQualifiedName;
-    use crate::{
-        chain::Chain,
-        graph::{Graph, Node},
-        stream::NodeStream,
-    };
+    use crate::{chain::Chain, graph::Graph, stream::NodeStream};
     use proc_macro2::TokenStream;
 
     pub struct ToLowercase {
@@ -70,13 +79,13 @@ pub mod string {
         string_to_type: Option<TokenStream>,
     }
 
-    impl Node<1, 1> for ToLowercase {
-        fn inputs(&self) -> &[NodeStream; 1] {
-            &self.in_place.inputs
+    impl ToLowercase {
+        pub fn inputs(&self) -> &[NodeStream; 1] {
+            self.in_place.inputs()
         }
 
-        fn outputs(&self) -> &[NodeStream; 1] {
-            &self.in_place.outputs
+        pub fn outputs(&self) -> &[NodeStream; 1] {
+            self.in_place.outputs()
         }
     }
 
@@ -146,13 +155,13 @@ pub mod string {
         string_to_type: Option<TokenStream>,
     }
 
-    impl Node<1, 1> for ReverseChars {
-        fn inputs(&self) -> &[NodeStream; 1] {
-            &self.in_place.inputs
+    impl ReverseChars {
+        pub fn inputs(&self) -> &[NodeStream; 1] {
+            self.in_place.inputs()
         }
 
-        fn outputs(&self) -> &[NodeStream; 1] {
-            &self.in_place.outputs
+        pub fn outputs(&self) -> &[NodeStream; 1] {
+            self.in_place.outputs()
         }
     }
 

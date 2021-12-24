@@ -1,43 +1,49 @@
 use crate::prelude::*;
 use datapet_support::AnchorId;
-use std::cell::RefCell;
-use truc::record::definition::{DatumDefinitionOverride, RecordDefinitionBuilder, RecordVariantId};
+use truc::record::definition::DatumDefinitionOverride;
 
-#[datapet_node(
-    in = "-",
-    out_mut = "-",
-    init = "graph_and_streams",
-    arg = "anchor_field: &str",
-    fields = "anchor_field: anchor_field.to_string()"
-)]
+#[derive(Getters)]
 pub struct Anchorize {
     name: FullyQualifiedName,
+    #[getset(get = "pub")]
     inputs: [NodeStream; 1],
+    #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     anchor_field: String,
 }
 
 impl Anchorize {
-    fn initialize_graph(graph: &mut GraphBuilder) -> usize {
-        graph.new_anchor_table()
-    }
-
-    fn initialize_streams(
-        (_, _): (&RefCell<RecordDefinitionBuilder>, RecordVariantId),
-        output_stream: &RefCell<RecordDefinitionBuilder>,
+    fn new(
+        graph: &mut GraphBuilder,
+        name: FullyQualifiedName,
+        inputs: [NodeStream; 1],
         anchor_field: &str,
-        anchor_table_id: usize,
-    ) -> [RecordVariantId; 1] {
-        let mut output_stream = output_stream.borrow_mut();
-        output_stream.add_datum_override::<AnchorId<0>, _>(
-            anchor_field,
-            DatumDefinitionOverride {
-                type_name: Some(format!("datapet_support::AnchorId<{}>", anchor_table_id)),
-                size: None,
-                allow_uninit: Some(true),
-            },
-        );
-        [output_stream.close_record_variant()]
+    ) -> Self {
+        let anchor_table_id = graph.new_anchor_table();
+
+        let mut streams = StreamsBuilder::new(&name, &inputs);
+
+        {
+            let output_stream = streams.output_from_input(0, graph).for_update();
+            let mut output_stream_def = output_stream.borrow_mut();
+            output_stream_def.add_datum_override::<AnchorId<0>, _>(
+                anchor_field,
+                DatumDefinitionOverride {
+                    type_name: Some(format!("datapet_support::AnchorId<{}>", anchor_table_id)),
+                    size: None,
+                    allow_uninit: Some(true),
+                },
+            );
+        }
+
+        let outputs = streams.build();
+
+        Self {
+            name,
+            inputs,
+            outputs,
+            anchor_field: anchor_field.to_string(),
+        }
     }
 }
 

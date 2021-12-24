@@ -1,36 +1,46 @@
 use crate::prelude::*;
-use std::cell::RefCell;
-use truc::record::definition::{RecordDefinitionBuilder, RecordVariantId};
 
-#[datapet_node(
-    in = "-",
-    out = "-",
-    out = "extracted",
-    init = "streams",
-    arg = "fields: &[&str]"
-)]
+#[derive(Getters)]
 pub struct ExtractFields {
     name: FullyQualifiedName,
+    #[getset(get = "pub")]
     inputs: [NodeStream; 1],
+    #[getset(get = "pub")]
     outputs: [NodeStream; 2],
 }
 
 impl ExtractFields {
-    fn initialize_streams(
-        (input_stream, input_variant_id): (&RefCell<RecordDefinitionBuilder>, RecordVariantId),
-        output_extracted_stream: &RefCell<RecordDefinitionBuilder>,
+    fn new(
+        graph: &mut GraphBuilder,
+        name: FullyQualifiedName,
+        inputs: [NodeStream; 1],
         fields: &[&str],
-    ) -> [RecordVariantId; 1] {
-        let mut output_extracted_stream = output_extracted_stream.borrow_mut();
-        for field in fields.iter() {
-            output_extracted_stream.copy_datum(
-                input_stream
-                    .borrow()
-                    .get_variant_datum_definition_by_name(input_variant_id, field)
-                    .unwrap_or_else(|| panic!(r#"datum "{}""#, field)),
-            );
+    ) -> Self {
+        let mut streams = StreamsBuilder::new(&name, &inputs);
+        streams.new_named_stream("extracted", graph);
+
+        let input_stream = streams.output_from_input(0, graph).pass_through();
+
+        {
+            let output_extracted_stream = streams.new_named_output("extracted", graph).for_update();
+            let mut output_extracted_stream_def = output_extracted_stream.borrow_mut();
+            for field in fields.iter() {
+                output_extracted_stream_def.copy_datum(
+                    input_stream
+                        .borrow()
+                        .get_variant_datum_definition_by_name(inputs[0].variant_id(), field)
+                        .unwrap_or_else(|| panic!(r#"datum "{}""#, field)),
+                );
+            }
         }
-        [output_extracted_stream.close_record_variant()]
+
+        let outputs = streams.build();
+
+        Self {
+            name,
+            inputs,
+            outputs,
+        }
     }
 }
 

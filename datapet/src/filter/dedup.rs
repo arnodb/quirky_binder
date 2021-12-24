@@ -1,10 +1,25 @@
 use crate::{prelude::*, support::fields_eq};
 
-#[datapet_node(in = "-", out = "-")]
+#[derive(Getters)]
 pub struct Dedup {
     name: FullyQualifiedName,
+    #[getset(get = "pub")]
     inputs: [NodeStream; 1],
+    #[getset(get = "pub")]
     outputs: [NodeStream; 1],
+}
+
+impl Dedup {
+    fn new(graph: &mut GraphBuilder, name: FullyQualifiedName, inputs: [NodeStream; 1]) -> Self {
+        let mut streams = StreamsBuilder::new(&name, &inputs);
+        streams.output_from_input(0, graph).pass_through();
+        let outputs = streams.build();
+        Self {
+            name,
+            inputs,
+            outputs,
+        }
+    }
 }
 
 impl DynNode for Dedup {

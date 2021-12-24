@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate datapet_codegen;
+extern crate getset;
 #[macro_use]
 extern crate quote;
 
@@ -8,32 +8,46 @@ use datapet::{
         anchor::anchorize, dedup::dedup, hof::index::wordlist::build_word_list, sink::sink,
         sort::sort,
     },
+    graph::StreamsBuilder,
     prelude::*,
 };
-use std::{cell::RefCell, path::Path};
-use truc::record::definition::{RecordDefinitionBuilder, RecordVariantId};
+use std::path::Path;
 
-#[datapet_node(
-    out_mut = "-",
-    arg = "field: &str",
-    init = "streams",
-    fields = "field: field.to_string()"
-)]
+#[derive(Getters)]
 struct ReadStdin {
     name: FullyQualifiedName,
+    #[getset(get = "pub")]
+    #[allow(dead_code)]
     inputs: [NodeStream; 0],
+    #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     field: String,
 }
 
 impl ReadStdin {
-    fn initialize_streams(
-        output_stream: &RefCell<RecordDefinitionBuilder>,
-        _field: &str,
-    ) -> [RecordVariantId; 1] {
-        let mut output_stream = output_stream.borrow_mut();
-        output_stream.add_datum::<Box<str>, _>("token");
-        [output_stream.close_record_variant()]
+    fn new(
+        graph: &mut GraphBuilder,
+        name: FullyQualifiedName,
+        inputs: [NodeStream; 0],
+        field: &str,
+    ) -> Self {
+        let mut streams = StreamsBuilder::new(&name, &inputs);
+        streams.new_main_stream(graph);
+
+        {
+            let output_stream = streams.new_main_output(graph).for_update();
+            let mut output_stream_def = output_stream.borrow_mut();
+            output_stream_def.add_datum::<Box<str>, _>("token");
+        }
+
+        let outputs = streams.build();
+
+        Self {
+            name,
+            inputs,
+            outputs,
+            field: field.to_string(),
+        }
     }
 }
 
@@ -101,27 +115,41 @@ impl DynNode for ReadStdin {
     }
 }
 
-#[datapet_node(
-    out_mut = "-",
-    arg = "field: &str",
-    init = "streams",
-    fields = "field: field.to_string()"
-)]
+#[derive(Getters)]
 struct ReadStdinIterator {
     name: FullyQualifiedName,
+    #[getset(get = "pub")]
+    #[allow(dead_code)]
     inputs: [NodeStream; 0],
+    #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     field: String,
 }
 
 impl ReadStdinIterator {
-    fn initialize_streams(
-        output_stream: &RefCell<RecordDefinitionBuilder>,
-        _field: &str,
-    ) -> [RecordVariantId; 1] {
-        let mut output_stream = output_stream.borrow_mut();
-        output_stream.add_datum::<Box<str>, _>("token");
-        [output_stream.close_record_variant()]
+    fn new(
+        graph: &mut GraphBuilder,
+        name: FullyQualifiedName,
+        inputs: [NodeStream; 0],
+        field: &str,
+    ) -> Self {
+        let mut streams = StreamsBuilder::new(&name, &inputs);
+        streams.new_main_stream(graph);
+
+        {
+            let output_stream = streams.new_main_output(graph).for_update();
+            let mut output_stream_def = output_stream.borrow_mut();
+            output_stream_def.add_datum::<Box<str>, _>("token");
+        }
+
+        let outputs = streams.build();
+
+        Self {
+            name,
+            inputs,
+            outputs,
+            field: field.to_string(),
+        }
     }
 }
 

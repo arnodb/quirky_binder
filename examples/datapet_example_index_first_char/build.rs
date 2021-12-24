@@ -1,36 +1,50 @@
 #[macro_use]
-extern crate datapet_codegen;
+extern crate getset;
 #[macro_use]
 extern crate quote;
 
 use datapet::{
     filter::{group::group, sink::sink, sort::sort},
+    graph::StreamsBuilder,
     prelude::*,
 };
-use std::{cell::RefCell, path::Path};
-use truc::record::definition::{RecordDefinitionBuilder, RecordVariantId};
+use std::path::Path;
 
-#[datapet_node(
-    out_mut = "-",
-    arg = "field: &str",
-    init = "streams",
-    fields = "field: field.to_string()"
-)]
+#[derive(Getters)]
 struct ReadStdinIterator {
     name: FullyQualifiedName,
+    #[getset(get = "pub")]
+    #[allow(dead_code)]
     inputs: [NodeStream; 0],
+    #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     field: String,
 }
 
 impl ReadStdinIterator {
-    fn initialize_streams(
-        output_stream: &RefCell<RecordDefinitionBuilder>,
-        _field: &str,
-    ) -> [RecordVariantId; 1] {
-        let mut output_stream = output_stream.borrow_mut();
-        output_stream.add_datum::<Box<str>, _>("words");
-        [output_stream.close_record_variant()]
+    fn new(
+        graph: &mut GraphBuilder,
+        name: FullyQualifiedName,
+        inputs: [NodeStream; 0],
+        field: &str,
+    ) -> Self {
+        let mut streams = StreamsBuilder::new(&name, &inputs);
+        streams.new_main_stream(graph);
+
+        {
+            let output_stream = streams.new_main_output(graph).for_update();
+            let mut output_stream_def = output_stream.borrow_mut();
+            output_stream_def.add_datum::<Box<str>, _>("words");
+        }
+
+        let outputs = streams.build();
+
+        Self {
+            name,
+            inputs,
+            outputs,
+            field: field.to_string(),
+        }
     }
 }
 
@@ -92,27 +106,39 @@ fn read_stdin(
     ReadStdinIterator::new(graph, name, [], field)
 }
 
-#[datapet_node(in = "-", out_mut = "-", init = "streams")]
+#[derive(Getters)]
 pub struct Tokenize {
     name: FullyQualifiedName,
+    #[getset(get = "pub")]
     inputs: [NodeStream; 1],
+    #[getset(get = "pub")]
     outputs: [NodeStream; 1],
 }
 
 impl Tokenize {
-    fn initialize_streams(
-        (_, input_variant_id): (&RefCell<RecordDefinitionBuilder>, RecordVariantId),
-        output_stream: &RefCell<RecordDefinitionBuilder>,
-    ) -> [RecordVariantId; 1] {
-        let mut output_stream = output_stream.borrow_mut();
-        let datum = output_stream
-            .get_variant_datum_definition_by_name(input_variant_id, "words")
-            .unwrap_or_else(|| panic!(r#"datum "{}""#, "words"));
-        let datum_id = datum.id();
-        output_stream.remove_datum(datum_id);
-        output_stream.add_datum::<Box<str>, _>("word");
-        output_stream.add_datum::<char, _>("first_char");
-        [output_stream.close_record_variant()]
+    fn new(graph: &mut GraphBuilder, name: FullyQualifiedName, inputs: [NodeStream; 1]) -> Self {
+        let mut streams = StreamsBuilder::new(&name, &inputs);
+
+        {
+            let output_stream = streams.output_from_input(0, graph).for_update();
+            let input_variant_id = output_stream.input_variant_id();
+            let mut output_stream_def = output_stream.borrow_mut();
+            let datum = output_stream_def
+                .get_variant_datum_definition_by_name(input_variant_id, "words")
+                .unwrap_or_else(|| panic!(r#"datum "{}""#, "words"));
+            let datum_id = datum.id();
+            output_stream_def.remove_datum(datum_id);
+            output_stream_def.add_datum::<Box<str>, _>("word");
+            output_stream_def.add_datum::<char, _>("first_char");
+        }
+
+        let outputs = streams.build();
+
+        Self {
+            name,
+            inputs,
+            outputs,
+        }
     }
 }
 

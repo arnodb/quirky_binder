@@ -6,7 +6,7 @@ use crate::{
         in_place::string::{reverse_chars_boxed_str, to_lowercase_boxed_str},
         sort::sort,
     },
-    graph::{GraphBuilder, Node, NodeCluster},
+    graph::{GraphBuilder, NodeCluster},
     stream::NodeStream,
     support::FullyQualifiedName,
 };

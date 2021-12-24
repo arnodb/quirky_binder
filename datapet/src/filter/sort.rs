@@ -1,16 +1,32 @@
 use crate::{prelude::*, support::fields_cmp};
 
-#[datapet_node(
-    in = "-",
-    out = "-",
-    arg = "fields: &[&str]",
-    fields = "fields: fields.iter().map(ToString::to_string).collect::<Vec<_>>()"
-)]
+#[derive(Getters)]
 pub struct Sort {
     name: FullyQualifiedName,
+    #[getset(get = "pub")]
     inputs: [NodeStream; 1],
+    #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     fields: Vec<String>,
+}
+
+impl Sort {
+    fn new(
+        graph: &mut GraphBuilder,
+        name: FullyQualifiedName,
+        inputs: [NodeStream; 1],
+        fields: &[&str],
+    ) -> Self {
+        let mut streams = StreamsBuilder::new(&name, &inputs);
+        streams.output_from_input(0, graph).pass_through();
+        let outputs = streams.build();
+        Self {
+            name,
+            inputs,
+            outputs,
+            fields: fields.iter().map(ToString::to_string).collect::<Vec<_>>(),
+        }
+    }
 }
 
 impl DynNode for Sort {

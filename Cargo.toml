@@ -1,6 +1,5 @@
 [workspace]
 members = [
-    "datapet_codegen",
     "datapet",
     "datapet_support",
     "examples/datapet_example_index_first_char",

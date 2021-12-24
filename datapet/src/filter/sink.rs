@@ -1,12 +1,30 @@
 use crate::prelude::*;
 use proc_macro2::TokenStream;
 
-#[datapet_node(in = "-", arg = "debug: Option<TokenStream>", fields = "debug")]
+#[derive(Getters)]
 pub struct Sink {
     name: FullyQualifiedName,
+    #[getset(get = "pub")]
     inputs: [NodeStream; 1],
+    #[getset(get = "pub")]
     outputs: [NodeStream; 0],
     debug: Option<TokenStream>,
+}
+
+impl Sink {
+    fn new(
+        _graph: &mut GraphBuilder,
+        name: FullyQualifiedName,
+        inputs: [NodeStream; 1],
+        debug: Option<TokenStream>,
+    ) -> Self {
+        Self {
+            name,
+            inputs,
+            outputs: [],
+            debug,
+        }
+    }
 }
 
 impl DynNode for Sink {

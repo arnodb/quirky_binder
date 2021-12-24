@@ -1,28 +1,79 @@
-use crate::{
-    chain::{Chain, ImportScope},
-    graph::{DynNode, Graph, GraphBuilder, Node},
-    stream::{NodeStream, NodeStreamSource, StreamRecordType},
-    support::{fields_eq, FullyQualifiedName},
-};
+use crate::{prelude::*, support::fields_eq};
 use itertools::Itertools;
 use truc::record::definition::DatumDefinitionOverride;
 
+#[derive(Getters)]
 pub struct Group {
     name: FullyQualifiedName,
+    #[getset(get = "pub")]
     inputs: [NodeStream; 1],
+    #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     rs_stream: NodeStream,
     fields: Vec<String>,
     rs_field: String,
 }
 
-impl Node<1, 1> for Group {
-    fn inputs(&self) -> &[NodeStream; 1] {
-        &self.inputs
-    }
+impl Group {
+    pub fn new(
+        graph: &mut GraphBuilder,
+        name: FullyQualifiedName,
+        inputs: [NodeStream; 1],
+        fields: &[&str],
+        rs_field: &str,
+    ) -> Group {
+        let mut streams = StreamsBuilder::new(&name, &inputs);
+        streams.new_named_stream("rs", graph);
 
-    fn outputs(&self) -> &[NodeStream; 1] {
-        &self.outputs
+        let rs_stream = {
+            let output_stream = streams.output_from_input(0, graph).for_update();
+            let rs_stream = output_stream.new_named_sub_stream("rs", graph);
+            let input_variant_id = output_stream.input_variant_id();
+            let mut output_stream_def = output_stream.borrow_mut();
+
+            {
+                let mut rs_stream_def = rs_stream.borrow_mut();
+                for &field in fields {
+                    let datum = output_stream_def
+                        .get_variant_datum_definition_by_name(input_variant_id, field)
+                        .unwrap_or_else(|| panic!(r#"datum "{}""#, field));
+                    rs_stream_def.copy_datum(datum);
+                    let datum_id = datum.id();
+                    output_stream_def.remove_datum(datum_id);
+                }
+            }
+            let rs_stream = rs_stream.close_record_variant();
+
+            let module_name = graph
+                .chain_customizer()
+                .streams_module_name
+                .sub_n(&***rs_stream.record_type());
+            output_stream_def.add_datum_override::<Vec<()>, _>(
+                rs_field,
+                DatumDefinitionOverride {
+                    type_name: Some(format!(
+                        "Vec<{module_name}::Record{rs_variant_id}>",
+                        module_name = module_name,
+                        rs_variant_id = rs_stream.variant_id(),
+                    )),
+                    size: None,
+                    allow_uninit: None,
+                },
+            );
+
+            rs_stream
+        };
+
+        let outputs = streams.build();
+
+        Group {
+            name: name.clone(),
+            inputs,
+            outputs,
+            rs_stream,
+            fields: fields.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            rs_field: rs_field.to_string(),
+        }
     }
 }
 
@@ -120,65 +171,5 @@ pub fn group(
     fields: &[&str],
     rs_field: &str,
 ) -> Group {
-    let [input] = inputs;
-
-    let rs_record_type = StreamRecordType::from(name.sub("rs"));
-    graph.new_stream(rs_record_type.clone());
-
-    let (variant_id, rs_stream) = {
-        let mut stream = graph
-            .get_stream(input.record_type())
-            .unwrap_or_else(|| panic!(r#"stream "{}""#, input.record_type()))
-            .borrow_mut();
-
-        let mut rs_stream = graph
-            .get_stream(&rs_record_type)
-            .unwrap_or_else(|| panic!(r#"stream "{}""#, rs_record_type))
-            .borrow_mut();
-
-        for &field in fields {
-            let datum = stream
-                .get_variant_datum_definition_by_name(input.variant_id(), field)
-                .unwrap_or_else(|| panic!(r#"datum "{}""#, field));
-            rs_stream.copy_datum(datum);
-            let datum_id = datum.id();
-            stream.remove_datum(datum_id);
-        }
-        let rs_variant_id = rs_stream.close_record_variant();
-
-        let module_name = graph
-            .chain_customizer()
-            .streams_module_name
-            .sub_n(&**rs_record_type);
-        stream.add_datum_override::<Vec<()>, _>(
-            rs_field,
-            DatumDefinitionOverride {
-                type_name: Some(format!(
-                    "Vec<{module_name}::Record{rs_variant_id}>",
-                    module_name = module_name,
-                    rs_variant_id = rs_variant_id,
-                )),
-                size: None,
-                allow_uninit: None,
-            },
-        );
-        (
-            stream.close_record_variant(),
-            NodeStream::new(rs_record_type, rs_variant_id, NodeStreamSource::default()),
-        )
-    };
-
-    let record_type = input.record_type().clone();
-    Group {
-        name: name.clone(),
-        inputs: [input],
-        outputs: [NodeStream::new(
-            record_type,
-            variant_id,
-            NodeStreamSource::from(name),
-        )],
-        rs_stream,
-        fields: fields.iter().map(ToString::to_string).collect::<Vec<_>>(),
-        rs_field: rs_field.to_string(),
-    }
+    Group::new(graph, name, inputs, fields, rs_field)
 }

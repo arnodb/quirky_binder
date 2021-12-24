@@ -27,29 +27,20 @@ impl Deref for NodeStreamSource {
 }
 
 /// Node stream information
-#[derive(Clone, Debug, new)]
+#[derive(Clone, Debug, new, Getters, CopyGetters, MutGetters)]
 pub struct NodeStream {
+    /// The type of the records going through the entire stream.
+    #[getset(get = "pub")]
     record_type: StreamRecordType,
+    /// The record variant for a specific node.
+    #[getset(get_copy = "pub")]
     variant_id: RecordVariantId,
+    /// The source to connect to in order to read records from it.
+    #[getset(get = "pub")]
     source: NodeStreamSource,
 }
 
 impl NodeStream {
-    /// Gets the type of the records going through the entire stream.
-    pub fn record_type(&self) -> &StreamRecordType {
-        &self.record_type
-    }
-
-    /// Gets the record variant for a specific node.
-    pub fn variant_id(&self) -> RecordVariantId {
-        self.variant_id
-    }
-
-    /// Gets the source to connect to in order to read records from it.
-    pub fn source(&self) -> &NodeStreamSource {
-        &self.source
-    }
-
     /// Creates a new stream with a different source.
     pub fn with_source(&self, source: NodeStreamSource) -> Self {
         Self {
