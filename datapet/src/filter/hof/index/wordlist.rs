@@ -3,7 +3,7 @@ use crate::{
         anchor::anchorize,
         fork::extract_fields::extract_fields,
         group::group,
-        in_place::string::{reverse_chars_boxed_str, to_lowercase_boxed_str},
+        in_place::string::{reverse_chars, to_lowercase},
         sort::sort,
     },
     graph::{GraphBuilder, NodeCluster},
@@ -26,7 +26,7 @@ fn build_rev_table(
         [input.clone()],
         &[token_field, reference_field],
     );
-    let reverse_token = reverse_chars_boxed_str(
+    let reverse_token = reverse_chars(
         graph,
         name.sub("reverse_token"),
         [extract_token.outputs()[1].clone()],
@@ -72,7 +72,7 @@ fn build_sim_table(
         &[token_field, reference_field],
     );
 
-    let simplify_token = to_lowercase_boxed_str(
+    let simplify_token = to_lowercase(
         graph,
         name.sub("simplify_token"),
         [extract_token.outputs()[1].clone()],
