@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use proc_macro2::TokenStream;
-use truc::record::definition::{DatumDefinition, RecordDefinition, RecordVariant};
+use truc::record::definition::{RecordDefinition, RecordVariant};
 
 #[derive(Getters)]
 struct InPlaceFilter {
@@ -75,16 +75,14 @@ impl InPlaceFilter {
         chain.update_thread_single_stream(thread.thread_id, &self.outputs[0]);
     }
 
-    fn gen_chain_simple<'f, F, S>(
+    fn gen_chain_simple<'f, F>(
         &self,
         graph: &Graph,
         chain: &mut Chain,
         fields: F,
         transform: TokenStream,
-        string_to_type: S,
     ) where
         F: IntoIterator<Item = &'f str> + Clone,
-        S: Fn(&DatumDefinition) -> TokenStream,
     {
         self.gen_chain(graph, chain, |record_definition, variant| {
             let data = variant
@@ -108,12 +106,8 @@ impl InPlaceFilter {
                 .iter()
                 .map(|datum| format_ident!("{}_mut", datum.name()));
             let fields = data.iter().map(|datum| format_ident!("{}", datum.name()));
-            let string_to_types = data
-                .iter()
-                .map(|datum| string_to_type(datum))
-                .collect::<Vec<_>>();
             quote! {
-                #(*record.#mut_fields() = record.#fields() #transform #string_to_types;)*
+                #(*record.#mut_fields() = record.#fields()#transform.into();)*
             }
         });
     }
@@ -124,8 +118,6 @@ pub mod string {
     use crate::graph::{DynNode, GraphBuilder};
     use crate::support::FullyQualifiedName;
     use crate::{chain::Chain, graph::Graph, stream::NodeStream};
-    use proc_macro2::TokenStream;
-    use truc::record::definition::DatumDefinition;
 
     pub struct ToLowercase {
         in_place: InPlaceFilter,
@@ -149,7 +141,6 @@ pub mod string {
                 chain,
                 self.fields.iter().map(Box::as_ref),
                 quote! { .to_lowercase() },
-                string_to_type,
             );
         }
     }
@@ -196,7 +187,6 @@ pub mod string {
                 chain,
                 self.fields.iter().map(Box::as_ref),
                 quote! { .chars().rev().collect::<String>() },
-                string_to_type,
             );
         }
     }
@@ -218,16 +208,6 @@ pub mod string {
                 .map(Into::into)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
-        }
-    }
-
-    fn string_to_type(datum: &DatumDefinition) -> TokenStream {
-        let type_name = datum.type_name();
-        let type_name = type_name.chars().filter(|c| *c != ' ').collect::<String>();
-        if type_name == "Box<str>" {
-            quote! { .into_boxed_str() }
-        } else {
-            quote! {}
         }
     }
 }
