@@ -92,7 +92,8 @@ pub fn dtpt_module(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                             .enumerate()
                             .map(|(filter_index, filter)| {
                                 let var_name = &var_names[filter_index];
-                                let name = format_ident!("{}", filter.filter.name);
+                                let name: syn::Path =
+                                    syn::parse_str(&filter.filter.name).expect("filter name");
                                 let inputs = filter
                                     .inputs
                                     .into_iter()

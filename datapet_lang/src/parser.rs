@@ -4,7 +4,7 @@ use nom::{
     character::complete::{alpha1, alphanumeric1, multispace0},
     combinator::{cut, eof, opt, recognize},
     error::ParseError,
-    multi::{many0_count, many_till, separated_list0, separated_list1},
+    multi::{many0, many0_count, many_till, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     AsChar, IResult, InputTakeAtPosition, Parser,
 };
@@ -134,7 +134,11 @@ fn filter_input_streams(input: &str) -> IResult<&str, Vec<&str>> {
 
 fn filter(input: &str) -> IResult<&str, Filter> {
     tuple((
-        identifier,
+        recognize(tuple((
+            opt(tag("::")),
+            ps(identifier),
+            many0(pair(ps(tag("::")), ps(identifier))),
+        ))),
         ps(opt(preceded(tag("#"), cut(ps(identifier))))),
         ps(filter_params),
         ps(opt_streams1),
