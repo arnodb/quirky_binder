@@ -225,15 +225,12 @@ fn main() {
             use itertools::Itertools;
 
             println!(
-                "{} - {}",
+                "{} - [{}]",
                 record.first_char(),
-                format!(
-                    "[{}]",
-                    record.words()
+                record.words()
                     .iter()
                     .map(|word|word.word())
                     .join(", ")
-                )
             );
         }),
     );

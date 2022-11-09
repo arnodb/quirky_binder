@@ -1,0 +1,10 @@
+[package]
+name = "datapet_lang"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nom = "7"
+
+[dev-dependencies]
+assert_matches = "1"

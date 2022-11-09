@@ -118,6 +118,7 @@ pub mod string {
     use crate::graph::{DynNode, GraphBuilder};
     use crate::support::FullyQualifiedName;
     use crate::{chain::Chain, graph::Graph, stream::NodeStream};
+    use std::ops::Deref;
 
     pub struct ToLowercase {
         in_place: InPlaceFilter,
@@ -145,20 +146,17 @@ pub mod string {
         }
     }
 
-    pub fn to_lowercase<I, F>(
+    pub fn to_lowercase(
         graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        fields: I,
-    ) -> ToLowercase
-    where
-        I: IntoIterator<Item = F>,
-        F: Into<Box<str>>,
-    {
+        fields: &[&str],
+    ) -> ToLowercase {
         ToLowercase {
             in_place: InPlaceFilter::new(graph, name, inputs),
             fields: fields
-                .into_iter()
+                .iter()
+                .map(Deref::deref)
                 .map(Into::into)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
@@ -191,20 +189,17 @@ pub mod string {
         }
     }
 
-    pub fn reverse_chars<I, F>(
+    pub fn reverse_chars(
         graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        fields: I,
-    ) -> ReverseChars
-    where
-        I: IntoIterator<Item = F>,
-        F: Into<Box<str>>,
-    {
+        fields: &[&str],
+    ) -> ReverseChars {
         ReverseChars {
             in_place: InPlaceFilter::new(graph, name, inputs),
             fields: fields
-                .into_iter()
+                .iter()
+                .map(Deref::deref)
                 .map(Into::into)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),

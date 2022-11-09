@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 codegen = "0.1"
+datapet_codegen = { path = "../datapet_codegen" }
 datapet_support = { path = "../datapet_support" }
 derive_more = "0.99"
 derive-new = "0.5"
