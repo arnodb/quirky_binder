@@ -1,20 +1,17 @@
-mod private {
-    use crate::{
-        filter::{
-            anchor::anchorize,
-            fork::extract_fields::extract_fields,
-            group::group,
-            in_place::string::{reverse_chars, to_lowercase},
-            sort::sort,
-        },
-        graph::{GraphBuilder, NodeCluster},
-        stream::NodeStream,
-        support::FullyQualifiedName,
-    };
-    use datapet_codegen::dtpt_module;
+use datapet_codegen::dtpt_module;
 
-    dtpt_module! {
-        r#"
+dtpt_module! {
+    r#"
+use crate::{
+    filter::{
+        anchor::anchorize,
+        fork::extract_fields::extract_fields,
+        group::group,
+        in_place::string::{reverse_chars, to_lowercase},
+        sort::sort,
+    },
+};
+
 [] build_rev_table(token_field, reference_field) [reversed]
 {
   (
@@ -44,7 +41,7 @@ mod private {
   )
 }
 
-[] build_word_list(token_field, anchor_field, sim_anchor_field, sim_rs_field) [rev_token, sim_token, rev_sim_token]
+pub [] build_word_list(token_field, anchor_field, sim_anchor_field, sim_rs_field) [rev_token, sim_token, rev_sim_token]
 {
   (
     - build_sim_table#sim(token_field, anchor_field, sim_rs_field) [simplified]
@@ -59,7 +56,4 @@ mod private {
   )
 }
 "#
-    }
 }
-
-pub use private::build_word_list;

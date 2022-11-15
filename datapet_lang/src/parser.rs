@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{alpha1, alphanumeric1, multispace0},
+    character::complete::{alpha1, alphanumeric1, multispace0, multispace1},
     combinator::{cut, eof, opt, recognize},
     error::ParseError,
     multi::{many0, many0_count, many_till, separated_list0, separated_list1},
@@ -11,22 +11,82 @@ use nom::{
 
 use crate::ast::{
     ConnectedFilter, Filter, FilterParam, GraphDefinition, GraphDefinitionSignature, Module,
-    StreamLine, StreamLineInput, StreamLineOutput,
+    StreamLine, StreamLineInput, StreamLineOutput, UseDeclaration, UseTree,
 };
 
 pub fn module(input: &str) -> IResult<&str, Module> {
-    ps(many_till(ts(graph_definition), eof))
-        .map(|(graph_definitions, _)| Module { graph_definitions })
-        .parse(input)
+    ps(many_till(
+        ts(alt((
+            use_declaration.map(Into::into),
+            graph_definition.map(Into::into),
+        ))),
+        eof,
+    ))
+    .map(|(items, _)| Module { items })
+    .parse(input)
+}
+
+fn use_declaration(input: &str) -> IResult<&str, UseDeclaration> {
+    delimited(
+        terminated(tag("use"), multispace1),
+        cut(use_tree).map(|use_tree| UseDeclaration { use_tree }),
+        cut(ps(tag(";"))),
+    )(input)
+}
+
+enum UseTreeSuffix {
+    Glob,
+    Group(Vec<UseTree>),
+}
+
+fn use_tree(input: &str) -> IResult<&str, UseTree> {
+    alt((
+        pair(
+            opt(terminated(opt(simple_path), ps(tag("::")))),
+            ps(alt((
+                tag("*").map(|_| UseTreeSuffix::Glob),
+                delimited(
+                    tag("{"),
+                    ps(opt(terminated(
+                        pair(use_tree, many0(preceded(ps(tag(",")), ps(use_tree)))).map(
+                            |(first, mut others)| {
+                                others.insert(0, first);
+                                others
+                            },
+                        ),
+                        ps(opt(ts(tag(",")))),
+                    )))
+                    .map(Option::unwrap_or_default),
+                    tag("}"),
+                )
+                .map(UseTreeSuffix::Group),
+            ))),
+        )
+        .map(|(path, suffix)| {
+            let path = path.map_or_else(String::default, |path| {
+                path.map_or_else(String::default, ToString::to_string)
+            });
+            match suffix {
+                UseTreeSuffix::Glob => UseTree::Glob(path),
+                UseTreeSuffix::Group(group) => UseTree::Group(path, group),
+            }
+        }),
+        simple_path.map(|path| UseTree::Path(path.to_string())),
+    ))(input)
 }
 
 fn graph_definition(input: &str) -> IResult<&str, GraphDefinition> {
-    pair(graph_definition_signature, ps(stream_lines))
-        .map(|(signature, stream_lines)| GraphDefinition {
-            signature,
-            stream_lines,
-        })
-        .parse(input)
+    tuple((
+        opt(tag("pub")),
+        ps(graph_definition_signature),
+        ps(stream_lines),
+    ))
+    .map(|(visibility, signature, stream_lines)| GraphDefinition {
+        signature,
+        stream_lines,
+        visible: visibility.is_some(),
+    })
+    .parse(input)
 }
 
 fn graph_definition_signature(input: &str) -> IResult<&str, GraphDefinitionSignature> {
@@ -134,11 +194,7 @@ fn filter_input_streams(input: &str) -> IResult<&str, Vec<&str>> {
 
 fn filter(input: &str) -> IResult<&str, Filter> {
     tuple((
-        recognize(tuple((
-            opt(tag("::")),
-            ps(identifier),
-            many0(pair(ps(tag("::")), ps(identifier))),
-        ))),
+        simple_path,
         ps(opt(preceded(tag("#"), cut(ps(identifier))))),
         ps(filter_params),
         ps(opt_streams1),
@@ -191,6 +247,14 @@ fn opt_streams1(input: &str) -> IResult<&str, Option<Vec<&str>>> {
 
 fn opened_streams1(input: &str) -> IResult<&str, Vec<&str>> {
     terminated(ps(separated_list1(tag(","), ds(identifier))), tag("]"))(input)
+}
+
+fn simple_path(input: &str) -> IResult<&str, &str> {
+    recognize(tuple((
+        opt(tag("::")),
+        ps(identifier),
+        many0(pair(ps(tag("::")), ps(identifier))),
+    )))(input)
 }
 
 fn identifier(input: &str) -> IResult<&str, &str> {

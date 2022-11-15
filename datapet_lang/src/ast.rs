@@ -1,12 +1,43 @@
 #[derive(Debug)]
 pub struct Module {
-    pub graph_definitions: Vec<GraphDefinition>,
+    pub items: Vec<ModuleItem>,
+}
+
+#[derive(Debug)]
+pub enum ModuleItem {
+    UseDeclaration(UseDeclaration),
+    GraphDefinition(GraphDefinition),
+}
+
+impl From<UseDeclaration> for ModuleItem {
+    fn from(value: UseDeclaration) -> Self {
+        ModuleItem::UseDeclaration(value)
+    }
+}
+
+impl From<GraphDefinition> for ModuleItem {
+    fn from(value: GraphDefinition) -> Self {
+        ModuleItem::GraphDefinition(value)
+    }
+}
+
+#[derive(Debug)]
+pub struct UseDeclaration {
+    pub use_tree: UseTree,
+}
+
+#[derive(Debug)]
+pub enum UseTree {
+    Glob(String),
+    Group(String, Vec<UseTree>),
+    Path(String),
 }
 
 #[derive(Debug)]
 pub struct GraphDefinition {
     pub signature: GraphDefinitionSignature,
     pub stream_lines: Vec<StreamLine>,
+    pub visible: bool,
 }
 
 #[derive(Debug)]
