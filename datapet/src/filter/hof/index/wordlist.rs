@@ -1,6 +1,6 @@
-use datapet_codegen::dtpt_module;
+use datapet_codegen::dtpt_mod_crate;
 
-dtpt_module! {
+dtpt_mod_crate! {
     r#"
 use crate::{
     filter::{
@@ -15,13 +15,13 @@ use crate::{
 [] build_rev_table(token_field, reference_field) [reversed]
 {
   (
-    - extract_fields#extract_token([token_field, reference_field]) [extracted]
+    - extract_fields#extract_token(&[token_field, reference_field]) [extracted]
     -
   )
 
   ( < extracted
-    - reverse_chars#reverse_token([token_field])
-    - sort#sort_token([token_field])
+    - reverse_chars#reverse_token(&[token_field])
+    - sort#sort_token(&[token_field])
     -> reversed
   )
 }
@@ -29,14 +29,14 @@ use crate::{
 [] build_sim_table(token_field, reference_field, ref_rs_field) [simplified]
 {
   (
-    - extract_fields#extract_token([token_field, reference_field]) [extracted]
+    - extract_fields#extract_token(&[token_field, reference_field]) [extracted]
     -
   )
 
   ( < extracted
-    - to_lowercase#simplify_token([token_field])
-    - sort#sort_token([token_field, reference_field])
-    - group#group([reference_field], ref_rs_field)
+    - to_lowercase#simplify_token(&[token_field])
+    - sort#sort_token(&[token_field, reference_field])
+    - group#group(&[reference_field], ref_rs_field)
     -> simplified
   )
 }

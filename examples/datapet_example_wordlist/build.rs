@@ -3,14 +3,8 @@ extern crate getset;
 #[macro_use]
 extern crate quote;
 
-use datapet::{
-    filter::{
-        anchor::anchorize, dedup::dedup, hof::index::wordlist::build_word_list, sink::sink,
-        sort::sort,
-    },
-    graph::StreamsBuilder,
-    prelude::*,
-};
+use datapet::{graph::StreamsBuilder, prelude::*};
+use datapet_codegen::dtpt_mod;
 use std::path::Path;
 
 #[derive(Getters)]
@@ -211,88 +205,65 @@ fn read_stdin_old(graph: &mut GraphBuilder, name: FullyQualifiedName, field: &st
 fn read_stdin(
     graph: &mut GraphBuilder,
     name: FullyQualifiedName,
+    inputs: [NodeStream; 0],
     field: &str,
 ) -> ReadStdinIterator {
-    ReadStdinIterator::new(graph, name, [], field)
+    ReadStdinIterator::new(graph, name, inputs, field)
 }
 
 fn main() {
-    let mut graph = GraphBuilder::new(ChainCustomizer::default());
+    dtpt_mod! {
+        r#"
+use datapet::{
+    filter::{
+        anchor::anchorize, dedup::dedup, hof::index::wordlist::build_word_list, sink::sink,
+        sort::sort,
+    },
+};
 
-    let root = FullyQualifiedName::default();
+use super::read_stdin;
 
-    let read_token = read_stdin(&mut graph, root.sub("read_token"), "token");
-    let sort_token = sort(
-        &mut graph,
-        root.sub("sort_token"),
-        [read_token.outputs()[0].clone()],
-        &["token"],
-    );
-    let dedup_token = dedup(
-        &mut graph,
-        root.sub("dedup_token"),
-        [sort_token.outputs()[0].clone()],
-    );
-    let anchorize = anchorize(
-        &mut graph,
-        root.sub("anchor"),
-        [dedup_token.outputs()[0].clone()],
-        "anchor",
-    );
+{
+  (
+      read_stdin#read_token("token")
+    - sort#sort_token(&["token"])
+    - dedup#dedup_token()
+    - anchorize#anchor("anchor")
+    - build_word_list#word_list("token", "anchor", "sim_anchor", "sim_rs") [s2, s3, s4]
+    - sink#sink_1(
+        Some(quote! { println!("sink_1 {} (id = {:?})", record.token(), record.anchor()); })
+      )
+  )
 
-    let word_list = build_word_list(
-        &mut graph,
-        root.sub("word_list"),
-        [anchorize.outputs()[0].clone()],
-        "token",
-        "anchor",
-        "sim_anchor",
-        "sim_rs",
-    );
+  ( < s2
+    - sink#sink_2(
+        Some(quote! { println!("sink_2 {} (id = {:?})", record.token(), record.anchor()); })
+      )
+  )
 
-    let sink_1 = sink(
-        &mut graph,
-        root.sub("sink_1"),
-        [word_list.outputs()[0].clone()],
-        Some(quote! { println!("sink_1 {} (id = {:?})", record.token(), record.anchor()); }),
-    );
-    let sink_2 = sink(
-        &mut graph,
-        root.sub("sink_2"),
-        [word_list.outputs()[1].clone()],
-        Some(quote! { println!("sink_2 {} (id = {:?})", record.token(), record.anchor()); }),
-    );
-    let sink_3 = sink(
-        &mut graph,
-        root.sub("sink_3"),
-        [word_list.outputs()[2].clone()],
+  ( < s3
+    - sink#sink_3(
         Some(quote! {
             println!("sink_3 {} (sim id = {:?}) == {}", record.token(), record.sim_anchor(), record.sim_rs().len());
             for r in record.sim_rs().iter() {
                 println!("    {:?}", r.anchor());
             }
-        }),
-    );
-    let sink_4 = sink(
-        &mut graph,
-        root.sub("sink_4"),
-        [word_list.outputs()[3].clone()],
+        })
+      )
+  )
+
+  ( < s4
+    - sink#sink_4(
         Some(
             quote! { println!("sink_4 {} (sim id = {:?})", record.token(), record.sim_anchor()); },
-        ),
-    );
+        )
+      )
+  )
+}
+"#
+    }
 
-    let graph = graph.build(vec![
-        Box::new(read_token),
-        Box::new(sort_token),
-        Box::new(dedup_token),
-        Box::new(anchorize),
-        Box::new(word_list),
-        Box::new(sink_1),
-        Box::new(sink_2),
-        Box::new(sink_3),
-        Box::new(sink_4),
-    ]);
+    let graph = dtpt_main(GraphBuilder::new(ChainCustomizer::default()));
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
     graph.generate(Path::new(&out_dir)).unwrap();

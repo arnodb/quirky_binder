@@ -1,7 +1,8 @@
-use datapet_lang::ast::FilterParam;
+use datapet_lang::ast::Graph;
 use datapet_lang::ast::GraphDefinition;
 use datapet_lang::ast::Module;
 use datapet_lang::ast::ModuleItem;
+use datapet_lang::ast::StreamLine;
 use datapet_lang::ast::StreamLineInput;
 use datapet_lang::ast::StreamLineOutput;
 use datapet_lang::ast::UseDeclaration;
@@ -84,11 +85,79 @@ fn dtpt_graph_definition(graph_definition: &GraphDefinition) -> TokenStream {
         let name = format_ident!("{}", param);
         quote! { #name: &str }
     });
+    let (body, all_var_names, main_stream, named_streams) =
+        dtpt_stream_lines(&graph_definition.stream_lines);
+    let outputs = graph_definition
+        .signature
+        .outputs
+        .as_ref()
+        .map_or_else(Vec::new, |outputs| {
+            Some(main_stream.expect("main stream"))
+                .into_iter()
+                .chain(outputs.iter().map(|name| {
+                    if let Some(stream) = named_streams.get(name) {
+                        stream.clone()
+                    } else {
+                        panic!("stream `{}` not registered", name);
+                    }
+                }))
+                .collect::<Vec<TokenStream>>()
+        });
+    quote! {
+        pub fn #name(
+            graph: &mut GraphBuilder,
+            name: FullyQualifiedName,
+            inputs: [NodeStream; #input_count],
+            #(#params,)*
+        ) -> NodeCluster<#input_count, #output_count> {
+
+            #body
+
+            let outputs = [#(#outputs.clone(),)*];
+
+            NodeCluster::new(
+                name,
+                vec![#(Box::new(#all_var_names),)*],
+                inputs,
+                outputs,
+            )
+        }
+    }
+}
+
+fn dtpt_graph(graph: &Graph, id: usize) -> TokenStream {
+    let name = format_ident!("dtpt_main_{}", id);
+    let (body, all_var_names, main_stream, _named_streams) = dtpt_stream_lines(&graph.stream_lines);
+    assert!(main_stream.is_none());
+    quote! {
+        pub fn #name(
+            graph: &mut GraphBuilder,
+            name: FullyQualifiedName,
+        ) -> NodeCluster<0, 0> {
+            #body
+
+            NodeCluster::new(
+                name.sub(stringify!(#name)),
+                vec![#(Box::new(#all_var_names),)*],
+                [],
+                [],
+            )
+        }
+    }
+}
+
+fn dtpt_stream_lines(
+    stream_lines: &[StreamLine],
+) -> (
+    TokenStream,
+    Vec<Ident>,
+    Option<TokenStream>,
+    HashMap<String, TokenStream>,
+) {
     let mut all_var_names = Vec::new();
     let mut main_stream = None;
     let mut named_streams = HashMap::<String, TokenStream>::new();
-    let body = graph_definition
-        .stream_lines
+    let body = stream_lines
         .iter()
         .map(|flow_line| {
             let var_names = flow_line
@@ -137,16 +206,9 @@ fn dtpt_graph_definition(graph_definition: &GraphDefinition) -> TokenStream {
                         .filter
                         .params
                         .iter()
-                        .map(|param| match param {
-                            FilterParam::Single(single_param) => {
-                                let single_param = format_ident!("{}", single_param);
-                                quote! { #single_param }
-                            }
-                            FilterParam::Array(array_param) => {
-                                let array_param_items =
-                                    array_param.iter().map(|item| format_ident!("{}", item));
-                                quote! { &[#(#array_param_items,)*] }
-                            }
+                        .map(|param| {
+                            let expr: syn::Expr = syn::parse_str(param).expect("param expr");
+                            quote! { #expr }
                         })
                         .collect::<Vec<TokenStream>>();
                     for (extra_output_index, extra_output) in
@@ -199,55 +261,30 @@ fn dtpt_graph_definition(graph_definition: &GraphDefinition) -> TokenStream {
             }
         })
         .collect::<Vec<TokenStream>>();
-    let outputs = graph_definition
-        .signature
-        .outputs
-        .as_ref()
-        .map_or_else(Vec::new, |outputs| {
-            Some(main_stream.expect("main stream"))
-                .into_iter()
-                .chain(outputs.iter().map(|name| {
-                    if let Some(stream) = named_streams.get(name) {
-                        stream.clone()
-                    } else {
-                        panic!("stream `{}` not registered", name);
-                    }
-                }))
-                .collect::<Vec<TokenStream>>()
-        });
-    quote! {
-        pub fn #name(
-            graph: &mut GraphBuilder,
-            name: FullyQualifiedName,
-            inputs: [NodeStream; #input_count],
-            #(#params,)*
-            ) -> NodeCluster<#input_count, #output_count> {
-
-            #(#body)*
-
-            let outputs = [#(#outputs.clone(),)*];
-
-            NodeCluster::new(
-                name,
-                vec![#(Box::new(#all_var_names),)*],
-                inputs,
-                outputs,
-            )
-        }
-    }
+    (
+        quote! { #(#body)* },
+        all_var_names,
+        main_stream,
+        named_streams,
+    )
 }
 
-#[proc_macro]
-pub fn dtpt_module(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+fn dtpt_mod_internal(input: proc_macro::TokenStream, crate_: Ident) -> proc_macro::TokenStream {
     let fragment: Fragment = match syn::parse(input) {
         Ok(res) => res,
         Err(err) => {
             return err.into_compile_error().into();
         }
     };
+    let mut graph_id = 0;
     let module = TokenStream::from_iter(fragment.module.items.iter().map(|item| match item {
         ModuleItem::UseDeclaration(use_declaration) => dtpt_use_declaration(use_declaration),
         ModuleItem::GraphDefinition(graph_definition) => dtpt_graph_definition(graph_definition),
+        ModuleItem::Graph(graph) => {
+            let id = graph_id;
+            graph_id += 1;
+            dtpt_graph(graph, id)
+        }
     }));
     let exports = TokenStream::from_iter(
         fragment
@@ -259,21 +296,47 @@ pub fn dtpt_module(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
                 ModuleItem::GraphDefinition(graph_definition) => graph_definition
                     .visible
                     .then_some(format_ident!("{}", graph_definition.signature.name)),
+                ModuleItem::Graph(_) => None,
             })
             .map(|name| quote! { pub use __dtpt_private::#name; }),
     );
+    let main = (graph_id > 0).then(|| {
+        let main_names = (0..graph_id)
+            .map(|id| format_ident!("dtpt_main_{}", id))
+            .collect::<Vec<_>>();
+        quote! {
+            fn dtpt_main(
+                mut graph: GraphBuilder,
+            ) -> Graph {
+                let root = FullyQualifiedName::default();
+
+                let entry_nodes: Vec<Box<dyn DynNode>> = vec![
+                    #(Box::new(__dtpt_private::#main_names(&mut graph, root)),)*
+                ];
+                graph.build(entry_nodes)
+            }
+        }
+    });
     quote! {
         mod __dtpt_private {
-            use crate::{
-                graph::{GraphBuilder, NodeCluster},
-                stream::NodeStream,
-                support::FullyQualifiedName,
-            };
+            use #crate_::prelude::*;
 
             #module
         }
 
         #exports
+
+        #main
     }
     .into()
+}
+
+#[proc_macro]
+pub fn dtpt_mod_crate(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    dtpt_mod_internal(input, format_ident!("crate"))
+}
+
+#[proc_macro]
+pub fn dtpt_mod(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    dtpt_mod_internal(input, format_ident!("datapet"))
 }

@@ -1,17 +1,17 @@
 use nom::{
     branch::alt,
-    bytes::complete::tag,
-    character::complete::{alpha1, alphanumeric1, multispace0, multispace1},
+    bytes::complete::{escaped, is_not, tag},
+    character::complete::{alpha1, alphanumeric1, anychar, char, multispace0, multispace1},
     combinator::{cut, eof, opt, recognize},
     error::ParseError,
-    multi::{many0, many0_count, many_till, separated_list0, separated_list1},
+    multi::{many0, many0_count, many1, many_till, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     AsChar, IResult, InputTakeAtPosition, Parser,
 };
 
 use crate::ast::{
-    ConnectedFilter, Filter, FilterParam, GraphDefinition, GraphDefinitionSignature, Module,
-    StreamLine, StreamLineInput, StreamLineOutput, UseDeclaration, UseTree,
+    ConnectedFilter, Filter, Graph, GraphDefinition, GraphDefinitionSignature, Module, StreamLine,
+    StreamLineInput, StreamLineOutput, UseDeclaration, UseTree,
 };
 
 pub fn module(input: &str) -> IResult<&str, Module> {
@@ -19,6 +19,7 @@ pub fn module(input: &str) -> IResult<&str, Module> {
         ts(alt((
             use_declaration.map(Into::into),
             graph_definition.map(Into::into),
+            graph.map(Into::into),
         ))),
         eof,
     ))
@@ -106,6 +107,12 @@ fn params(input: &str) -> IResult<&str, Vec<&str>> {
         ps(separated_list0(tag(","), ds(identifier))),
         tag(")"),
     )(input)
+}
+
+fn graph(input: &str) -> IResult<&str, Graph> {
+    stream_lines
+        .map(|stream_lines| Graph { stream_lines })
+        .parse(input)
 }
 
 fn stream_lines(input: &str) -> IResult<&str, Vec<StreamLine>> {
@@ -202,7 +209,7 @@ fn filter(input: &str) -> IResult<&str, Filter> {
     .map(|(name, alias, params, extra_streams)| Filter {
         name: name.to_string(),
         alias: alias.map(ToString::to_string),
-        params,
+        params: params.into_iter().map(ToString::to_string).collect(),
         extra_outputs: extra_streams.map_or_else(Vec::new, |extra_outputs| {
             extra_outputs.into_iter().map(ToString::to_string).collect()
         }),
@@ -210,7 +217,7 @@ fn filter(input: &str) -> IResult<&str, Filter> {
     .parse(input)
 }
 
-fn filter_params(input: &str) -> IResult<&str, Vec<FilterParam>> {
+fn filter_params(input: &str) -> IResult<&str, Vec<&str>> {
     delimited(
         tag("("),
         ps(separated_list0(tag(","), ds(filter_param))),
@@ -218,19 +225,46 @@ fn filter_params(input: &str) -> IResult<&str, Vec<FilterParam>> {
     )(input)
 }
 
-fn filter_param(input: &str) -> IResult<&str, FilterParam> {
-    alt((
-        preceded(
-            tag("["),
+fn filter_param(input: &str) -> IResult<&str, &str> {
+    code(input)
+}
+
+fn code(input: &str) -> IResult<&str, &str> {
+    recognize(many1(alt((special_code, is_not("\"'()[]{},;")))))(input)
+}
+
+fn special_code(input: &str) -> IResult<&str, &str> {
+    recognize(alt((
+        recognize(preceded(
+            char('"'),
+            cut(terminated(escaped(is_not("\""), '\\', anychar), char('"'))),
+        )),
+        recognize(preceded(
+            char('\''),
+            cut(terminated(escaped(is_not("\'"), '\\', anychar), char('\''))),
+        )),
+        recognize(preceded(
+            char('('),
             cut(terminated(
-                ps(separated_list0(tag(","), ds(identifier)).map(|vec| {
-                    FilterParam::Array(vec.into_iter().map(ToString::to_string).collect())
-                })),
-                tag("]"),
+                many0(alt((code, recognize(is_not("\"'()[]{}"))))),
+                char(')'),
             )),
-        ),
-        identifier.map(|single| FilterParam::Single(single.to_string())),
-    ))(input)
+        )),
+        recognize(preceded(
+            char('['),
+            cut(terminated(
+                many0(alt((code, recognize(is_not("\"'()[]{}"))))),
+                char(']'),
+            )),
+        )),
+        recognize(preceded(
+            char('{'),
+            cut(terminated(
+                many0(alt((code, recognize(is_not("\"'()[]{}"))))),
+                char('}'),
+            )),
+        )),
+    )))(input)
 }
 
 fn opt_streams0(input: &str) -> IResult<&str, Option<Vec<&str>>> {

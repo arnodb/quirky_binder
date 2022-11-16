@@ -3,11 +3,8 @@ extern crate getset;
 #[macro_use]
 extern crate quote;
 
-use datapet::{
-    filter::{group::group, sink::sink, sort::sort},
-    graph::StreamsBuilder,
-    prelude::*,
-};
+use datapet::{graph::StreamsBuilder, prelude::*};
+use datapet_codegen::dtpt_mod;
 use std::path::Path;
 
 #[derive(Getters)]
@@ -101,9 +98,10 @@ impl DynNode for ReadStdinIterator {
 fn read_stdin(
     graph: &mut GraphBuilder,
     name: FullyQualifiedName,
+    inputs: [NodeStream; 0],
     field: &str,
 ) -> ReadStdinIterator {
-    ReadStdinIterator::new(graph, name, [], field)
+    ReadStdinIterator::new(graph, name, inputs, field)
 }
 
 #[derive(Getters)]
@@ -193,34 +191,21 @@ pub fn tokenize(
 }
 
 fn main() {
-    let mut graph = GraphBuilder::new(ChainCustomizer::default());
+    dtpt_mod! {
+        r#"
+use datapet::{
+    filter::{group::group, sink::sink, sort::sort},
+};
 
-    let root = FullyQualifiedName::default();
+use super::{read_stdin, tokenize};
 
-    let read = read_stdin(&mut graph, root.sub("read_input"), "words");
-    let tokenize = tokenize(
-        &mut graph,
-        root.sub("tokenize"),
-        [read.outputs()[0].clone()],
-    );
-    let sort = sort(
-        &mut graph,
-        root.sub("sort"),
-        [tokenize.outputs()[0].clone()],
-        &["first_char", "word"],
-    );
-    let group = group(
-        &mut graph,
-        root.sub("group"),
-        [sort.outputs()[0].clone()],
-        &["word"],
-        "words",
-    );
-
-    let sink = sink(
-        &mut graph,
-        root.sub("sink"),
-        [group.outputs()[0].clone()],
+{
+  (
+      read_stdin#read_input("words")
+    - tokenize#tokenize()
+    - sort#sort(&["first_char", "word"])
+    - group#group(&["word"], "words")
+    - sink#sink(
         Some(quote! {
             use itertools::Itertools;
 
@@ -232,16 +217,14 @@ fn main() {
                     .map(|word|word.word())
                     .join(", ")
             );
-        }),
-    );
+        })
+      )
+  )
+}
+"#
+    }
 
-    let graph = graph.build(vec![
-        Box::new(read),
-        Box::new(tokenize),
-        Box::new(sort),
-        Box::new(group),
-        Box::new(sink),
-    ]);
+    let graph = dtpt_main(GraphBuilder::new(ChainCustomizer::default()));
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
     graph.generate(Path::new(&out_dir)).unwrap();

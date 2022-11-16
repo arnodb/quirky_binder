@@ -7,6 +7,7 @@ pub struct Module {
 pub enum ModuleItem {
     UseDeclaration(UseDeclaration),
     GraphDefinition(GraphDefinition),
+    Graph(Graph),
 }
 
 impl From<UseDeclaration> for ModuleItem {
@@ -18,6 +19,12 @@ impl From<UseDeclaration> for ModuleItem {
 impl From<GraphDefinition> for ModuleItem {
     fn from(value: GraphDefinition) -> Self {
         ModuleItem::GraphDefinition(value)
+    }
+}
+
+impl From<Graph> for ModuleItem {
+    fn from(value: Graph) -> Self {
+        ModuleItem::Graph(value)
     }
 }
 
@@ -64,14 +71,8 @@ pub struct ConnectedFilter {
 pub struct Filter {
     pub name: String,
     pub alias: Option<String>,
-    pub params: Vec<FilterParam>,
+    pub params: Vec<String>,
     pub extra_outputs: Vec<String>,
-}
-
-#[derive(Debug)]
-pub enum FilterParam {
-    Single(String),
-    Array(Vec<String>),
 }
 
 #[derive(Debug)]
@@ -84,4 +85,9 @@ pub enum StreamLineInput {
 pub enum StreamLineOutput {
     Main,
     Named(String),
+}
+
+#[derive(Debug)]
+pub struct Graph {
+    pub stream_lines: Vec<StreamLine>,
 }

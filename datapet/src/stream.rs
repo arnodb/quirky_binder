@@ -10,7 +10,7 @@ impl Deref for StreamRecordType {
     type Target = Box<[Box<str>]>;
 
     fn deref(&self) -> &Self::Target {
-        &*self.0
+        &self.0
     }
 }
 
@@ -22,7 +22,7 @@ impl Deref for NodeStreamSource {
     type Target = Box<[Box<str>]>;
 
     fn deref(&self) -> &Self::Target {
-        &*self.0
+        &self.0
     }
 }
 
