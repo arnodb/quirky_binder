@@ -1,4 +1,4 @@
 # datapet
-[![Build Status](https://img.shields.io/github/workflow/status/arnodb/datapet/Rust)](https://github.com/arnodb/datapet/actions/workflows/rust.yml)
+[![Build Status](https://img.shields.io/github/workflow/status/arnodb/datapet/Continuous%20Integration)](https://github.com/arnodb/datapet/actions/workflows/ci.yml)
 
 Data Pet
