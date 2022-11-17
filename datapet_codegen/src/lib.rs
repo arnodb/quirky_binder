@@ -6,7 +6,6 @@ use datapet_lang::ast::StreamLine;
 use datapet_lang::ast::StreamLineInput;
 use datapet_lang::ast::StreamLineOutput;
 use datapet_lang::ast::UseDeclaration;
-use datapet_lang::ast::UseTree;
 use datapet_lang::parser::module;
 use proc_macro2::Ident;
 use proc_macro2::TokenStream;
@@ -44,28 +43,10 @@ impl Parse for Fragment {
     }
 }
 
-fn use_tree_decl(use_tree: &UseTree) -> TokenStream {
-    match use_tree {
-        UseTree::Glob(path) => {
-            let path: syn::Path = syn::parse_str(path).expect("path");
-            quote! { #path :: * }
-        }
-        UseTree::Group(path, group) => {
-            let path: syn::Path = syn::parse_str(path).expect("path");
-            let group_decl = group.iter().map(use_tree_decl);
-            quote! { #path :: { #(#group_decl,)* } }
-        }
-        UseTree::Path(path) => {
-            let path: syn::Path = syn::parse_str(path).expect("path");
-            quote! { #path }
-        }
-    }
-}
-
 fn dtpt_use_declaration(use_declaration: &UseDeclaration) -> TokenStream {
-    let use_decl = use_tree_decl(&use_declaration.use_tree);
+    let use_tree: syn::UseTree = syn::parse_str(&use_declaration.use_tree).expect("use expr");
     quote! {
-        use #use_decl;
+        use #use_tree;
     }
 }
 

@@ -11,7 +11,7 @@ use nom::{
 
 use crate::ast::{
     ConnectedFilter, Filter, Graph, GraphDefinition, GraphDefinitionSignature, Module, StreamLine,
-    StreamLineInput, StreamLineOutput, UseDeclaration, UseTree,
+    StreamLineInput, StreamLineOutput, UseDeclaration,
 };
 
 pub fn module(input: &str) -> IResult<&str, Module> {
@@ -30,50 +30,13 @@ pub fn module(input: &str) -> IResult<&str, Module> {
 fn use_declaration(input: &str) -> IResult<&str, UseDeclaration> {
     delimited(
         terminated(tag("use"), multispace1),
-        cut(use_tree).map(|use_tree| UseDeclaration { use_tree }),
+        cut(code),
         cut(ps(tag(";"))),
-    )(input)
-}
-
-enum UseTreeSuffix {
-    Glob,
-    Group(Vec<UseTree>),
-}
-
-fn use_tree(input: &str) -> IResult<&str, UseTree> {
-    alt((
-        pair(
-            opt(terminated(opt(simple_path), ps(tag("::")))),
-            ps(alt((
-                tag("*").map(|_| UseTreeSuffix::Glob),
-                delimited(
-                    tag("{"),
-                    ps(opt(terminated(
-                        pair(use_tree, many0(preceded(ps(tag(",")), ps(use_tree)))).map(
-                            |(first, mut others)| {
-                                others.insert(0, first);
-                                others
-                            },
-                        ),
-                        ps(opt(ts(tag(",")))),
-                    )))
-                    .map(Option::unwrap_or_default),
-                    tag("}"),
-                )
-                .map(UseTreeSuffix::Group),
-            ))),
-        )
-        .map(|(path, suffix)| {
-            let path = path.map_or_else(String::default, |path| {
-                path.map_or_else(String::default, ToString::to_string)
-            });
-            match suffix {
-                UseTreeSuffix::Glob => UseTree::Glob(path),
-                UseTreeSuffix::Group(group) => UseTree::Group(path, group),
-            }
-        }),
-        simple_path.map(|path| UseTree::Path(path.to_string())),
-    ))(input)
+    )
+    .map(|use_tree| UseDeclaration {
+        use_tree: use_tree.to_string(),
+    })
+    .parse(input)
 }
 
 fn graph_definition(input: &str) -> IResult<&str, GraphDefinition> {

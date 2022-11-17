@@ -30,14 +30,7 @@ impl From<Graph> for ModuleItem {
 
 #[derive(Debug)]
 pub struct UseDeclaration {
-    pub use_tree: UseTree,
-}
-
-#[derive(Debug)]
-pub enum UseTree {
-    Glob(String),
-    Group(String, Vec<UseTree>),
-    Path(String),
+    pub use_tree: String,
 }
 
 #[derive(Debug)]
