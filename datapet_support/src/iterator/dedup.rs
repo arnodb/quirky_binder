@@ -47,7 +47,7 @@ fn should_dedup_stream() {
                 .into_iter()
                 .map(Ok::<_, ()>),
         ),
-        |a, b| (&a.0).eq(&b.0) && (&a.1).eq(&b.1),
+        |a, b| (&a.0).eq(&b.0) && a.1.eq(&b.1),
     );
     assert_matches!(stream.next(), Ok(Some((v, 12))) if v == "a");
     assert_matches!(stream.next(), Ok(Some((v, 42))) if v == "a");

@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::comparison_to_empty))]
+
 #[cfg(test)]
 #[macro_use]
 extern crate assert_matches;

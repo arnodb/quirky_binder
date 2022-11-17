@@ -2,6 +2,7 @@
 name = "datapet"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.56.1"
 
 [dependencies]
 codegen = "0.1"

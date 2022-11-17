@@ -274,9 +274,13 @@ fn dtpt_mod_internal(input: proc_macro::TokenStream, crate_: Ident) -> proc_macr
             .iter()
             .filter_map(|item| match item {
                 ModuleItem::UseDeclaration(_) => None,
-                ModuleItem::GraphDefinition(graph_definition) => graph_definition
-                    .visible
-                    .then_some(format_ident!("{}", graph_definition.signature.name)),
+                ModuleItem::GraphDefinition(graph_definition) => {
+                    if graph_definition.visible {
+                        Some(format_ident!("{}", graph_definition.signature.name))
+                    } else {
+                        None
+                    }
+                }
                 ModuleItem::Graph(_) => None,
             })
             .map(|name| quote! { pub use __dtpt_private::#name; }),
@@ -298,7 +302,7 @@ fn dtpt_mod_internal(input: proc_macro::TokenStream, crate_: Ident) -> proc_macr
             }
         }
     });
-    quote! {
+    (quote! {
         mod __dtpt_private {
             use #crate_::prelude::*;
 
@@ -308,7 +312,7 @@ fn dtpt_mod_internal(input: proc_macro::TokenStream, crate_: Ident) -> proc_macr
         #exports
 
         #main
-    }
+    })
     .into()
 }
 

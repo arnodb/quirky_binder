@@ -2,6 +2,7 @@
 name = "datapet_codegen"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.56.1"
 
 [lib]
 proc-macro = true

@@ -2,6 +2,7 @@
 name = "datapet_example_wordlist"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.56.1"
 
 [dependencies]
 datapet_support = { path = "../../datapet_support" }
