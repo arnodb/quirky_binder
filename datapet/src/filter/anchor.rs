@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use datapet_support::AnchorId;
-use truc::record::definition::DatumDefinitionOverride;
+use truc::record::{definition::DatumDefinitionOverride, type_resolver::TypeResolver};
 
 #[derive(Getters)]
 pub struct Anchorize {
@@ -13,8 +13,8 @@ pub struct Anchorize {
 }
 
 impl Anchorize {
-    fn new(
-        graph: &mut GraphBuilder,
+    fn new<R: TypeResolver + Copy>(
+        graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         anchor_field: &str,
@@ -31,6 +31,7 @@ impl Anchorize {
                 DatumDefinitionOverride {
                     type_name: Some(format!("datapet_support::AnchorId<{}>", anchor_table_id)),
                     size: None,
+                    align: None,
                     allow_uninit: Some(true),
                 },
             );
@@ -101,8 +102,8 @@ impl DynNode for Anchorize {
     }
 }
 
-pub fn anchorize(
-    graph: &mut GraphBuilder,
+pub fn anchorize<R: TypeResolver + Copy>(
+    graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     anchor_field: &str,

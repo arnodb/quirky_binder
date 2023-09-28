@@ -26,7 +26,7 @@ use crate::{
   )
 }
 
-[] build_sim_table(token_field, reference_field, ref_rs_field) [simplified]
+[] build_ci_table(token_field, reference_field, refs_field) [case_insensitive]
 {
   (
     - extract_fields#extract_token(&[token_field, reference_field]) [extracted]
@@ -34,25 +34,25 @@ use crate::{
   )
 
   ( < extracted
-    - to_lowercase#simplify_token(&[token_field])
+    - to_lowercase#lowercase_token(&[token_field])
     - sort#sort_token(&[token_field, reference_field])
-    - group#group(&[reference_field], ref_rs_field)
-    -> simplified
+    - group#group(&[reference_field], refs_field)
+    -> case_insensitive
   )
 }
 
-pub [] build_word_list(token_field, anchor_field, sim_anchor_field, sim_rs_field) [rev_token, sim_token, rev_sim_token]
+pub [] build_word_list(token_field, anchor_field, ci_anchor_field, ci_refs_field) [rev_token, ci_token, rev_ci_token]
 {
   (
-    - build_sim_table#sim(token_field, anchor_field, sim_rs_field) [simplified]
+    - build_ci_table#case_insensitive(token_field, anchor_field, ci_refs_field) [case_insensitive]
     - build_rev_table#rev(token_field, anchor_field) [rev_token]
     -
   )
 
-  ( < simplified
-    - anchorize#anchorize(sim_anchor_field)
-    - build_rev_table#sim_rev(token_field, sim_anchor_field) [rev_sim_token]
-    -> sim_token
+  ( < case_insensitive
+    - anchorize#anchorize(ci_anchor_field)
+    - build_rev_table#ci_rev(token_field, ci_anchor_field) [rev_ci_token]
+    -> ci_token
   )
 }
 "#

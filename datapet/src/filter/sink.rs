@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use proc_macro2::TokenStream;
+use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
 pub struct Sink {
@@ -12,8 +13,8 @@ pub struct Sink {
 }
 
 impl Sink {
-    fn new(
-        _graph: &mut GraphBuilder,
+    fn new<R: TypeResolver + Copy>(
+        _graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         debug: Option<TokenStream>,
@@ -77,8 +78,8 @@ impl DynNode for Sink {
     }
 }
 
-pub fn sink(
-    graph: &mut GraphBuilder,
+pub fn sink<R: TypeResolver + Copy>(
+    graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     debug: Option<TokenStream>,

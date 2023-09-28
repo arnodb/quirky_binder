@@ -1,6 +1,6 @@
 use crate::{prelude::*, support::fields_eq};
 use itertools::Itertools;
-use truc::record::definition::DatumDefinitionOverride;
+use truc::record::{definition::DatumDefinitionOverride, type_resolver::TypeResolver};
 
 #[derive(Getters)]
 pub struct Group {
@@ -9,59 +9,60 @@ pub struct Group {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    rs_stream: NodeStream,
+    group_field: String,
+    group_stream: NodeStream,
     fields: Vec<String>,
-    rs_field: String,
 }
 
 impl Group {
-    pub fn new(
-        graph: &mut GraphBuilder,
+    pub fn new<R: TypeResolver + Copy>(
+        graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         fields: &[&str],
-        rs_field: &str,
+        group_field: &str,
     ) -> Group {
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams.new_named_stream("rs", graph);
+        streams.new_named_stream("group", graph);
 
-        let rs_stream = {
+        let group_stream = {
             let output_stream = streams.output_from_input(0, graph).for_update();
-            let rs_stream = output_stream.new_named_sub_stream("rs", graph);
+            let group_stream = output_stream.new_named_sub_stream("group", graph);
             let input_variant_id = output_stream.input_variant_id();
             let mut output_stream_def = output_stream.borrow_mut();
 
             {
-                let mut rs_stream_def = rs_stream.borrow_mut();
+                let mut group_stream_def = group_stream.borrow_mut();
                 for &field in fields {
                     let datum = output_stream_def
                         .get_variant_datum_definition_by_name(input_variant_id, field)
                         .unwrap_or_else(|| panic!(r#"datum "{}""#, field));
-                    rs_stream_def.copy_datum(datum);
+                    group_stream_def.copy_datum(datum);
                     let datum_id = datum.id();
                     output_stream_def.remove_datum(datum_id);
                 }
             }
-            let rs_stream = rs_stream.close_record_variant();
+            let group_stream = group_stream.close_record_variant();
 
             let module_name = graph
                 .chain_customizer()
                 .streams_module_name
-                .sub_n(&***rs_stream.record_type());
+                .sub_n(&***group_stream.record_type());
             output_stream_def.add_datum_override::<Vec<()>, _>(
-                rs_field,
+                group_field,
                 DatumDefinitionOverride {
                     type_name: Some(format!(
-                        "Vec<{module_name}::Record{rs_variant_id}>",
+                        "Vec<{module_name}::Record{group_variant_id}>",
                         module_name = module_name,
-                        rs_variant_id = rs_stream.variant_id(),
+                        group_variant_id = group_stream.variant_id(),
                     )),
                     size: None,
+                    align: None,
                     allow_uninit: None,
                 },
             );
 
-            rs_stream
+            group_stream
         };
 
         let outputs = streams.build();
@@ -70,9 +71,9 @@ impl Group {
             name: name.clone(),
             inputs,
             outputs,
-            rs_stream,
+            group_field: group_field.to_string(),
+            group_stream,
             fields: fields.iter().map(ToString::to_string).collect::<Vec<_>>(),
-            rs_field: rs_field.to_string(),
         }
     }
 }
@@ -98,15 +99,15 @@ impl DynNode for Group {
                 self.inputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
             let def =
                 self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
-            let def_rs = self
-                .rs_stream
+            let def_group = self
+                .group_stream
                 .definition_fragments(&graph.chain_customizer().streams_module_name);
             let input_unpacked_record = def_input.unpacked_record();
             let record = def.record();
             let unpacked_record_in = def.unpacked_record_in();
             let record_and_unpacked_out = def.record_and_unpacked_out();
-            let rs_record = def_rs.record();
-            let rs_unpacked_record = def_rs.unpacked_record();
+            let group_record = def_group.record();
+            let group_unpacked_record = def_group.unpacked_record();
 
             let input = thread.format_input(
                 self.inputs[0].source(),
@@ -117,8 +118,8 @@ impl DynNode for Group {
             let fields =
                 syn::parse_str::<syn::Expr>(&self.fields.iter().join(", ")).expect("fields");
 
-            let rs_field = format_ident!("{}", self.rs_field);
-            let mut_rs_field = format_ident!("{}_mut", self.rs_field);
+            let group_field = format_ident!("{}", self.group_field);
+            let mut_group_field = format_ident!("{}_mut", self.group_field);
 
             let record_definition = &graph.record_definitions()[self.inputs[0].record_type()];
             let variant = record_definition
@@ -128,7 +129,9 @@ impl DynNode for Group {
                 let datum = record_definition
                     .get_datum_definition(d)
                     .unwrap_or_else(|| panic!("datum #{}", d));
-                if !self.fields.iter().any(|f| f == datum.name()) && datum.name() != self.rs_field {
+                if !self.fields.iter().any(|f| f == datum.name())
+                    && datum.name() != self.group_field
+                {
                     Some(datum.name())
                 } else {
                     None
@@ -141,16 +144,16 @@ impl DynNode for Group {
                       datapet_support::iterator::group::Group::new(
                           input,
                           |rec| {{
-                              let #record_and_unpacked_out { mut record, #fields } = #record_and_unpacked_out::from((rec, #unpacked_record_in { #rs_field: Vec::new() }));
-                              let rs_record = #rs_record::new(#rs_unpacked_record { #fields });
-                              record.#mut_rs_field().push(rs_record);
+                              let #record_and_unpacked_out { mut record, #fields } = #record_and_unpacked_out::from((rec, #unpacked_record_in { #group_field: Vec::new() }));
+                              let group_record = #group_record::new(#group_unpacked_record { #fields });
+                              record.#mut_group_field().push(group_record);
                               record
                           }},
                           #eq,
                           |group, rec| {
                               let #input_unpacked_record{ #fields, .. } = rec.unpack();
-                              let rs_record = #rs_record::new(#rs_unpacked_record { #fields });
-                              group.#mut_rs_field().push(rs_record);
+                              let group_record = #group_record::new(#group_unpacked_record { #fields });
+                              group.#mut_group_field().push(group_record);
                           },
                       )
                   }
@@ -164,12 +167,12 @@ impl DynNode for Group {
     }
 }
 
-pub fn group(
-    graph: &mut GraphBuilder,
+pub fn group<R: TypeResolver + Copy>(
+    graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     fields: &[&str],
-    rs_field: &str,
+    group_field: &str,
 ) -> Group {
-    Group::new(graph, name, inputs, fields, rs_field)
+    Group::new(graph, name, inputs, fields, group_field)
 }

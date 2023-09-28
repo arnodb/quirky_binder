@@ -6,6 +6,7 @@ extern crate quote;
 use datapet::{graph::StreamsBuilder, prelude::*};
 use datapet_codegen::dtpt_mod;
 use std::path::Path;
+use truc::record::type_resolver::{HostTypeResolver, TypeResolver};
 
 #[derive(Getters)]
 struct ReadStdin {
@@ -19,8 +20,8 @@ struct ReadStdin {
 }
 
 impl ReadStdin {
-    fn new(
-        graph: &mut GraphBuilder,
+    fn new<R: TypeResolver + Copy>(
+        graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
         field: &str,
@@ -121,8 +122,8 @@ struct ReadStdinIterator {
 }
 
 impl ReadStdinIterator {
-    fn new(
-        graph: &mut GraphBuilder,
+    fn new<R: TypeResolver + Copy>(
+        graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
         field: &str,
@@ -198,12 +199,16 @@ impl DynNode for ReadStdinIterator {
 }
 
 #[allow(dead_code)]
-fn read_stdin_old(graph: &mut GraphBuilder, name: FullyQualifiedName, field: &str) -> ReadStdin {
+fn read_stdin_old<R: TypeResolver + Copy>(
+    graph: &mut GraphBuilder<R>,
+    name: FullyQualifiedName,
+    field: &str,
+) -> ReadStdin {
     ReadStdin::new(graph, name, [], field)
 }
 
-fn read_stdin(
-    graph: &mut GraphBuilder,
+fn read_stdin<R: TypeResolver + Copy>(
+    graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 0],
     field: &str,
@@ -229,7 +234,7 @@ use super::read_stdin;
     - sort#sort_token(&["token"])
     - dedup#dedup_token()
     - anchorize#anchor("anchor")
-    - build_word_list#word_list("token", "anchor", "sim_anchor", "sim_rs") [s2, s3, s4]
+    - build_word_list#word_list("token", "anchor", "ci_anchor", "ci_refs") [s2, s3, s4]
     - sink#sink_1(
         Some(quote! { println!("sink_1 {} (id = {:?})", record.token(), record.anchor()); })
       )
@@ -244,8 +249,8 @@ use super::read_stdin;
   ( < s3
     - sink#sink_3(
         Some(quote! {
-            println!("sink_3 {} (sim id = {:?}) == {}", record.token(), record.sim_anchor(), record.sim_rs().len());
-            for r in record.sim_rs().iter() {
+            println!("sink_3 {} (ci id = {:?}) == {}", record.token(), record.ci_anchor(), record.ci_refs().len());
+            for r in record.ci_refs().iter() {
                 println!("    {:?}", r.anchor());
             }
         })
@@ -255,7 +260,7 @@ use super::read_stdin;
   ( < s4
     - sink#sink_4(
         Some(
-            quote! { println!("sink_4 {} (sim id = {:?})", record.token(), record.sim_anchor()); },
+            quote! { println!("sink_4 {} (ci id = {:?})", record.token(), record.ci_anchor()); },
         )
       )
   )
@@ -263,7 +268,10 @@ use super::read_stdin;
 "#
     }
 
-    let graph = dtpt_main(GraphBuilder::new(ChainCustomizer::default()));
+    let graph = dtpt_main(GraphBuilder::new(
+        &HostTypeResolver,
+        ChainCustomizer::default(),
+    ));
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
     graph.generate(Path::new(&out_dir)).unwrap();

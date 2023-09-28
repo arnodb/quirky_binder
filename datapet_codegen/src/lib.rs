@@ -85,8 +85,8 @@ fn dtpt_graph_definition(graph_definition: &GraphDefinition) -> TokenStream {
                 .collect::<Vec<TokenStream>>()
         });
     quote! {
-        pub fn #name(
-            graph: &mut GraphBuilder,
+        pub fn #name<R: TypeResolver + Copy>(
+            graph: &mut GraphBuilder<R>,
             name: FullyQualifiedName,
             inputs: [NodeStream; #input_count],
             #(#params,)*
@@ -111,8 +111,8 @@ fn dtpt_graph(graph: &Graph, id: usize) -> TokenStream {
     let (body, all_var_names, main_stream, _named_streams) = dtpt_stream_lines(&graph.stream_lines);
     assert!(main_stream.is_none());
     quote! {
-        pub fn #name(
-            graph: &mut GraphBuilder,
+        pub fn #name<R: TypeResolver + Copy>(
+            graph: &mut GraphBuilder<R>,
             name: FullyQualifiedName,
         ) -> NodeCluster<0, 0> {
             #body
@@ -290,8 +290,8 @@ fn dtpt_mod_internal(input: proc_macro::TokenStream, crate_: Ident) -> proc_macr
             .map(|id| format_ident!("dtpt_main_{}", id))
             .collect::<Vec<_>>();
         quote! {
-            fn dtpt_main(
-                mut graph: GraphBuilder,
+            fn dtpt_main<R: TypeResolver + Copy>(
+                mut graph: GraphBuilder<R>,
             ) -> Graph {
                 let root = FullyQualifiedName::default();
 
@@ -305,6 +305,7 @@ fn dtpt_mod_internal(input: proc_macro::TokenStream, crate_: Ident) -> proc_macr
     (quote! {
         mod __dtpt_private {
             use #crate_::prelude::*;
+            use truc::record::type_resolver::TypeResolver;
 
             #module
         }

@@ -12,7 +12,10 @@ use std::{
     ops::Deref,
     path::Path,
 };
-use truc::record::definition::{RecordDefinition, RecordDefinitionBuilder, RecordVariantId};
+use truc::record::{
+    definition::{RecordDefinition, RecordDefinitionBuilder, RecordVariantId},
+    type_resolver::TypeResolver,
+};
 
 pub trait DynNode {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain);
@@ -49,19 +52,20 @@ impl<const IN: usize, const OUT: usize> DynNode for NodeCluster<IN, OUT> {
 }
 
 #[derive(new)]
-pub struct GraphBuilder {
+pub struct GraphBuilder<R: TypeResolver + Copy> {
+    type_resolver: R,
     chain_customizer: ChainCustomizer,
     #[new(default)]
-    record_definitions: HashMap<StreamRecordType, RefCell<RecordDefinitionBuilder>>,
+    record_definitions: HashMap<StreamRecordType, RefCell<RecordDefinitionBuilder<R>>>,
     #[new(default)]
     anchor_table_count: usize,
 }
 
-impl GraphBuilder {
+impl<R: TypeResolver + Copy> GraphBuilder<R> {
     pub fn new_stream(&mut self, record_type: StreamRecordType) {
         match self.record_definitions.entry(record_type) {
             Entry::Vacant(entry) => {
-                let record_definition_builder = RecordDefinitionBuilder::new();
+                let record_definition_builder = RecordDefinitionBuilder::new(self.type_resolver);
                 entry.insert(record_definition_builder.into());
             }
             Entry::Occupied(entry) => {
@@ -79,7 +83,7 @@ impl GraphBuilder {
     pub fn get_stream(
         &self,
         record_type: &StreamRecordType,
-    ) -> Option<&RefCell<RecordDefinitionBuilder>> {
+    ) -> Option<&RefCell<RecordDefinitionBuilder<R>>> {
         self.record_definitions.get(record_type)
     }
 
@@ -121,40 +125,44 @@ impl<'a> StreamsBuilder<'a> {
         }
     }
 
-    pub fn new_main_stream(&mut self, graph: &mut GraphBuilder) {
+    pub fn new_main_stream<R: TypeResolver + Copy>(&mut self, graph: &mut GraphBuilder<R>) {
         let full_name = self.name.clone();
         let record_type = StreamRecordType::from(full_name);
         graph.new_stream(record_type);
     }
 
-    pub fn new_named_stream(&mut self, name: &str, graph: &mut GraphBuilder) {
+    pub fn new_named_stream<R: TypeResolver + Copy>(
+        &mut self,
+        name: &str,
+        graph: &mut GraphBuilder<R>,
+    ) {
         let full_name = self.name.sub(name);
         let record_type = StreamRecordType::from(full_name);
         graph.new_stream(record_type);
     }
 
-    pub fn new_main_output<'b, 'g>(
+    pub fn new_main_output<'b, 'g, R: TypeResolver + Copy>(
         &'b mut self,
-        graph: &'g GraphBuilder,
-    ) -> OutputBuilder<'a, 'b, 'g> {
+        graph: &'g GraphBuilder<R>,
+    ) -> OutputBuilder<'a, 'b, 'g, R> {
         let full_name = self.name.clone();
         self.new_output_internal(graph, full_name)
     }
 
-    pub fn new_named_output<'b, 'g>(
+    pub fn new_named_output<'b, 'g, R: TypeResolver + Copy>(
         &'b mut self,
         name: &str,
-        graph: &'g GraphBuilder,
-    ) -> OutputBuilder<'a, 'b, 'g> {
+        graph: &'g GraphBuilder<R>,
+    ) -> OutputBuilder<'a, 'b, 'g, R> {
         let full_name = self.name.sub(name);
         self.new_output_internal(graph, full_name)
     }
 
-    fn new_output_internal<'b, 'g>(
+    fn new_output_internal<'b, 'g, R: TypeResolver + Copy>(
         &'b mut self,
-        graph: &'g GraphBuilder,
+        graph: &'g GraphBuilder<R>,
         full_name: FullyQualifiedName,
-    ) -> OutputBuilder<'a, 'b, 'g> {
+    ) -> OutputBuilder<'a, 'b, 'g, R> {
         let record_type = StreamRecordType::from(full_name.clone());
         let record_definition = graph
             .get_stream(&record_type)
@@ -168,11 +176,11 @@ impl<'a> StreamsBuilder<'a> {
         }
     }
 
-    pub fn output_from_input<'b, 'g>(
+    pub fn output_from_input<'b, 'g, R: TypeResolver + Copy>(
         &'b mut self,
         input_index: usize,
-        graph: &'g GraphBuilder,
-    ) -> OutputBuilder<'a, 'b, 'g> {
+        graph: &'g GraphBuilder<R>,
+    ) -> OutputBuilder<'a, 'b, 'g, R> {
         let input = &self.inputs[input_index];
         if let Some(output_index) = self.in_out_links[input_index] {
             panic!(
@@ -204,17 +212,17 @@ impl<'a> StreamsBuilder<'a> {
 
 #[must_use]
 #[derive(Getters)]
-pub struct OutputBuilder<'a, 'b, 'g> {
+pub struct OutputBuilder<'a, 'b, 'g, R: TypeResolver> {
     streams: &'b mut StreamsBuilder<'a>,
     #[getset(get = "pub")]
     record_type: StreamRecordType,
-    record_definition: &'g RefCell<RecordDefinitionBuilder>,
+    record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
     input_variant_id: Option<RecordVariantId>,
     source: NodeStreamSource,
 }
 
-impl<'a, 'b, 'g> OutputBuilder<'a, 'b, 'g> {
-    pub fn for_update(self) -> OutputBuilderForUpdate<'a, 'b, 'g> {
+impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
+    pub fn for_update(self) -> OutputBuilderForUpdate<'a, 'b, 'g, R> {
         OutputBuilderForUpdate {
             streams: self.streams,
             record_type: self.record_type,
@@ -224,7 +232,7 @@ impl<'a, 'b, 'g> OutputBuilder<'a, 'b, 'g> {
         }
     }
 
-    pub fn pass_through(self) -> &'g RefCell<RecordDefinitionBuilder> {
+    pub fn pass_through(self) -> &'g RefCell<RecordDefinitionBuilder<R>> {
         if let Some(input_variant_id) = self.input_variant_id {
             self.streams.outputs.push(NodeStream::new(
                 self.record_type,
@@ -239,24 +247,24 @@ impl<'a, 'b, 'g> OutputBuilder<'a, 'b, 'g> {
 }
 
 #[derive(Getters)]
-pub struct OutputBuilderForUpdate<'a, 'b, 'g> {
+pub struct OutputBuilderForUpdate<'a, 'b, 'g, R: TypeResolver + Copy> {
     streams: &'b mut StreamsBuilder<'a>,
     #[getset(get = "pub")]
     record_type: StreamRecordType,
-    record_definition: &'g RefCell<RecordDefinitionBuilder>,
+    record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
     input_variant_id: Option<RecordVariantId>,
     source: NodeStreamSource,
 }
 
-impl<'a, 'b, 'g> Deref for OutputBuilderForUpdate<'a, 'b, 'g> {
-    type Target = RefCell<RecordDefinitionBuilder>;
+impl<'a, 'b, 'g, R: TypeResolver + Copy> Deref for OutputBuilderForUpdate<'a, 'b, 'g, R> {
+    type Target = RefCell<RecordDefinitionBuilder<R>>;
 
     fn deref(&self) -> &Self::Target {
         self.record_definition
     }
 }
 
-impl<'a, 'b, 'g> OutputBuilderForUpdate<'a, 'b, 'g> {
+impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
     pub fn input_variant_id(&self) -> RecordVariantId {
         if let Some(input_variant_id) = self.input_variant_id {
             input_variant_id
@@ -268,17 +276,17 @@ impl<'a, 'b, 'g> OutputBuilderForUpdate<'a, 'b, 'g> {
     pub fn new_named_sub_stream(
         &self,
         name: &str,
-        graph: &'g GraphBuilder,
-    ) -> SubStreamBuilder<'g> {
+        graph: &'g GraphBuilder<R>,
+    ) -> SubStreamBuilder<'g, R> {
         let full_name = self.streams.name.sub(name);
         self.new_sub_stream_internal(graph, full_name)
     }
 
     fn new_sub_stream_internal(
         &self,
-        graph: &'g GraphBuilder,
+        graph: &'g GraphBuilder<R>,
         full_name: FullyQualifiedName,
-    ) -> SubStreamBuilder<'g> {
+    ) -> SubStreamBuilder<'g, R> {
         let record_type = StreamRecordType::from(full_name);
         let record_definition = graph
             .get_stream(&record_type)
@@ -291,7 +299,7 @@ impl<'a, 'b, 'g> OutputBuilderForUpdate<'a, 'b, 'g> {
     }
 }
 
-impl<'a, 'b, 'g> Drop for OutputBuilderForUpdate<'a, 'b, 'g> {
+impl<'a, 'b, 'g, R: TypeResolver + Copy> Drop for OutputBuilderForUpdate<'a, 'b, 'g, R> {
     fn drop(&mut self) {
         let variant_id = self.record_definition.borrow_mut().close_record_variant();
         self.streams.outputs.push(NodeStream::new(
@@ -303,22 +311,22 @@ impl<'a, 'b, 'g> Drop for OutputBuilderForUpdate<'a, 'b, 'g> {
 }
 
 #[derive(Getters)]
-pub struct SubStreamBuilder<'g> {
+pub struct SubStreamBuilder<'g, R: TypeResolver> {
     #[getset(get = "pub")]
     record_type: StreamRecordType,
-    record_definition: &'g RefCell<RecordDefinitionBuilder>,
+    record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
     source: NodeStreamSource,
 }
 
-impl<'g> SubStreamBuilder<'g> {
+impl<'g, R: TypeResolver> SubStreamBuilder<'g, R> {
     pub fn close_record_variant(self) -> NodeStream {
         let variant_id = self.record_definition.borrow_mut().close_record_variant();
         NodeStream::new(self.record_type, variant_id, self.source)
     }
 }
 
-impl<'g> Deref for SubStreamBuilder<'g> {
-    type Target = RefCell<RecordDefinitionBuilder>;
+impl<'g, R: TypeResolver> Deref for SubStreamBuilder<'g, R> {
+    type Target = RefCell<RecordDefinitionBuilder<R>>;
 
     fn deref(&self) -> &Self::Target {
         self.record_definition
@@ -373,7 +381,7 @@ impl Graph {
 
             chain.gen_chain();
 
-            let mut file = File::create(&output.join("chain.rs")).unwrap();
+            let mut file = File::create(output.join("chain.rs")).unwrap();
             write!(file, "{}", scope.to_string()).unwrap();
         }
         rustfmt_generated_file(output.join("chain.rs").as_path()).unwrap();

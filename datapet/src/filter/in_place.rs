@@ -1,6 +1,9 @@
 use crate::prelude::*;
 use proc_macro2::TokenStream;
-use truc::record::definition::{RecordDefinition, RecordVariant};
+use truc::record::{
+    definition::{RecordDefinition, RecordVariant},
+    type_resolver::TypeResolver,
+};
 
 #[derive(Getters)]
 struct InPlaceFilter {
@@ -12,7 +15,11 @@ struct InPlaceFilter {
 }
 
 impl InPlaceFilter {
-    fn new(graph: &mut GraphBuilder, name: FullyQualifiedName, inputs: [NodeStream; 1]) -> Self {
+    fn new<R: TypeResolver + Copy>(
+        graph: &mut GraphBuilder<R>,
+        name: FullyQualifiedName,
+        inputs: [NodeStream; 1],
+    ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.output_from_input(0, graph).pass_through();
         let outputs = streams.build();
@@ -119,6 +126,7 @@ pub mod string {
     use crate::support::FullyQualifiedName;
     use crate::{chain::Chain, graph::Graph, stream::NodeStream};
     use std::ops::Deref;
+    use truc::record::type_resolver::TypeResolver;
 
     pub struct ToLowercase {
         in_place: InPlaceFilter,
@@ -146,8 +154,8 @@ pub mod string {
         }
     }
 
-    pub fn to_lowercase(
-        graph: &mut GraphBuilder,
+    pub fn to_lowercase<R: TypeResolver + Copy>(
+        graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         fields: &[&str],
@@ -189,8 +197,8 @@ pub mod string {
         }
     }
 
-    pub fn reverse_chars(
-        graph: &mut GraphBuilder,
+    pub fn reverse_chars<R: TypeResolver + Copy>(
+        graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         fields: &[&str],

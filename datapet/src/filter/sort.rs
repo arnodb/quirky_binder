@@ -1,4 +1,5 @@
 use crate::{prelude::*, support::fields_cmp};
+use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
 pub struct Sort {
@@ -11,8 +12,8 @@ pub struct Sort {
 }
 
 impl Sort {
-    fn new(
-        graph: &mut GraphBuilder,
+    fn new<R: TypeResolver + Copy>(
+        graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         fields: &[&str],
@@ -76,8 +77,8 @@ impl DynNode for Sort {
     }
 }
 
-pub fn sort(
-    graph: &mut GraphBuilder,
+pub fn sort<R: TypeResolver + Copy>(
+    graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     fields: &[&str],

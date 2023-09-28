@@ -296,7 +296,7 @@ impl<'a> Chain<'a> {
         {
             let error_type = self.customizer.error_type.to_name();
 
-            let channels = (0..self.pipe_count).into_iter().map(|pipe| {
+            let channels = (0..self.pipe_count).map(|pipe| {
                 let tx = format_ident!("tx_{}", pipe);
                 let rx = format_ident!("rx_{}", pipe);
                 quote! {

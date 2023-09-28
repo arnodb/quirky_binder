@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
 pub struct ExtractFields {
@@ -10,8 +11,8 @@ pub struct ExtractFields {
 }
 
 impl ExtractFields {
-    fn new(
-        graph: &mut GraphBuilder,
+    fn new<R: TypeResolver + Copy>(
+        graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         fields: &[&str],
@@ -126,8 +127,8 @@ impl DynNode for ExtractFields {
     }
 }
 
-pub fn extract_fields(
-    graph: &mut GraphBuilder,
+pub fn extract_fields<R: TypeResolver + Copy>(
+    graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     fields: &[&str],

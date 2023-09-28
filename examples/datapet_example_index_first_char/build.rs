@@ -6,6 +6,7 @@ extern crate quote;
 use datapet::{graph::StreamsBuilder, prelude::*};
 use datapet_codegen::dtpt_mod;
 use std::path::Path;
+use truc::record::type_resolver::{HostTypeResolver, TypeResolver};
 
 #[derive(Getters)]
 struct ReadStdinIterator {
@@ -19,8 +20,8 @@ struct ReadStdinIterator {
 }
 
 impl ReadStdinIterator {
-    fn new(
-        graph: &mut GraphBuilder,
+    fn new<R: TypeResolver + Copy>(
+        graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
         field: &str,
@@ -95,8 +96,8 @@ impl DynNode for ReadStdinIterator {
     }
 }
 
-fn read_stdin(
-    graph: &mut GraphBuilder,
+fn read_stdin<R: TypeResolver + Copy>(
+    graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 0],
     field: &str,
@@ -114,7 +115,11 @@ pub struct Tokenize {
 }
 
 impl Tokenize {
-    fn new(graph: &mut GraphBuilder, name: FullyQualifiedName, inputs: [NodeStream; 1]) -> Self {
+    fn new<R: TypeResolver + Copy>(
+        graph: &mut GraphBuilder<R>,
+        name: FullyQualifiedName,
+        inputs: [NodeStream; 1],
+    ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
         {
@@ -182,8 +187,8 @@ impl DynNode for Tokenize {
     }
 }
 
-pub fn tokenize(
-    graph: &mut GraphBuilder,
+pub fn tokenize<R: TypeResolver + Copy>(
+    graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
 ) -> Tokenize {
@@ -224,7 +229,10 @@ use super::{read_stdin, tokenize};
 "#
     }
 
-    let graph = dtpt_main(GraphBuilder::new(ChainCustomizer::default()));
+    let graph = dtpt_main(GraphBuilder::new(
+        &HostTypeResolver,
+        ChainCustomizer::default(),
+    ));
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
     graph.generate(Path::new(&out_dir)).unwrap();

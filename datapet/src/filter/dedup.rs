@@ -1,4 +1,5 @@
 use crate::{prelude::*, support::fields_eq};
+use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
 pub struct Dedup {
@@ -10,7 +11,11 @@ pub struct Dedup {
 }
 
 impl Dedup {
-    fn new(graph: &mut GraphBuilder, name: FullyQualifiedName, inputs: [NodeStream; 1]) -> Self {
+    fn new<R: TypeResolver + Copy>(
+        graph: &mut GraphBuilder<R>,
+        name: FullyQualifiedName,
+        inputs: [NodeStream; 1],
+    ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.output_from_input(0, graph).pass_through();
         let outputs = streams.build();
@@ -78,6 +83,10 @@ impl DynNode for Dedup {
     }
 }
 
-pub fn dedup(graph: &mut GraphBuilder, name: FullyQualifiedName, inputs: [NodeStream; 1]) -> Dedup {
+pub fn dedup<R: TypeResolver + Copy>(
+    graph: &mut GraphBuilder<R>,
+    name: FullyQualifiedName,
+    inputs: [NodeStream; 1],
+) -> Dedup {
     Dedup::new(graph, name, inputs)
 }
