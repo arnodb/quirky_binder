@@ -64,7 +64,8 @@ impl DynNode for Sink {
                               #debug
                               read += 1;
                           }
-                          println!("read {} {}", #full_name, read);
+                          let full_name = #full_name;
+                          println!("read {} {}", full_name, read);
                           Ok(())
                       }
                   }
