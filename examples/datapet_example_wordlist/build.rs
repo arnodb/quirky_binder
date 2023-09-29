@@ -25,10 +25,11 @@ use datapet::{
         r#"{
         use std::io::BufRead;
 
-        let mut stdin = std::io::stdin().lock();
+        let stdin = std::io::stdin();
+        let mut input = stdin.lock();
         let mut buffer = String::new();
         loop {
-            let read = stdin.read_line(&mut buffer).map_err(|err| DatapetError::Custom(err.to_string()))?;
+            let read = input.read_line(&mut buffer).map_err(|err| DatapetError::Custom(err.to_string()))?;
             if read > 0 {
                 let value = std::mem::take(&mut buffer);
                 let value = value.trim_end_matches('\n');
