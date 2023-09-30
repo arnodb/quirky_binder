@@ -1,3 +1,4 @@
+use datapet_lang::ast::ConnectedFilter;
 use datapet_lang::ast::Graph;
 use datapet_lang::ast::GraphDefinition;
 use datapet_lang::ast::Module;
@@ -12,7 +13,10 @@ use proc_macro2::TokenStream;
 use quote::format_ident;
 use quote::quote;
 use std::collections::hash_map::Entry;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::iter::{Enumerate, Peekable};
 use syn::parse::Parse;
 use syn::parse::ParseStream;
 use syn::Error;
@@ -66,24 +70,38 @@ fn dtpt_graph_definition(graph_definition: &GraphDefinition) -> TokenStream {
         let name = format_ident!("{}", param);
         quote! { #name: &str }
     });
-    let (body, all_var_names, main_stream, named_streams) =
+    let (body, all_var_names, main_stream, mut named_streams) =
         dtpt_stream_lines(&graph_definition.stream_lines);
-    let outputs = graph_definition
-        .signature
-        .outputs
-        .as_ref()
-        .map_or_else(Vec::new, |outputs| {
-            Some(main_stream.expect("main stream"))
-                .into_iter()
-                .chain(outputs.iter().map(|name| {
-                    if let Some(stream) = named_streams.get(name) {
-                        stream.clone()
+    let dangling_main_stream = main_stream.is_some();
+    let outputs =
+        graph_definition.signature.outputs.as_ref().map_or_else(
+            || {
+                if dangling_main_stream {
+                    panic!("main stream is not connected");
+                }
+                Vec::new()
+            },
+            |outputs| {
+                Some(main_stream.unwrap_or_else(|| {
+                    if dangling_main_stream {
+                        panic!("main stream is already connected");
                     } else {
-                        panic!("stream `{}` not registered", name);
+                        panic!("main stream does not exist");
                     }
                 }))
+                .into_iter()
+                .chain(outputs.iter().map(
+                    |name| match named_streams.connect_stream(name.clone()) {
+                        Ok(tokens) => tokens,
+                        Err(name) => {
+                            panic!("stream `{}` does not exist", name);
+                        }
+                    },
+                ))
                 .collect::<Vec<TokenStream>>()
-        });
+            },
+        );
+    named_streams.check_all_streams_connected();
     quote! {
         pub fn #name<R: TypeResolver + Copy>(
             graph: &mut GraphBuilder<R>,
@@ -108,7 +126,8 @@ fn dtpt_graph_definition(graph_definition: &GraphDefinition) -> TokenStream {
 
 fn dtpt_graph(graph: &Graph, id: usize) -> TokenStream {
     let name = format_ident!("dtpt_main_{}", id);
-    let (body, all_var_names, main_stream, _named_streams) = dtpt_stream_lines(&graph.stream_lines);
+    let (body, all_var_names, main_stream, named_streams) = dtpt_stream_lines(&graph.stream_lines);
+    named_streams.check_all_streams_connected();
     assert!(main_stream.is_none());
     quote! {
         pub fn #name<R: TypeResolver + Copy>(
@@ -127,62 +146,178 @@ fn dtpt_graph(graph: &Graph, id: usize) -> TokenStream {
     }
 }
 
+struct NamedStreams {
+    streams: HashMap<String, NamedStreamState>,
+}
+
+impl NamedStreams {
+    fn new() -> Self {
+        Self {
+            streams: HashMap::new(),
+        }
+    }
+
+    fn new_stream(&mut self, name: String, tokens: TokenStream) {
+        match self.streams.entry(name) {
+            Entry::Vacant(vacant) => {
+                vacant.insert(NamedStreamState::Dangling(tokens));
+            }
+            Entry::Occupied(occupied) => {
+                panic!("stream `{}` is duplicated", occupied.key());
+            }
+        }
+    }
+
+    fn connect_stream(&mut self, name: String) -> Result<TokenStream, String> {
+        match self.streams.entry(name) {
+            Entry::Vacant(vacant) => Err(vacant.into_key()),
+            Entry::Occupied(mut occupied) => match occupied.get() {
+                NamedStreamState::Dangling(_) => {
+                    let tokens = occupied.get_mut().connect();
+                    Ok(quote! { #tokens })
+                }
+                NamedStreamState::Connected => {
+                    panic!("stream `{}` already connected", occupied.key());
+                }
+            },
+        }
+    }
+
+    fn check_all_streams_connected(self) {
+        for (name, state) in self.streams {
+            match state {
+                NamedStreamState::Dangling(_) => {
+                    panic!("stream `{}` is not connected", name);
+                }
+                NamedStreamState::Connected => {}
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+enum NamedStreamState {
+    Dangling(TokenStream),
+    Connected,
+}
+
+impl NamedStreamState {
+    fn connect(&mut self) -> TokenStream {
+        let mut swapped = NamedStreamState::Connected;
+        std::mem::swap(self, &mut swapped);
+        if let NamedStreamState::Dangling(tokens) = swapped {
+            tokens
+        } else {
+            unreachable!("Cannot connect a stream multiple times ");
+        }
+    }
+}
+
 fn dtpt_stream_lines(
     stream_lines: &[StreamLine],
-) -> (
-    TokenStream,
-    Vec<Ident>,
-    Option<TokenStream>,
-    HashMap<String, TokenStream>,
-) {
-    let mut all_var_names = Vec::new();
-    let mut main_stream = None;
-    let mut named_streams = HashMap::<String, TokenStream>::new();
-    let body = stream_lines
+) -> (TokenStream, Vec<Ident>, Option<TokenStream>, NamedStreams) {
+    #[derive(PartialEq, Eq, Debug)]
+    enum FlowLineState {
+        Unstarted,
+        Started,
+        Done,
+    }
+    struct FlowLineIter<'a> {
+        filter_iter: Peekable<Enumerate<std::slice::Iter<'a, ConnectedFilter>>>,
+        output: Option<&'a StreamLineOutput>,
+        state: FlowLineState,
+        missing_inputs: BTreeSet<String>,
+    }
+    let mut named_streams = NamedStreams::new();
+    let var_names = stream_lines
         .iter()
-        .map(|flow_line| {
-            let var_names = flow_line
+        .enumerate()
+        .flat_map(|(flow_line_index, flow_line)| {
+            flow_line
                 .filters
                 .iter()
                 .enumerate()
-                .map(|(filter_index, filter)| {
+                .map(move |(filter_index, filter)| {
                     if let Some(alias) = &filter.filter.alias {
-                        format_ident!("{}", alias)
+                        ((flow_line_index, filter_index), format_ident!("{}", alias))
                     } else {
-                        format_ident!("dtpt_filter_{}", filter_index)
+                        (
+                            (flow_line_index, filter_index),
+                            format_ident!("dtpt_filter_{}", filter_index),
+                        )
                     }
                 })
-                .collect::<Vec<Ident>>();
-            let filters = flow_line
-                .filters
-                .iter()
-                .enumerate()
-                .map(|(filter_index, filter)| {
-                    let var_name = &var_names[filter_index];
+        })
+        .collect::<BTreeMap<(usize, usize), Ident>>();
+    let mut flow_line_iters = stream_lines
+        .iter()
+        .map(|flow_line| FlowLineIter {
+            filter_iter: flow_line.filters.iter().enumerate().peekable(),
+            output: flow_line.output.as_ref(),
+            state: FlowLineState::Unstarted,
+            missing_inputs: BTreeSet::new(),
+        })
+        .collect::<Vec<FlowLineIter>>();
+    let mut first_incomplete_line = 0;
+    let mut body = Vec::<TokenStream>::new();
+    let mut main_stream = None;
+    loop {
+        let mut go_back_on_unstarted = false;
+        let start_bound_of_this_loop = first_incomplete_line;
+        for flow_line_index in start_bound_of_this_loop..flow_line_iters.len() {
+            let flow_line_iter = &mut flow_line_iters[flow_line_index];
+            match flow_line_iter.state {
+                FlowLineState::Unstarted => {
+                    if go_back_on_unstarted && first_incomplete_line != flow_line_index - 1 {
+                        break;
+                    }
+                }
+                FlowLineState::Started => {}
+                FlowLineState::Done => {
+                    if first_incomplete_line == flow_line_index {
+                        first_incomplete_line += 1
+                    }
+                    continue;
+                }
+            }
+            let mut new_named_streams = BTreeSet::<String>::new();
+            if flow_line_iter.missing_inputs.is_empty() {
+                if flow_line_iter.state == FlowLineState::Unstarted {
+                    flow_line_iter.state = FlowLineState::Started;
+                }
+                while let Some((filter_index, filter)) = flow_line_iter.filter_iter.peek() {
+                    let filter_index = *filter_index;
+                    let var_name = &var_names[&(flow_line_index, filter_index)];
                     let name: syn::Path = syn::parse_str(&filter.filter.name).expect("filter name");
                     let inputs = filter
                         .inputs
                         .iter()
-                        .map(|input| match input {
+                        .filter_map(|input| match input {
                             StreamLineInput::Main => {
-                                let inputs = if filter_index == 0 {
-                                    quote! { inputs }
+                                if filter_index == 0 {
+                                    Some(quote! { inputs[0].clone() })
                                 } else {
-                                    let preceding_var_name = &var_names[filter_index - 1];
-                                    quote! { #preceding_var_name.outputs() }
-                                };
-                                quote! { #inputs[0].clone() }
+                                    let preceding_var_name =
+                                        &var_names[&(flow_line_index, filter_index - 1)];
+                                    Some(quote! { #preceding_var_name.outputs()[0].clone() })
+                                }
                             }
                             StreamLineInput::Named(name) => {
-                                let input = if let Some(stream) = named_streams.get(name) {
-                                    stream.clone()
-                                } else {
-                                    panic!("stream `{}` not registered", name);
-                                };
-                                quote! { #input.clone() }
+                                match named_streams.connect_stream(name.clone()) {
+                                    Ok(tokens) => Some(tokens),
+                                    Err(name) => {
+                                        flow_line_iter.missing_inputs.insert(name);
+                                        None
+                                    }
+                                }
                             }
                         })
                         .collect::<Vec<TokenStream>>();
+                    if !flow_line_iter.missing_inputs.is_empty() {
+                        assert_ne!(inputs.len(), filter.inputs.len());
+                        break;
+                    }
+                    assert_eq!(inputs.len(), filter.inputs.len());
                     let params = filter
                         .filter
                         .params
@@ -195,56 +330,70 @@ fn dtpt_stream_lines(
                     for (extra_output_index, extra_output) in
                         filter.filter.extra_outputs.iter().enumerate()
                     {
-                        match named_streams.entry(extra_output.clone()) {
-                            Entry::Vacant(entry) => {
-                                let output_index = extra_output_index + 1;
-                                entry.insert(quote! { #var_name.outputs()[#output_index]});
-                            }
-                            Entry::Occupied(entry) => {
-                                panic!("stream `{}` already registered", entry.key());
-                            }
-                        }
+                        let output_index = extra_output_index + 1;
+                        let tokens = quote! { #var_name.outputs()[#output_index].clone() };
+                        named_streams.new_stream(extra_output.clone(), tokens);
+                        new_named_streams.insert(extra_output.clone());
                     }
-                    quote! {
+                    body.push(quote! {
                         let #var_name = #name(
                             graph,
                             name.sub(stringify!(#var_name)),
                             [#(#inputs,)*],
                             #(#params,)*
                         );
+                    });
+                    go_back_on_unstarted = true;
+                    flow_line_iter.filter_iter.next();
+                    if flow_line_iter.filter_iter.peek().is_none() {
+                        if let Some(output) = &flow_line_iter.output {
+                            let last_var_name = &var_names[&(flow_line_index, filter_index)];
+                            let tokens = quote! { #last_var_name.outputs()[0] };
+                            match output {
+                                StreamLineOutput::Main => match &mut main_stream {
+                                    main_stream @ None => {
+                                        *main_stream = Some(tokens);
+                                    }
+                                    Some(_) => {
+                                        panic!("main stream is duplicated");
+                                    }
+                                },
+                                StreamLineOutput::Named(output) => {
+                                    named_streams.new_stream(output.clone(), tokens);
+                                    new_named_streams.insert(output.clone());
+                                }
+                            }
+                        }
+
+                        flow_line_iter.state = FlowLineState::Done;
+                        flow_line_iter.missing_inputs.clear();
+                        if first_incomplete_line == flow_line_index {
+                            first_incomplete_line += 1;
+                        }
                     }
-                })
-                .collect::<Vec<TokenStream>>();
-            if let Some(output) = flow_line.output.as_ref() {
-                let last_var_name = var_names.last().expect("last filter");
-                match output {
-                    StreamLineOutput::Main => match &mut main_stream {
-                        main_stream @ None => {
-                            *main_stream = Some(quote! { #last_var_name.outputs()[0] });
-                        }
-                        Some(_) => {
-                            panic!("main stream already registered");
-                        }
-                    },
-                    StreamLineOutput::Named(output) => match named_streams.entry(output.clone()) {
-                        Entry::Vacant(entry) => {
-                            entry.insert(quote! { #last_var_name.outputs()[0]});
-                        }
-                        Entry::Occupied(entry) => {
-                            panic!("stream `{}` already registered", entry.key());
-                        }
-                    },
                 }
             }
-            all_var_names.extend(var_names);
-            quote! {
-                #(#filters)*
+            for flow_line_iter in &mut flow_line_iters[first_incomplete_line..] {
+                match flow_line_iter.state {
+                    FlowLineState::Started => {
+                        for name in &new_named_streams {
+                            flow_line_iter.missing_inputs.remove(name);
+                        }
+                    }
+                    FlowLineState::Unstarted | FlowLineState::Done => {
+                        break;
+                    }
+                }
             }
-        })
-        .collect::<Vec<TokenStream>>();
+        }
+        if first_incomplete_line >= flow_line_iters.len() {
+            assert_eq!(first_incomplete_line, flow_line_iters.len());
+            break;
+        }
+    }
     (
         quote! { #(#body)* },
-        all_var_names,
+        var_names.into_values().collect(),
         main_stream,
         named_streams,
     )
