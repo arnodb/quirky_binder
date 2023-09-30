@@ -1,5 +1,4 @@
 use crate::{prelude::*, support::fields_eq};
-use itertools::Itertools;
 use truc::record::{definition::DatumDefinitionOverride, type_resolver::TypeResolver};
 
 #[derive(Getters)]
@@ -115,8 +114,14 @@ impl DynNode for Group {
                 &mut import_scope,
             );
 
-            let fields =
-                syn::parse_str::<syn::Expr>(&self.fields.iter().join(", ")).expect("fields");
+            let fields = {
+                let names = self
+                    .fields
+                    .iter()
+                    .map(|name| format_ident!("{}", name))
+                    .collect::<Vec<_>>();
+                quote!(#(#names),*)
+            };
 
             let group_field = format_ident!("{}", self.group_field);
             let mut_group_field = format_ident!("{}_mut", self.group_field);

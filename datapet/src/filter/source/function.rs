@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use itertools::Itertools;
 use proc_macro2::TokenStream;
 use truc::record::type_resolver::TypeResolver;
 
@@ -76,18 +75,19 @@ impl DynNode for FunctionSource {
             let record = def.record();
             let unpacked_record = def.unpacked_record();
 
-            let new_record_args = syn::parse_str::<syn::Expr>(
-                &self
+            let (new_record_args, new_record_fields) = {
+                let names = self
                     .fields
                     .iter()
-                    .map(|(name, r#type)| format!("{}: {}", name, r#type))
-                    .join(", "),
-            )
-            .expect("new_record_args");
-            let new_record_fields = syn::parse_str::<syn::Expr>(
-                &self.fields.iter().map(|(name, _type)| name).join(", "),
-            )
-            .expect("new_record_fields");
+                    .map(|(name, _)| format_ident!("{}", name))
+                    .collect::<Vec<_>>();
+                let types = self
+                    .fields
+                    .iter()
+                    .map(|(_, r#type)| syn::parse_str::<syn::Type>(r#type).expect("field type"))
+                    .collect::<Vec<_>>();
+                (quote!(#(#names: #types),*), quote!(#(#names),*))
+            };
 
             let func_body: TokenStream = self.func.parse().expect("function body");
 
