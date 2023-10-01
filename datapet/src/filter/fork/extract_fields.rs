@@ -53,11 +53,7 @@ impl DynNode for ExtractFields {
             self.name.clone(),
             self.inputs.to_vec().into_boxed_slice(),
             self.outputs.to_vec().into_boxed_slice(),
-            if let Some(pipe) = input_pipe {
-                Some(Box::new([pipe]))
-            } else {
-                None
-            },
+            Some(Box::new([input_pipe])),
             false,
             Some(self.name.clone()),
         );

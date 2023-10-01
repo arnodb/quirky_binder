@@ -7,6 +7,7 @@ use itertools::Itertools;
 use proc_macro2::TokenStream;
 use std::{collections::HashMap, ops::Deref};
 
+#[derive(Debug)]
 struct ChainThread {
     id: usize,
     name: FullyQualifiedName,
@@ -195,11 +196,11 @@ impl<'a> Chain<'a> {
         pipe
     }
 
-    pub fn pipe_single_thread(&mut self, source: &NodeStreamSource) -> Option<usize> {
+    pub fn pipe_single_thread(&mut self, source: &NodeStreamSource) -> usize {
         let source_thread = self.get_source_thread(source).clone();
         let thread = &mut self.threads[source_thread.thread_id];
         if let Some(output_pipes) = &thread.output_pipes {
-            return Some(output_pipes[source_thread.stream_index]);
+            return output_pipes[source_thread.stream_index];
         }
         let pipe = self.new_pipe();
         let thread = &mut self.threads[source_thread.thread_id];
@@ -240,7 +241,7 @@ impl<'a> Chain<'a> {
             thread.main = Some(FullyQualifiedName::new(name).sub("datapet_pipe"));
         }
         import_scope.import(scope, self.customizer);
-        Some(pipe)
+        pipe
     }
 
     pub fn set_thread_main(&mut self, thread_id: usize, main: FullyQualifiedName) {
