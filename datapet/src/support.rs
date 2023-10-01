@@ -1,3 +1,4 @@
+use itertools::zip_eq;
 use std::{
     fmt::{Display, Formatter},
     ops::Deref,
@@ -140,11 +141,11 @@ where
     syn::parse_str::<syn::Expr>(&eq).expect("eq")
 }
 
-pub fn fields_cmp<'f, F>(fields: F) -> syn::Expr
+pub fn fields_cmp<'f, F>(record_type: &syn::Type, fields: F) -> syn::Expr
 where
     F: IntoIterator<Item = &'f str>,
 {
-    let cmp = Some("|a, b| ".to_string())
+    let cmp = Some(quote! {|a: &#record_type, b: &#record_type|}.to_string())
         .into_iter()
         .chain(fields.into_iter().enumerate().map(|(i, field)| {
             let (then, end_then) = if i > 0 {
@@ -159,6 +160,40 @@ where
                 field = field
             )
         }))
+        .collect::<String>();
+    syn::parse_str::<syn::Expr>(&cmp).expect("cmp")
+}
+
+pub fn fields_cmp_ab<'f, 'g, F, G>(
+    record_type_a: &syn::Type,
+    fields_a: F,
+    record_type_b: &syn::Type,
+    fields_b: G,
+) -> syn::Expr
+where
+    F: IntoIterator<Item = &'f str>,
+    G: IntoIterator<Item = &'g str>,
+{
+    let cmp = Some(quote! {|a: &#record_type_a, b: &#record_type_b|}.to_string())
+        .into_iter()
+        .chain(
+            zip_eq(fields_a, fields_b)
+                .enumerate()
+                .map(|(i, (field_a, field_b))| {
+                    let (then, end_then) = if i > 0 {
+                        (".then_with(|| ", ")")
+                    } else {
+                        ("", "")
+                    };
+                    format!(
+                        "{then}a.{field_a}().cmp(b.{field_b}(){end_then})",
+                        then = then,
+                        end_then = end_then,
+                        field_a = field_a,
+                        field_b = field_b
+                    )
+                }),
+        )
         .collect::<String>();
     syn::parse_str::<syn::Expr>(&cmp).expect("cmp")
 }

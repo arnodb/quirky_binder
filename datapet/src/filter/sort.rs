@@ -57,7 +57,7 @@ impl DynNode for Sort {
                 &mut import_scope,
             );
 
-            let cmp = fields_cmp(self.fields.iter().map(String::as_str));
+            let cmp = fields_cmp(&record, self.fields.iter().map(String::as_str));
 
             let fn_def = quote! {
                   pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
