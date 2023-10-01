@@ -243,7 +243,7 @@ fn dtpt_stream_lines(
                     } else {
                         (
                             (flow_line_index, filter_index),
-                            format_ident!("dtpt_filter_{}", filter_index),
+                            format_ident!("dtpt_filter_{}_{}", flow_line_index, filter_index),
                         )
                     }
                 })
@@ -348,7 +348,7 @@ fn dtpt_stream_lines(
                     if flow_line_iter.filter_iter.peek().is_none() {
                         if let Some(output) = &flow_line_iter.output {
                             let last_var_name = &var_names[&(flow_line_index, filter_index)];
-                            let tokens = quote! { #last_var_name.outputs()[0] };
+                            let tokens = quote! { #last_var_name.outputs()[0].clone() };
                             match output {
                                 StreamLineOutput::Main => match &mut main_stream {
                                     main_stream @ None => {
