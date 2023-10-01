@@ -12,8 +12,14 @@ fn main() {
 use datapet::{
     filter::{
         anchor::anchorize, dedup::dedup, hof::index::wordlist::build_word_list, sink::sink,
+        fork::{
+            extract_fields::extract_fields,
+            join::join,
+        },
+        group::group,
         sort::sort,
         source::function::function_source,
+        unwrap::unwrap,
     },
 };
 
@@ -58,9 +64,28 @@ use datapet::{
         Ok(())
         }"#
       )
+    - sort(&["id"])
+    - extract_fields(&["id", "parent_id"]) [extracted]
+    - [children] join(&["id"], &["parent_id"])
     - sink(
-        Some(quote! { println!("({}) {} ({:?}) / {}", record.id(), record.path(), record.parent_id(), record.file_name()); })
+        Some(quote! {
+            println!(
+                "({}) {} ({:?}) / {}, children: {:?}",
+                record.id(),
+                record.path(),
+                record.parent_id(),
+                record.file_name(),
+                record.children().iter().map(|rec| rec.id()).collect::<Vec<_>>()
+            );
+        })
       )
+  )
+
+  ( < extracted
+    - unwrap(&["parent_id"], true)
+    - sort(&["parent_id", "id"])
+    - group(&["id"], "children")
+    -> children
   )
 }
 "###

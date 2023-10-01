@@ -24,6 +24,12 @@ pub enum DatapetError {
     PipeWrite,
 }
 
+impl DatapetError {
+    pub fn custom(error: String) -> Self {
+        Self::Custom(error)
+    }
+}
+
 impl From<RecvError> for DatapetError {
     fn from(_: RecvError) -> Self {
         Self::PipeRead
