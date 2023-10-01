@@ -24,7 +24,7 @@ pub trait DynNode {
 #[derive(new)]
 pub struct NodeCluster<const IN: usize, const OUT: usize> {
     name: FullyQualifiedName,
-    nodes: Vec<Box<dyn DynNode>>,
+    ordered_nodes: Vec<Box<dyn DynNode>>,
     inputs: [NodeStream; IN],
     outputs: [NodeStream; OUT],
 }
@@ -45,7 +45,7 @@ impl<const IN: usize, const OUT: usize> NodeCluster<IN, OUT> {
 
 impl<const IN: usize, const OUT: usize> DynNode for NodeCluster<IN, OUT> {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        for node in &self.nodes {
+        for node in &self.ordered_nodes {
             node.gen_chain(graph, chain);
         }
     }

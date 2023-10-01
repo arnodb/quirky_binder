@@ -70,7 +70,7 @@ fn dtpt_graph_definition(graph_definition: &GraphDefinition) -> TokenStream {
         let name = format_ident!("{}", param);
         quote! { #name: &str }
     });
-    let (body, all_var_names, main_stream, mut named_streams) =
+    let (body, ordered_var_names, main_stream, mut named_streams) =
         dtpt_stream_lines(&graph_definition.stream_lines);
     let dangling_main_stream = main_stream.is_some();
     let outputs =
@@ -116,7 +116,7 @@ fn dtpt_graph_definition(graph_definition: &GraphDefinition) -> TokenStream {
 
             NodeCluster::new(
                 name,
-                vec![#(Box::new(#all_var_names),)*],
+                vec![#(Box::new(#ordered_var_names),)*],
                 inputs,
                 outputs,
             )
@@ -126,7 +126,8 @@ fn dtpt_graph_definition(graph_definition: &GraphDefinition) -> TokenStream {
 
 fn dtpt_graph(graph: &Graph, id: usize) -> TokenStream {
     let name = format_ident!("dtpt_main_{}", id);
-    let (body, all_var_names, main_stream, named_streams) = dtpt_stream_lines(&graph.stream_lines);
+    let (body, ordered_var_names, main_stream, named_streams) =
+        dtpt_stream_lines(&graph.stream_lines);
     named_streams.check_all_streams_connected();
     assert!(main_stream.is_none());
     quote! {
@@ -138,7 +139,7 @@ fn dtpt_graph(graph: &Graph, id: usize) -> TokenStream {
 
             NodeCluster::new(
                 name.sub(stringify!(#name)),
-                vec![#(Box::new(#all_var_names),)*],
+                vec![#(Box::new(#ordered_var_names),)*],
                 [],
                 [],
             )
@@ -249,6 +250,7 @@ fn dtpt_stream_lines(
                 })
         })
         .collect::<BTreeMap<(usize, usize), Ident>>();
+    let mut ordered_var_names = Vec::<Ident>::new();
     let mut flow_line_iters = stream_lines
         .iter()
         .map(|flow_line| FlowLineIter {
@@ -343,6 +345,7 @@ fn dtpt_stream_lines(
                             #(#params,)*
                         );
                     });
+                    ordered_var_names.push(var_name.clone());
                     go_back_on_unstarted = true;
                     flow_line_iter.filter_iter.next();
                     if flow_line_iter.filter_iter.peek().is_none() {
@@ -393,7 +396,7 @@ fn dtpt_stream_lines(
     }
     (
         quote! { #(#body)* },
-        var_names.into_values().collect(),
+        ordered_var_names,
         main_stream,
         named_streams,
     )
