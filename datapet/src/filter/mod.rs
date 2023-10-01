@@ -7,3 +7,4 @@ pub mod in_place;
 pub mod sink;
 pub mod sort;
 pub mod source;
+pub mod unwrap;
