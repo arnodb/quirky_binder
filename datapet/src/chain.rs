@@ -256,6 +256,11 @@ impl<'a> Chain<'a> {
                 .get_module_mut(&name)
                 .expect("thread module")
                 .scope();
+            scope.import("std::sync", "Arc");
+            scope.import(
+                "datapet_support::chain::configuration",
+                "ChainConfiguration",
+            );
             if thread.input_streams.len() > 0 {
                 scope.import("std::sync::mpsc", "Receiver");
             }
@@ -287,6 +292,7 @@ impl<'a> Chain<'a> {
             .flatten();
             let struct_def = quote! {
                 pub struct ThreadControl {
+                    pub chain_configuration: Arc<ChainConfiguration>,
                     #(pub #inputs: Option<Receiver<Option<#input_types>>>,)*
                     #(pub #outputs: Option<SyncSender<Option<#output_types>>>,)*
                 }
@@ -305,40 +311,50 @@ impl<'a> Chain<'a> {
                 }
             });
 
-            let thread_controls = self.threads.iter().map(|thread| {
-                let thread_control = format_ident!("thread_control_{}", thread.id);
-                let thread_module = format_ident!("thread_{}", thread.id);
-                let inputs = thread
-                    .input_pipes
-                    .as_ref()
-                    .map(|input_pipes| {
-                        input_pipes.iter().enumerate().map(|(index, pipe)| {
-                            let input = format_ident!("input_{}", index);
-                            let rx = format_ident!("rx_{}", pipe);
-                            quote! { #input: Some(#rx), }
+            let thread_controls = self
+                .threads
+                .iter()
+                .enumerate()
+                .map(|(thread_index, thread)| {
+                    let thread_control = format_ident!("thread_control_{}", thread.id);
+                    let thread_module = format_ident!("thread_{}", thread.id);
+                    let inputs = thread
+                        .input_pipes
+                        .as_ref()
+                        .map(|input_pipes| {
+                            input_pipes.iter().enumerate().map(|(index, pipe)| {
+                                let input = format_ident!("input_{}", index);
+                                let rx = format_ident!("rx_{}", pipe);
+                                quote! { #input: Some(#rx), }
+                            })
                         })
-                    })
-                    .into_iter()
-                    .flatten();
-                let outputs = thread
-                    .output_pipes
-                    .as_ref()
-                    .map(|output_pipes| {
-                        output_pipes.iter().enumerate().map(|(index, pipe)| {
-                            let output = format_ident!("output_{}", index);
-                            let tx = format_ident!("tx_{}", pipe);
-                            quote! { #output: Some(#tx), }
+                        .into_iter()
+                        .flatten();
+                    let outputs = thread
+                        .output_pipes
+                        .as_ref()
+                        .map(|output_pipes| {
+                            output_pipes.iter().enumerate().map(|(index, pipe)| {
+                                let output = format_ident!("output_{}", index);
+                                let tx = format_ident!("tx_{}", pipe);
+                                quote! { #output: Some(#tx), }
+                            })
                         })
-                    })
-                    .into_iter()
-                    .flatten();
-                quote! {
-                    let #thread_control = #thread_module::ThreadControl {
-                        #(#inputs)*
-                        #(#outputs)*
+                        .into_iter()
+                        .flatten();
+                    let config_assignment = if thread_index + 1 < self.threads.len() {
+                        quote! {chain_configuration: chain_configuration.clone(), }
+                    } else {
+                        quote! {chain_configuration,}
                     };
-                }
-            });
+                    quote! {
+                        let #thread_control = #thread_module::ThreadControl {
+                            #config_assignment
+                            #(#inputs)*
+                            #(#outputs)*
+                        };
+                    }
+                });
 
             let spawn_threads = self.threads.iter().map(|thread| {
                 let join_thread = format_ident!("join_{}", thread.id);
@@ -354,8 +370,15 @@ impl<'a> Chain<'a> {
                 quote! { #join_thread.join().unwrap()?; }
             });
 
+            self.scope.import("std::sync", "Arc");
+            self.scope.import(
+                "datapet_support::chain::configuration",
+                "ChainConfiguration",
+            );
             let main_def = quote! {
-                pub fn main() -> Result<(), #error_type> {
+                pub fn main(chain_configuration: ChainConfiguration) -> Result<(), #error_type> {
+                    let chain_configuration = Arc::new(chain_configuration);
+
                     #(#channels)*
 
                     #(#thread_controls)*

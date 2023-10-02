@@ -35,7 +35,7 @@ use datapet::{
 
         let mut full_name_index = BTreeMap::<PathBuf, usize>::new();
 
-        for (id, entry) in WalkDir::new("datapet").into_iter().enumerate() {
+        for (id, entry) in WalkDir::new(thread_control.chain_configuration.variables["root"].clone()).into_iter().enumerate() {
             let entry = entry.map_err(|err| DatapetError::Custom(err.to_string()))?;
 
             let parent_id = entry.path().parent()

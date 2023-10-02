@@ -10,6 +10,7 @@ extern crate lazy_static;
 #[macro_use]
 extern crate thiserror;
 
+pub mod chain;
 pub mod iterator;
 
 use std::sync::mpsc::{RecvError, SendError};

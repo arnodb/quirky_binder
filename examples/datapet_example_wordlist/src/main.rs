@@ -1,3 +1,5 @@
+use datapet_support::chain::configuration::ChainConfiguration;
+
 #[macro_use]
 extern crate static_assertions;
 
@@ -7,5 +9,5 @@ extern crate static_assertions;
 mod chain;
 
 fn main() {
-    chain::main().unwrap();
+    chain::main(ChainConfiguration::default()).unwrap();
 }
