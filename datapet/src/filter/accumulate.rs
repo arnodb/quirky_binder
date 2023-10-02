@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{prelude::*, stream::UniqueNodeStream};
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
@@ -30,7 +30,11 @@ impl Accumulate {
 
 impl DynNode for Accumulate {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let thread = chain.get_thread_id_and_module_by_source(self.inputs[0].source(), &self.name);
+        let thread = chain.get_thread_id_and_module_by_source(
+            self.inputs.unique(),
+            &self.name,
+            self.outputs.some_unique(),
+        );
 
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
@@ -45,12 +49,14 @@ impl DynNode for Accumulate {
             let thread_module = format_ident!("thread_{}", thread.thread_id);
             let error_type = graph.chain_customizer().error_type.to_name();
 
-            let def =
-                self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
+            let def = self
+                .outputs
+                .unique()
+                .definition_fragments(&graph.chain_customizer().streams_module_name);
             let record = def.record();
 
             let input = thread.format_input(
-                self.inputs[0].source(),
+                self.inputs.unique().source(),
                 graph.chain_customizer(),
                 &mut import_scope,
             );
@@ -65,8 +71,6 @@ impl DynNode for Accumulate {
         }
 
         import_scope.import(scope, graph.chain_customizer());
-
-        chain.update_thread_single_stream(thread.thread_id, &self.outputs[0]);
     }
 }
 

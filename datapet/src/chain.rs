@@ -22,7 +22,7 @@ struct ChainThread {
 pub struct ChainSourceThread {
     pub thread_id: usize,
     pub stream_index: usize,
-    pub pipe: Option<usize>,
+    pub piped: bool,
 }
 
 impl ChainSourceThread {
@@ -32,7 +32,7 @@ impl ChainSourceThread {
         customizer: &ChainCustomizer,
         import_scope: &mut ImportScope,
     ) -> TokenStream {
-        if self.pipe.is_none() {
+        if !self.piped {
             let input = syn::parse_str::<syn::Path>(&format!(
                 "{}::{}",
                 customizer.module_name, source_name
@@ -68,7 +68,7 @@ pub struct Chain<'a> {
 }
 
 impl<'a> Chain<'a> {
-    pub fn new_thread(
+    fn new_thread(
         &mut self,
         name: FullyQualifiedName,
         input_streams: Box<[NodeStream]>,
@@ -103,7 +103,7 @@ impl<'a> Chain<'a> {
                 ChainSourceThread {
                     thread_id,
                     stream_index: i,
-                    pipe: None,
+                    piped: false,
                 },
             );
         }
@@ -135,20 +135,20 @@ impl<'a> Chain<'a> {
         thread_id
     }
 
-    pub fn update_thread_single_stream(&mut self, thread_id: usize, stream: &NodeStream) {
-        let thread = self.threads.get_mut(thread_id).expect("thread");
-        assert_eq!(thread.output_streams.len(), 1);
-        self.thread_by_source
-            .remove(thread.output_streams[0].source());
-        thread.output_streams[0] = stream.clone();
-        self.thread_by_source.insert(
-            stream.source().clone(),
-            ChainSourceThread {
-                thread_id,
-                stream_index: 0,
-                pipe: None,
-            },
-        );
+    pub fn new_threaded_source(
+        &mut self,
+        name: &FullyQualifiedName,
+        inputs: &[NodeStream; 0],
+        outputs: &[NodeStream],
+    ) -> usize {
+        self.new_thread(
+            name.clone(),
+            inputs.to_vec().into_boxed_slice(),
+            outputs.to_vec().into_boxed_slice(),
+            None,
+            false,
+            Some(name.clone()),
+        )
     }
 
     fn get_source_thread(&self, source: &NodeStreamSource) -> &ChainSourceThread {
@@ -163,10 +163,11 @@ impl<'a> Chain<'a> {
 
     pub fn get_thread_id_and_module_by_source(
         &mut self,
-        source: &NodeStreamSource,
+        input: &NodeStream,
         new_thread_name: &FullyQualifiedName,
+        output: Option<&NodeStream>,
     ) -> ChainSourceThread {
-        let source_thread = self.get_source_thread(source);
+        let source_thread = self.get_source_thread(input.source());
         let thread_id = source_thread.thread_id;
         let thread = &self.threads[thread_id];
         if let Some(output_pipes) = &thread.output_pipes {
@@ -180,14 +181,37 @@ impl<'a> Chain<'a> {
                 true,
                 None,
             );
+            if let Some(output) = output {
+                self.update_thread_single_stream(thread_id, output);
+            }
             ChainSourceThread {
                 thread_id,
                 stream_index: 0,
-                pipe: Some(input_pipe),
+                piped: true,
             }
         } else {
-            source_thread.clone()
+            let thread = source_thread.clone();
+            if let Some(output) = output {
+                self.update_thread_single_stream(thread.thread_id, output);
+            }
+            thread
         }
+    }
+
+    fn update_thread_single_stream(&mut self, thread_id: usize, stream: &NodeStream) {
+        let thread = self.threads.get_mut(thread_id).expect("thread");
+        assert_eq!(thread.output_streams.len(), 1);
+        self.thread_by_source
+            .remove(thread.output_streams[0].source());
+        thread.output_streams[0] = stream.clone();
+        self.thread_by_source.insert(
+            stream.source().clone(),
+            ChainSourceThread {
+                thread_id,
+                stream_index: 0,
+                piped: false,
+            },
+        );
     }
 
     fn new_pipe(&mut self) -> usize {
@@ -196,7 +220,7 @@ impl<'a> Chain<'a> {
         pipe
     }
 
-    pub fn pipe_single_thread(&mut self, source: &NodeStreamSource) -> usize {
+    fn pipe_single_thread(&mut self, source: &NodeStreamSource) -> usize {
         let source_thread = self.get_source_thread(source).clone();
         let thread = &mut self.threads[source_thread.thread_id];
         if let Some(output_pipes) = &thread.output_pipes {
@@ -242,6 +266,26 @@ impl<'a> Chain<'a> {
         }
         import_scope.import(scope, self.customizer);
         pipe
+    }
+
+    pub fn pipe_inputs(
+        &mut self,
+        name: &FullyQualifiedName,
+        inputs: &[NodeStream],
+        outputs: &[NodeStream],
+    ) -> usize {
+        let input_pipes = inputs
+            .iter()
+            .map(|input| self.pipe_single_thread(input.source()))
+            .collect::<Vec<usize>>();
+        self.new_thread(
+            name.clone(),
+            inputs.to_vec().into_boxed_slice(),
+            outputs.to_vec().into_boxed_slice(),
+            Some(input_pipes.into_boxed_slice()),
+            false,
+            Some(name.clone()),
+        )
     }
 
     pub fn set_thread_main(&mut self, thread_id: usize, main: FullyQualifiedName) {

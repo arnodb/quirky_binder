@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{prelude::*, stream::UniqueNodeStream};
 use proc_macro2::TokenStream;
 use truc::record::{
     definition::{RecordDefinition, RecordVariant},
@@ -34,7 +34,11 @@ impl InPlaceFilter {
     where
         B: FnOnce(&RecordDefinition, &RecordVariant) -> TokenStream,
     {
-        let thread = chain.get_thread_id_and_module_by_source(self.inputs[0].source(), &self.name);
+        let thread = chain.get_thread_id_and_module_by_source(
+            self.inputs.unique(),
+            &self.name,
+            self.outputs.some_unique(),
+        );
 
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
@@ -49,20 +53,22 @@ impl InPlaceFilter {
             let thread_module = format_ident!("thread_{}", thread.thread_id);
             let error_type = graph.chain_customizer().error_type.to_name();
 
-            let def =
-                self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
+            let def = self
+                .outputs
+                .unique()
+                .definition_fragments(&graph.chain_customizer().streams_module_name);
             let record = def.record();
 
             let input = thread.format_input(
-                self.inputs[0].source(),
+                self.inputs.unique().source(),
                 graph.chain_customizer(),
                 &mut import_scope,
             );
 
-            let record_definition = &graph.record_definitions()[self.inputs[0].record_type()];
+            let record_definition = &graph.record_definitions()[self.inputs.unique().record_type()];
             let record_variant = record_definition
-                .get_variant(self.inputs[0].variant_id())
-                .unwrap_or_else(|| panic!("variant #{}", self.inputs[0].variant_id()));
+                .get_variant(self.inputs.unique().variant_id())
+                .unwrap_or_else(|| panic!("variant #{}", self.inputs.unique().variant_id()));
             let body = body(record_definition, record_variant);
 
             let fn_def = quote! {
@@ -78,8 +84,6 @@ impl InPlaceFilter {
         }
 
         import_scope.import(scope, graph.chain_customizer());
-
-        chain.update_thread_single_stream(thread.thread_id, &self.outputs[0]);
     }
 
     fn gen_chain_simple<'f, F>(

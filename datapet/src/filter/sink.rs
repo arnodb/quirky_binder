@@ -1,4 +1,7 @@
-use crate::prelude::*;
+use crate::{
+    prelude::*,
+    stream::{NoneNodeStream, UniqueNodeStream},
+};
 use proc_macro2::TokenStream;
 use truc::record::type_resolver::TypeResolver;
 
@@ -30,7 +33,11 @@ impl Sink {
 
 impl DynNode for Sink {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let thread = chain.get_thread_id_and_module_by_source(self.inputs[0].source(), &self.name);
+        let thread = chain.get_thread_id_and_module_by_source(
+            self.inputs.unique(),
+            &self.name,
+            self.outputs.none(),
+        );
 
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
@@ -45,7 +52,7 @@ impl DynNode for Sink {
             let error_type = graph.chain_customizer().error_type.to_name();
 
             let input = thread.format_input(
-                self.inputs[0].source(),
+                self.inputs.unique().source(),
                 graph.chain_customizer(),
                 &mut import_scope,
             );

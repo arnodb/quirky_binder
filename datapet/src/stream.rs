@@ -60,6 +60,32 @@ impl NodeStream {
     }
 }
 
+pub trait NoneNodeStream {
+    fn none(&self) -> Option<&NodeStream>;
+}
+
+impl NoneNodeStream for [NodeStream; 0] {
+    fn none(&self) -> Option<&NodeStream> {
+        None
+    }
+}
+
+pub trait UniqueNodeStream {
+    fn unique(&self) -> &NodeStream;
+
+    fn some_unique(&self) -> Option<&NodeStream>;
+}
+
+impl UniqueNodeStream for [NodeStream; 1] {
+    fn unique(&self) -> &NodeStream {
+        &self[0]
+    }
+
+    fn some_unique(&self) -> Option<&NodeStream> {
+        Some(self.unique())
+    }
+}
+
 pub struct RecordDefinitionFragments<'a> {
     stream: &'a NodeStream,
     module_prefix: &'a FullyQualifiedName,

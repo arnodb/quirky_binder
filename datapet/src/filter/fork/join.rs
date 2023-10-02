@@ -1,4 +1,4 @@
-use crate::{prelude::*, support::fields_cmp_ab};
+use crate::{prelude::*, stream::UniqueNodeStream, support::fields_cmp_ab};
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
@@ -73,17 +73,7 @@ impl Join {
 
 impl DynNode for Join {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let primary_pipe = chain.pipe_single_thread(self.inputs[0].source());
-        let secondary_pipe = chain.pipe_single_thread(self.inputs[1].source());
-
-        let thread_id = chain.new_thread(
-            self.name.clone(),
-            self.inputs.to_vec().into_boxed_slice(),
-            self.outputs.to_vec().into_boxed_slice(),
-            Some(Box::new([primary_pipe, secondary_pipe])),
-            false,
-            Some(self.name.clone()),
-        );
+        let thread_id = chain.pipe_inputs(&self.name, &self.inputs, &self.outputs);
 
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
@@ -112,8 +102,10 @@ impl DynNode for Join {
                 self.secondary_fields.iter().map(String::as_str),
             );
 
-            let def =
-                self.outputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
+            let def = self
+                .outputs
+                .unique()
+                .definition_fragments(&graph.chain_customizer().streams_module_name);
             let unpacked_record_in = def.unpacked_record_in();
             let record_and_unpacked_out = def.record_and_unpacked_out();
 

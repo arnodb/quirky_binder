@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use crate::{prelude::*, stream::UniqueNodeStream};
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
@@ -29,7 +29,7 @@ impl ExtractFields {
                 output_extracted_stream_def.copy_datum(
                     input_stream
                         .borrow()
-                        .get_variant_datum_definition_by_name(inputs[0].variant_id(), field)
+                        .get_variant_datum_definition_by_name(inputs.unique().variant_id(), field)
                         .unwrap_or_else(|| panic!(r#"datum "{}""#, field)),
                 );
             }
@@ -47,16 +47,7 @@ impl ExtractFields {
 
 impl DynNode for ExtractFields {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let input_pipe = chain.pipe_single_thread(self.inputs[0].source());
-
-        let thread_id = chain.new_thread(
-            self.name.clone(),
-            self.inputs.to_vec().into_boxed_slice(),
-            self.outputs.to_vec().into_boxed_slice(),
-            Some(Box::new([input_pipe])),
-            false,
-            Some(self.name.clone()),
-        );
+        let thread_id = chain.pipe_inputs(&self.name, &self.inputs, &self.outputs);
 
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
