@@ -1,5 +1,6 @@
 use fallible_iterator::FallibleIterator;
 
+pub mod accumulate;
 pub mod dedup;
 pub mod group;
 pub mod io;

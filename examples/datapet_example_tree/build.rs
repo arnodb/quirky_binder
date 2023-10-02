@@ -11,6 +11,7 @@ fn main() {
         r###"
 use datapet::{
     filter::{
+        accumulate::accumulate,
         anchor::anchorize, dedup::dedup, hof::index::wordlist::build_word_list, sink::sink,
         fork::{
             extract_fields::extract_fields,
@@ -66,6 +67,7 @@ use datapet::{
       )
     - sort(&["id"])
     - extract_fields(&["id", "parent_id"]) [extracted]
+    - accumulate()
     - [children] join(&["id"], &["parent_id"])
     - sink(
         Some(quote! {
