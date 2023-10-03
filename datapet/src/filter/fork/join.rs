@@ -37,9 +37,7 @@ impl Join {
             let joined_fields = variant
                 .data()
                 .filter_map(|d| {
-                    let datum = secondary_stream_def
-                        .get_datum_definition(d)
-                        .unwrap_or_else(|| panic!("datum #{}", d));
+                    let datum = &secondary_stream_def[d];
                     if !secondary_fields.iter().any(|field| *field == datum.name()) {
                         output_stream_def.copy_datum(datum);
                         Some(datum.name().to_owned())

@@ -62,12 +62,7 @@ impl DynNode for Dedup {
             let variant = record_definition
                 .get_variant(self.inputs.unique().variant_id())
                 .unwrap_or_else(|| panic!("variant #{}", self.inputs.unique().variant_id()));
-            let eq = fields_eq(variant.data().map(|d| {
-                let datum = record_definition
-                    .get_datum_definition(d)
-                    .unwrap_or_else(|| panic!("datum #{}", d));
-                datum.name()
-            }));
+            let eq = fields_eq(variant.data().map(|d| record_definition[d].name()));
 
             let fn_def = quote! {
                   pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {

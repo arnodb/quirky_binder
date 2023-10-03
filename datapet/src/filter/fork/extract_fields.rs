@@ -67,9 +67,7 @@ impl DynNode for ExtractFields {
                 .get_variant(self.outputs[1].variant_id())
                 .unwrap_or_else(|| panic!("variant #{}", self.outputs[1].variant_id()));
             let datum_clones = variant.data().map(|d| {
-                let datum = record_definition
-                    .get_datum_definition(d)
-                    .unwrap_or_else(|| panic!("datum #{}", d));
+                let datum = &record_definition[d];
                 syn::parse_str::<syn::Stmt>(&format!(
                     "let {name} = {deref}record.{name}(){clone};",
                     name = datum.name(),
@@ -83,9 +81,7 @@ impl DynNode for ExtractFields {
             let output_unpacked_record_1 = def_output_1.unpacked_record();
 
             let fields = variant.data().map(|d| {
-                let datum = record_definition
-                    .get_datum_definition(d)
-                    .unwrap_or_else(|| panic!("datum #{}", d));
+                let datum = &record_definition[d];
                 format_ident!("{}", datum.name())
             });
 

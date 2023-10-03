@@ -97,9 +97,7 @@ impl InPlaceFilter {
             let data = variant
                 .data()
                 .filter_map(|d| {
-                    let datum = record_definition
-                        .get_datum_definition(d)
-                        .unwrap_or_else(|| panic!("datum #{}", d));
+                    let datum = &record_definition[d];
                     if fields
                         .clone()
                         .into_iter()

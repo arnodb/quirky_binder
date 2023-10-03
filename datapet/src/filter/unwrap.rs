@@ -110,16 +110,14 @@ impl DynNode for Unwrap {
                 let unwraps = variant
                     .data()
                     .map(|d| {
-                        let datum = record_definition
-                            .get_datum_definition(d)
-                            .unwrap_or_else(|| panic!("datum #{}", d));
-                        let name = datum.name();
-                        let name_ident = format_ident!("{}", name);
+                        let datum = &record_definition[d];
+                        let name_ident = format_ident!("{}", datum.name());
                         let error = if self.skip_nones {
                             quote! {
                                 return Ok(None);
                             }
                         } else {
+                            let name = datum.name();
                             quote! {
                                 return Err(#error_type::custom(
                                     format!("found None for field `{}`", #name)

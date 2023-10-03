@@ -132,9 +132,7 @@ impl DynNode for Group {
                 .get_variant(self.inputs.unique().variant_id())
                 .unwrap_or_else(|| panic!("variant #{}", self.inputs.unique().variant_id()));
             let eq = fields_eq(variant.data().filter_map(|d| {
-                let datum = record_definition
-                    .get_datum_definition(d)
-                    .unwrap_or_else(|| panic!("datum #{}", d));
+                let datum = &record_definition[d];
                 if !self.fields.iter().any(|f| f == datum.name())
                     && datum.name() != self.group_field
                 {
