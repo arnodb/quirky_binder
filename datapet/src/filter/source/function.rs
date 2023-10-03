@@ -52,6 +52,8 @@ impl DynNode for FunctionSource {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.new_threaded_source(&self.name, &self.inputs, &self.outputs);
 
+        let def = chain.stream_definition_fragments(self.outputs.unique());
+
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
             graph.chain_customizer(),
@@ -63,10 +65,6 @@ impl DynNode for FunctionSource {
             let thread_module = format_ident!("thread_{}", thread_id);
             let error_type = graph.chain_customizer().error_type.to_name();
 
-            let def = self
-                .outputs
-                .unique()
-                .definition_fragments(&graph.chain_customizer().streams_module_name);
             let record = def.record();
             let unpacked_record = def.unpacked_record();
 

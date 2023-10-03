@@ -77,6 +77,8 @@ impl DynNode for Unwrap {
             self.outputs.some_unique(),
         );
 
+        let def = chain.stream_definition_fragments(self.outputs.unique());
+
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
             graph.chain_customizer(),
@@ -95,10 +97,6 @@ impl DynNode for Unwrap {
                 .get_variant(self.inputs.unique().variant_id())
                 .unwrap_or_else(|| panic!("variant #{}", self.inputs.unique().variant_id()));
 
-            let def = self
-                .outputs
-                .unique()
-                .definition_fragments(&graph.chain_customizer().streams_module_name);
             let record = def.record();
             let unpacked_record = def.unpacked_record();
 

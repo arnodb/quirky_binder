@@ -49,6 +49,8 @@ impl DynNode for ExtractFields {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.pipe_inputs(&self.name, &self.inputs, &self.outputs);
 
+        let def_output_1 = chain.stream_definition_fragments(&self.outputs[1]);
+
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
             graph.chain_customizer(),
@@ -77,8 +79,6 @@ impl DynNode for ExtractFields {
                 .expect("clone")
             });
 
-            let def_output_1 =
-                self.outputs[1].definition_fragments(&graph.chain_customizer().streams_module_name);
             let output_record_1 = def_output_1.record();
             let output_unpacked_record_1 = def_output_1.unpacked_record();
 

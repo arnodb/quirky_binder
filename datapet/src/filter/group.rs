@@ -85,6 +85,10 @@ impl DynNode for Group {
             self.outputs.some_unique(),
         );
 
+        let def_input = chain.stream_definition_fragments(self.inputs.unique());
+        let def = chain.stream_definition_fragments(self.outputs.unique());
+        let def_group = chain.stream_definition_fragments(&self.group_stream);
+
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
             graph.chain_customizer(),
@@ -98,17 +102,6 @@ impl DynNode for Group {
             let thread_module = format_ident!("thread_{}", thread.thread_id);
             let error_type = graph.chain_customizer().error_type.to_name();
 
-            let def_input = self
-                .inputs
-                .unique()
-                .definition_fragments(&graph.chain_customizer().streams_module_name);
-            let def = self
-                .outputs
-                .unique()
-                .definition_fragments(&graph.chain_customizer().streams_module_name);
-            let def_group = self
-                .group_stream
-                .definition_fragments(&graph.chain_customizer().streams_module_name);
             let input_unpacked_record = def_input.unpacked_record();
             let record = def.record();
             let unpacked_record_in = def.unpacked_record_in();

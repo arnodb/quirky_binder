@@ -1,5 +1,5 @@
 use crate::{
-    stream::{NodeStream, NodeStreamSource},
+    stream::{NodeStream, NodeStreamSource, RecordDefinitionFragments},
     support::FullyQualifiedName,
 };
 use codegen::{Function, Module, Scope};
@@ -68,6 +68,13 @@ pub struct Chain<'a> {
 }
 
 impl<'a> Chain<'a> {
+    pub fn stream_definition_fragments(
+        &self,
+        stream: &'a NodeStream,
+    ) -> RecordDefinitionFragments<'a> {
+        stream.definition_fragments(&self.customizer.streams_module_name)
+    }
+
     fn new_thread(
         &mut self,
         name: FullyQualifiedName,

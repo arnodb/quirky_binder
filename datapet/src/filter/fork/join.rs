@@ -75,6 +75,10 @@ impl DynNode for Join {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.pipe_inputs(&self.name, &self.inputs, &self.outputs);
 
+        let primary_input_def = chain.stream_definition_fragments(&self.inputs[0]);
+        let secondary_input_def = chain.stream_definition_fragments(&self.inputs[1]);
+        let output_def = chain.stream_definition_fragments(self.outputs.unique());
+
         let scope = chain.get_or_new_module_scope(
             self.name.iter().take(self.name.len() - 1),
             graph.chain_customizer(),
@@ -89,12 +93,6 @@ impl DynNode for Join {
             let thread_module = format_ident!("thread_{}", thread_id);
             let error_type = graph.chain_customizer().error_type.to_name();
 
-            let primary_input_def =
-                self.inputs[0].definition_fragments(&graph.chain_customizer().streams_module_name);
-            let secondary_input_def =
-                self.inputs[1].definition_fragments(&graph.chain_customizer().streams_module_name);
-            let secondary_unpacked_record = secondary_input_def.unpacked_record();
-
             let cmp = fields_cmp_ab(
                 &primary_input_def.record(),
                 &self.primary_fields,
@@ -102,12 +100,9 @@ impl DynNode for Join {
                 &self.secondary_fields,
             );
 
-            let def = self
-                .outputs
-                .unique()
-                .definition_fragments(&graph.chain_customizer().streams_module_name);
-            let unpacked_record_in = def.unpacked_record_in();
-            let record_and_unpacked_out = def.record_and_unpacked_out();
+            let secondary_unpacked_record = secondary_input_def.unpacked_record();
+            let unpacked_record_in = output_def.unpacked_record_in();
+            let record_and_unpacked_out = output_def.record_and_unpacked_out();
 
             let joined_fields = {
                 let names = self
