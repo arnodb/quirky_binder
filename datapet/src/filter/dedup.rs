@@ -59,9 +59,7 @@ impl DynNode for Dedup {
             );
 
             let record_definition = &graph.record_definitions()[self.inputs.unique().record_type()];
-            let variant = record_definition
-                .get_variant(self.inputs.unique().variant_id())
-                .unwrap_or_else(|| panic!("variant #{}", self.inputs.unique().variant_id()));
+            let variant = &record_definition[self.inputs.unique().variant_id()];
             let eq = fields_eq(variant.data().map(|d| record_definition[d].name()));
 
             let fn_def = quote! {

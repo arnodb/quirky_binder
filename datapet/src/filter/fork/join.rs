@@ -30,9 +30,7 @@ impl Join {
                 .get_stream(inputs[1].record_type())
                 .expect("secondary stream definition")
                 .borrow();
-            let variant = secondary_stream_def
-                .get_variant(inputs[1].variant_id())
-                .unwrap_or_else(|| panic!("variant #{}", inputs[1].variant_id()));
+            let variant = &secondary_stream_def[inputs[1].variant_id()];
 
             let joined_fields = variant
                 .data()

@@ -63,9 +63,7 @@ impl DynNode for ExtractFields {
             let error_type = graph.chain_customizer().error_type.to_name();
 
             let record_definition = &graph.record_definitions()[self.outputs[1].record_type()];
-            let variant = record_definition
-                .get_variant(self.outputs[1].variant_id())
-                .unwrap_or_else(|| panic!("variant #{}", self.outputs[1].variant_id()));
+            let variant = &record_definition[self.outputs[1].variant_id()];
             let datum_clones = variant.data().map(|d| {
                 let datum = &record_definition[d];
                 syn::parse_str::<syn::Stmt>(&format!(

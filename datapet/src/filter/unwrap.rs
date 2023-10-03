@@ -93,9 +93,7 @@ impl DynNode for Unwrap {
             let error_type = graph.chain_customizer().error_type.to_name();
 
             let record_definition = &graph.record_definitions()[self.inputs.unique().record_type()];
-            let variant = record_definition
-                .get_variant(self.inputs.unique().variant_id())
-                .unwrap_or_else(|| panic!("variant #{}", self.inputs.unique().variant_id()));
+            let variant = &record_definition[self.inputs.unique().variant_id()];
 
             let record = def.record();
             let unpacked_record = def.unpacked_record();

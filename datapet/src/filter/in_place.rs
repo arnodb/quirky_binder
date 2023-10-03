@@ -64,9 +64,7 @@ impl InPlaceFilter {
             );
 
             let record_definition = &graph.record_definitions()[self.inputs.unique().record_type()];
-            let record_variant = record_definition
-                .get_variant(self.inputs.unique().variant_id())
-                .unwrap_or_else(|| panic!("variant #{}", self.inputs.unique().variant_id()));
+            let record_variant = &record_definition[self.inputs.unique().variant_id()];
             let body = body(record_definition, record_variant);
 
             let fn_def = quote! {
