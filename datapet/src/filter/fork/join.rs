@@ -97,9 +97,9 @@ impl DynNode for Join {
 
             let cmp = fields_cmp_ab(
                 &primary_input_def.record(),
-                self.primary_fields.iter().map(String::as_str),
+                &self.primary_fields,
                 &secondary_input_def.record(),
-                self.secondary_fields.iter().map(String::as_str),
+                &self.secondary_fields,
             );
 
             let def = self

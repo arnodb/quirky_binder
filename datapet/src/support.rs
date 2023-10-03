@@ -127,23 +127,29 @@ impl Deref for FullyQualifiedName {
     }
 }
 
-pub fn fields_eq<'f, F>(fields: F) -> syn::Expr
+pub fn fields_eq<F, FStr>(fields: F) -> syn::Expr
 where
-    F: IntoIterator<Item = &'f str>,
+    F: IntoIterator<Item = FStr>,
+    FStr: AsRef<str>,
 {
     let eq = Some("|a, b| ".to_string())
         .into_iter()
         .chain(fields.into_iter().enumerate().map(|(i, field)| {
             let and = if i > 0 { " && " } else { "" };
-            format!("{and}a.{field}().eq(b.{field}())", and = and, field = field)
+            format!(
+                "{and}a.{field}().eq(b.{field}())",
+                and = and,
+                field = field.as_ref()
+            )
         }))
         .collect::<String>();
     syn::parse_str::<syn::Expr>(&eq).expect("eq")
 }
 
-pub fn fields_cmp<'f, F>(record_type: &syn::Type, fields: F) -> syn::Expr
+pub fn fields_cmp<F, FStr>(record_type: &syn::Type, fields: F) -> syn::Expr
 where
-    F: IntoIterator<Item = &'f str>,
+    F: IntoIterator<Item = FStr>,
+    FStr: AsRef<str>,
 {
     let cmp = Some(quote! {|a: &#record_type, b: &#record_type|}.to_string())
         .into_iter()
@@ -157,22 +163,24 @@ where
                 "{then}a.{field}().cmp(b.{field}(){end_then})",
                 then = then,
                 end_then = end_then,
-                field = field
+                field = field.as_ref()
             )
         }))
         .collect::<String>();
     syn::parse_str::<syn::Expr>(&cmp).expect("cmp")
 }
 
-pub fn fields_cmp_ab<'f, 'g, F, G>(
+pub fn fields_cmp_ab<F, FStr, G, GStr>(
     record_type_a: &syn::Type,
     fields_a: F,
     record_type_b: &syn::Type,
     fields_b: G,
 ) -> syn::Expr
 where
-    F: IntoIterator<Item = &'f str>,
-    G: IntoIterator<Item = &'g str>,
+    F: IntoIterator<Item = FStr>,
+    FStr: AsRef<str>,
+    G: IntoIterator<Item = GStr>,
+    GStr: AsRef<str>,
 {
     let cmp = Some(quote! {|a: &#record_type_a, b: &#record_type_b|}.to_string())
         .into_iter()
@@ -189,8 +197,8 @@ where
                         "{then}a.{field_a}().cmp(b.{field_b}(){end_then})",
                         then = then,
                         end_then = end_then,
-                        field_a = field_a,
-                        field_b = field_b
+                        field_a = field_a.as_ref(),
+                        field_b = field_b.as_ref()
                     )
                 }),
         )
