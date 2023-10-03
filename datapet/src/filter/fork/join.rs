@@ -100,24 +100,18 @@ impl DynNode for Join {
             let unpacked_record_in = output_def.unpacked_record_in();
             let record_and_unpacked_out = output_def.record_and_unpacked_out();
 
-            let joined_fields = {
+            let (joined_fields, joined_fields_defaults) = {
                 let names = self
                     .joined_fields
                     .iter()
                     .map(|name| format_ident!("{}", name))
                     .collect::<Vec<_>>();
-                quote!(#(#names),*)
-            };
-
-            // Left join.
-            // TODO: support inner join.
-            let joined_fields_defaults = {
-                let names = self
-                    .joined_fields
-                    .iter()
-                    .map(|name| format_ident!("{}", name))
-                    .collect::<Vec<_>>();
-                quote!(#(#names: Default::default()),*)
+                (
+                    quote!(#(#names),*),
+                    // Left join.
+                    // TODO: support inner join.
+                    quote!(#(#names: Default::default()),*),
+                )
             };
 
             let fn_def = quote! {
