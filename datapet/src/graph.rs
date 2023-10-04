@@ -18,6 +18,8 @@ use truc::record::{
 };
 
 pub trait DynNode {
+    fn name(&self) -> &FullyQualifiedName;
+
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain);
 }
 
@@ -44,6 +46,10 @@ impl<const IN: usize, const OUT: usize> NodeCluster<IN, OUT> {
 }
 
 impl<const IN: usize, const OUT: usize> DynNode for NodeCluster<IN, OUT> {
+    fn name(&self) -> &FullyQualifiedName {
+        &self.name
+    }
+
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         for node in &self.ordered_nodes {
             node.gen_chain(graph, chain);

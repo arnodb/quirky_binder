@@ -31,51 +31,27 @@ impl Sort {
 }
 
 impl DynNode for Sort {
-    fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let thread = chain.get_thread_id_and_module_by_source(
+    fn name(&self) -> &FullyQualifiedName {
+        &self.name
+    }
+
+    fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
+        let record = chain
+            .stream_definition_fragments(self.outputs.unique())
+            .record();
+
+        let cmp = fields_cmp(&record, &self.fields);
+
+        let inline_body = quote! {
+            datapet_support::iterator::sort::Sort::new(input, #cmp)
+        };
+
+        chain.implement_inline_node(
+            self,
             self.inputs.unique(),
-            &self.name,
-            self.outputs.some_unique(),
+            self.outputs.unique(),
+            &inline_body,
         );
-
-        let def = chain.stream_definition_fragments(self.outputs.unique());
-
-        let scope = chain.get_or_new_module_scope(
-            self.name.iter().take(self.name.len() - 1),
-            graph.chain_customizer(),
-            thread.thread_id,
-        );
-        let mut import_scope = ImportScope::default();
-        import_scope.add_import_with_error_type("fallible_iterator", "FallibleIterator");
-
-        {
-            let fn_name = format_ident!("{}", **self.name.last().expect("local name"));
-            let thread_module = format_ident!("thread_{}", thread.thread_id);
-            let error_type = graph.chain_customizer().error_type.to_name();
-
-            let record = def.record();
-
-            let input = thread.format_input(
-                self.inputs.unique().source(),
-                graph.chain_customizer(),
-                &mut import_scope,
-            );
-
-            let cmp = fields_cmp(&record, &self.fields);
-
-            let fn_def = quote! {
-                  pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
-                      #input
-                      datapet_support::iterator::sort::Sort::new(
-                          input,
-                          #cmp,
-                      )
-                  }
-            };
-            scope.raw(&fn_def.to_string());
-        }
-
-        import_scope.import(scope, graph.chain_customizer());
     }
 }
 

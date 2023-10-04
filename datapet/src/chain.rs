@@ -1,8 +1,9 @@
 use crate::{
+    prelude::DynNode,
     stream::{NodeStream, NodeStreamSource, RecordDefinitionFragments},
     support::FullyQualifiedName,
 };
-use codegen::{Function, Module, Scope};
+use codegen::{Module, Scope};
 use itertools::Itertools;
 use proc_macro2::TokenStream;
 use std::{collections::HashMap, ops::Deref};
@@ -30,7 +31,6 @@ impl ChainSourceThread {
         &self,
         source_name: &NodeStreamSource,
         customizer: &ChainCustomizer,
-        import_scope: &mut ImportScope,
     ) -> TokenStream {
         if !self.piped {
             let input = syn::parse_str::<syn::Path>(&format!(
@@ -42,7 +42,6 @@ impl ChainSourceThread {
                 let input = #input(thread_control);
             }
         } else {
-            import_scope.add_error_type();
             let input = format_ident!("input_{}", self.stream_index);
             let error_type = customizer.error_type.to_name();
             quote! {
@@ -244,12 +243,12 @@ impl<'a> Chain<'a> {
         let mut import_scope = ImportScope::default();
         if thread.output_pipes.is_none() {
             assert_eq!(thread.output_streams.len(), 1);
-            import_scope.add_import_with_error_type("fallible_iterator", "FallibleIterator");
+            import_scope.add_import("fallible_iterator", "FallibleIterator");
 
             {
                 let error_type = self.customizer.error_type.to_name();
 
-                let input = source_thread.format_input(source, self.customizer, &mut import_scope);
+                let input = source_thread.format_input(source, self.customizer);
 
                 let pipe_def = quote! {
                     pub fn datapet_pipe(mut thread_control: ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
@@ -445,7 +444,7 @@ impl<'a> Chain<'a> {
         }
     }
 
-    pub fn get_or_new_module_scope<'i>(
+    fn get_or_new_module_scope<'i>(
         &mut self,
         path: impl IntoIterator<Item = &'i Box<str>>,
         chain_customizer: &ChainCustomizer,
@@ -471,6 +470,75 @@ impl<'a> Chain<'a> {
         } else {
             self.scope
         }
+    }
+
+    pub fn implement_inline_node(
+        &mut self,
+        node: &dyn DynNode,
+        input: &NodeStream,
+        output: &NodeStream,
+        inline_body: &TokenStream,
+    ) {
+        let name = node.name();
+
+        let thread = self.get_thread_id_and_module_by_source(input, name, Some(output));
+
+        let record = self.stream_definition_fragments(output).record();
+
+        let fn_name = format_ident!("{}", **name.last().expect("local name"));
+        let thread_module = format_ident!("thread_{}", thread.thread_id);
+        let error_type = self.customizer.error_type.to_name();
+
+        let input = thread.format_input(input.source(), self.customizer);
+
+        let fn_def = quote! {
+              pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
+                  #input
+                  #inline_body
+              }
+        };
+
+        let customizer = self.customizer;
+
+        let mut import_scope = ImportScope::default();
+        import_scope.add_import("fallible_iterator", "FallibleIterator");
+
+        let scope = self.get_or_new_module_scope(
+            name.iter().take(name.len() - 1),
+            self.customizer,
+            thread.thread_id,
+        );
+
+        scope.raw(&fn_def.to_string());
+
+        import_scope.import(scope, customizer);
+    }
+
+    pub fn implement_node_thread(
+        &mut self,
+        node: &dyn DynNode,
+        thread_id: usize,
+        thread_body: &TokenStream,
+    ) {
+        let name = node.name();
+
+        let fn_name = format_ident!("{}", **name.last().expect("local name"));
+        let thread_module = format_ident!("thread_{}", thread_id);
+        let error_type = self.customizer.error_type.to_name();
+
+        let fn_def = quote! {
+            pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
+                #thread_body
+            }
+        };
+
+        let scope = self.get_or_new_module_scope(
+            name.iter().take(name.len() - 1),
+            self.customizer,
+            thread_id,
+        );
+
+        scope.raw(&fn_def.to_string());
     }
 }
 
@@ -521,7 +589,6 @@ impl Default for ChainCustomizer {
 #[derive(Default)]
 pub struct ImportScope {
     fixed: Vec<(String, String)>,
-    import_error_type: bool,
     used: bool,
 }
 
@@ -530,21 +597,10 @@ impl ImportScope {
         self.fixed.push((path.to_string(), ty.to_string()));
     }
 
-    pub fn add_import_with_error_type(&mut self, path: &str, ty: &str) {
-        self.add_import(path, ty);
-        self.add_error_type();
-    }
-
-    pub fn add_error_type(&mut self) {
-        self.import_error_type = true;
-    }
-
     pub fn import(mut self, scope: &mut Scope, customizer: &ChainCustomizer) {
+        scope.import(&customizer.error_type_path(), &customizer.error_type_name());
         for (path, ty) in &self.fixed {
             scope.import(path, ty);
-        }
-        if self.import_error_type {
-            scope.import(&customizer.error_type_path(), &customizer.error_type_name());
         }
         self.used = true;
     }
@@ -553,11 +609,5 @@ impl ImportScope {
 impl Drop for ImportScope {
     fn drop(&mut self) {
         assert!(self.used);
-    }
-}
-
-pub fn fn_body<T: ToString>(body: T, the_fn: &mut Function) {
-    for line in body.to_string().split('\n') {
-        the_fn.line(line);
     }
 }

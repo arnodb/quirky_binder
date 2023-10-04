@@ -30,60 +30,32 @@ impl InPlaceFilter {
         }
     }
 
-    fn gen_chain<B>(&self, graph: &Graph, chain: &mut Chain, body: B)
+    fn gen_chain<B>(&self, node: &dyn DynNode, graph: &Graph, chain: &mut Chain, body: B)
     where
         B: FnOnce(&RecordDefinition, &RecordVariant) -> TokenStream,
     {
-        let thread = chain.get_thread_id_and_module_by_source(
+        let record_definition = &graph.record_definitions()[self.inputs.unique().record_type()];
+        let record_variant = &record_definition[self.inputs.unique().variant_id()];
+        let body = body(record_definition, record_variant);
+
+        let inline_body = quote! {
+            input.map(|mut record| {
+                #body
+                Ok(record)
+            })
+        };
+
+        chain.implement_inline_node(
+            node,
             self.inputs.unique(),
-            &self.name,
-            self.outputs.some_unique(),
+            self.outputs.unique(),
+            &inline_body,
         );
-
-        let def = chain.stream_definition_fragments(self.outputs.unique());
-
-        let scope = chain.get_or_new_module_scope(
-            self.name.iter().take(self.name.len() - 1),
-            graph.chain_customizer(),
-            thread.thread_id,
-        );
-        let mut import_scope = ImportScope::default();
-        import_scope.add_import_with_error_type("fallible_iterator", "FallibleIterator");
-
-        {
-            let fn_name = format_ident!("{}", **self.name.last().expect("local name"));
-            let thread_module = format_ident!("thread_{}", thread.thread_id);
-            let error_type = graph.chain_customizer().error_type.to_name();
-
-            let record = def.record();
-
-            let input = thread.format_input(
-                self.inputs.unique().source(),
-                graph.chain_customizer(),
-                &mut import_scope,
-            );
-
-            let record_definition = &graph.record_definitions()[self.inputs.unique().record_type()];
-            let record_variant = &record_definition[self.inputs.unique().variant_id()];
-            let body = body(record_definition, record_variant);
-
-            let fn_def = quote! {
-                pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
-                    #input
-                    input.map(|mut record| {
-                        #body
-                        Ok(record)
-                    })
-                }
-            };
-            scope.raw(&fn_def.to_string());
-        }
-
-        import_scope.import(scope, graph.chain_customizer());
     }
 
     fn gen_chain_simple<'f, F>(
         &self,
+        node: &dyn DynNode,
         graph: &Graph,
         chain: &mut Chain,
         fields: F,
@@ -91,7 +63,7 @@ impl InPlaceFilter {
     ) where
         F: IntoIterator<Item = &'f str> + Clone,
     {
-        self.gen_chain(graph, chain, |record_definition, variant| {
+        self.gen_chain(node, graph, chain, |record_definition, variant| {
             let data = variant
                 .data()
                 .filter_map(|d| {
@@ -142,8 +114,13 @@ pub mod string {
     }
 
     impl DynNode for ToLowercase {
+        fn name(&self) -> &FullyQualifiedName {
+            &self.in_place.name
+        }
+
         fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
             self.in_place.gen_chain_simple(
+                self,
                 graph,
                 chain,
                 self.fields.iter().map(Box::as_ref),
@@ -185,8 +162,13 @@ pub mod string {
     }
 
     impl DynNode for ReverseChars {
+        fn name(&self) -> &FullyQualifiedName {
+            &self.in_place.name
+        }
+
         fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
             self.in_place.gen_chain_simple(
+                self,
                 graph,
                 chain,
                 self.fields.iter().map(Box::as_ref),

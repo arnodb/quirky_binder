@@ -49,54 +49,44 @@ impl FunctionSource {
 }
 
 impl DynNode for FunctionSource {
-    fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
+    fn name(&self) -> &FullyQualifiedName {
+        &self.name
+    }
+
+    fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.new_threaded_source(&self.name, &self.inputs, &self.outputs);
 
         let def = chain.stream_definition_fragments(self.outputs.unique());
+        let record = def.record();
+        let unpacked_record = def.unpacked_record();
 
-        let scope = chain.get_or_new_module_scope(
-            self.name.iter().take(self.name.len() - 1),
-            graph.chain_customizer(),
-            thread_id,
-        );
+        let (new_record_args, new_record_fields) = {
+            let names = self
+                .fields
+                .iter()
+                .map(|(name, _)| format_ident!("{}", name))
+                .collect::<Vec<_>>();
+            let types = self
+                .fields
+                .iter()
+                .map(|(_, r#type)| syn::parse_str::<syn::Type>(r#type).expect("field type"))
+                .collect::<Vec<_>>();
+            (quote!(#(#names: #types),*), quote!(#(#names),*))
+        };
 
-        {
-            let fn_name = format_ident!("{}", **self.name.last().expect("local name"));
-            let thread_module = format_ident!("thread_{}", thread_id);
-            let error_type = graph.chain_customizer().error_type.to_name();
+        let func_body: TokenStream = self.func.parse().expect("function body");
 
-            let record = def.record();
-            let unpacked_record = def.unpacked_record();
+        let thread_body = quote! {
+            move || {
+                let out = thread_control.output_0.take().expect("output 0");
+                let new_record = |#new_record_args| {
+                    #record::new(#unpacked_record { #new_record_fields })
+                };
+                #func_body
+            }
+        };
 
-            let (new_record_args, new_record_fields) = {
-                let names = self
-                    .fields
-                    .iter()
-                    .map(|(name, _)| format_ident!("{}", name))
-                    .collect::<Vec<_>>();
-                let types = self
-                    .fields
-                    .iter()
-                    .map(|(_, r#type)| syn::parse_str::<syn::Type>(r#type).expect("field type"))
-                    .collect::<Vec<_>>();
-                (quote!(#(#names: #types),*), quote!(#(#names),*))
-            };
-
-            let func_body: TokenStream = self.func.parse().expect("function body");
-
-            let fn_def = quote! {
-                pub fn #fn_name(mut thread_control: #thread_module::ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
-                    move || {
-                        let out = thread_control.output_0.take().expect("output 0");
-                        let new_record = |#new_record_args| {
-                            #record::new(#unpacked_record { #new_record_fields })
-                        };
-                        #func_body
-                    }
-                }
-            };
-            scope.raw(&fn_def.to_string());
-        }
+        chain.implement_node_thread(self, thread_id, &thread_body);
     }
 }
 

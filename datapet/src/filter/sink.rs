@@ -32,6 +32,10 @@ impl Sink {
 }
 
 impl DynNode for Sink {
+    fn name(&self) -> &FullyQualifiedName {
+        &self.name
+    }
+
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread = chain.get_thread_id_and_module_by_source(
             self.inputs.unique(),
@@ -39,48 +43,27 @@ impl DynNode for Sink {
             self.outputs.none(),
         );
 
-        let scope = chain.get_or_new_module_scope(
-            self.name.iter().take(self.name.len() - 1),
-            graph.chain_customizer(),
-            thread.thread_id,
-        );
-        let mut import_scope = ImportScope::default();
+        let input = thread.format_input(self.inputs.unique().source(), graph.chain_customizer());
 
-        {
-            let fn_name = format_ident!("{}", **self.name.last().expect("local name"));
-            let thread_module = format_ident!("thread_{}", thread.thread_id);
-            let error_type = graph.chain_customizer().error_type.to_name();
+        let debug = &self.debug;
+        let full_name = &self.name.to_string();
 
-            let input = thread.format_input(
-                self.inputs.unique().source(),
-                graph.chain_customizer(),
-                &mut import_scope,
-            );
+        let thread_body = quote! {
+            #input
+            move || {
+                let mut input = input;
+                let mut read = 0;
+                while let Some(record) = input.next()? {
+                    #debug
+                    read += 1;
+                }
+                let full_name = #full_name;
+                println!("read {} {}", full_name, read);
+                Ok(())
+            }
+        };
 
-            let debug = &self.debug;
-
-            let full_name = &self.name.to_string();
-
-            let fn_def = quote! {
-                  pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
-                      move || {
-                          #input
-                          let mut input = input;
-                          let mut read = 0;
-                          while let Some(record) = input.next()? {
-                              #debug
-                              read += 1;
-                          }
-                          let full_name = #full_name;
-                          println!("read {} {}", full_name, read);
-                          Ok(())
-                      }
-                  }
-            };
-            scope.raw(&fn_def.to_string());
-        }
-
-        import_scope.import(scope, graph.chain_customizer());
+        chain.implement_node_thread(self, thread.thread_id, &thread_body);
 
         chain.set_thread_main(thread.thread_id, self.name.clone());
     }
