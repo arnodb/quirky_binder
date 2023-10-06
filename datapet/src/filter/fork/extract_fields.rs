@@ -35,7 +35,7 @@ impl ExtractFields {
             }
         }
 
-        let outputs = streams.build();
+        let outputs = streams.build(graph);
 
         Self {
             name,

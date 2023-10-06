@@ -3,24 +3,25 @@ use std::cmp::Ordering;
 
 /// Sorts items in memory and stream them.
 #[derive(new)]
-pub struct Sort<I: FallibleIterator<Item = R, Error = E>, R, E, C>
+pub struct Sort<Input: FallibleIterator<Item = Record, Error = Error>, Record, Error, CmpFn>
 where
-    C: Fn(&R, &R) -> Ordering,
+    CmpFn: Fn(&Record, &Record) -> Ordering,
 {
-    input: I,
-    cmp: C,
+    input: Input,
+    cmp: CmpFn,
     #[new(default)]
-    buffer: Vec<R>,
+    buffer: Vec<Record>,
     #[new(value = "false")]
     finalizing: bool,
 }
 
-impl<I: FallibleIterator<Item = R, Error = E>, R, E, C> FallibleIterator for Sort<I, R, E, C>
+impl<Input: FallibleIterator<Item = Record, Error = Error>, Record, Error, Cmp> FallibleIterator
+    for Sort<Input, Record, Error, Cmp>
 where
-    C: Fn(&R, &R) -> Ordering,
+    Cmp: Fn(&Record, &Record) -> Ordering,
 {
-    type Item = R;
-    type Error = E;
+    type Item = Record;
+    type Error = Error;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
         if !self.finalizing {
@@ -31,6 +32,80 @@ where
             self.finalizing = true;
         }
         Ok(self.buffer.pop())
+    }
+}
+
+pub trait CollectionsIteratorFnHelper<'r, Record, Collection>
+where
+    Record: 'r,
+    Collection: 'r,
+{
+    type Iter: Iterator<Item = &'r mut Collection>;
+
+    fn call(&self, val: &'r mut Record) -> Self::Iter;
+}
+
+impl<'r, Record, Collection, Iter, Func> CollectionsIteratorFnHelper<'r, Record, Collection>
+    for Func
+where
+    Record: 'r,
+    Collection: 'r,
+    Iter: Iterator<Item = &'r mut Collection>,
+    Func: Fn(&'r mut Record) -> Iter,
+{
+    type Iter = Iter;
+
+    fn call(&self, val: &'r mut Record) -> Self::Iter {
+        (self)(val)
+    }
+}
+
+#[derive(new)]
+pub struct SubSort<
+    Input: FallibleIterator<Item = Record, Error = Error>,
+    Record,
+    Error,
+    CollectionsIteratorFn,
+    Collection,
+    SubRecord,
+    CmpFn,
+> where
+    CollectionsIteratorFn: for<'r> CollectionsIteratorFnHelper<'r, Record, Collection>,
+    Collection: AsMut<[SubRecord]>,
+    CmpFn: Fn(&SubRecord, &SubRecord) -> Ordering,
+{
+    input: Input,
+    collections_iterator_fn: CollectionsIteratorFn,
+    cmp: CmpFn,
+    _collection: std::marker::PhantomData<Collection>,
+    _sub_record: std::marker::PhantomData<SubRecord>,
+}
+
+impl<
+        Input: FallibleIterator<Item = Record, Error = Error>,
+        Record,
+        Error,
+        CollectionsIteratorFn,
+        Collection,
+        SubRecord,
+        CmpFn,
+    > FallibleIterator
+    for SubSort<Input, Record, Error, CollectionsIteratorFn, Collection, SubRecord, CmpFn>
+where
+    CollectionsIteratorFn: for<'r> CollectionsIteratorFnHelper<'r, Record, Collection>,
+    Collection: AsMut<[SubRecord]>,
+    CmpFn: Fn(&SubRecord, &SubRecord) -> Ordering,
+{
+    type Item = Record;
+    type Error = Error;
+
+    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        Ok(self.input.next()?.map(|mut rec| {
+            for collection in self.collections_iterator_fn.call(&mut rec) {
+                collection.as_mut().sort_by(|r1, r2| (self.cmp)(r1, r2));
+            }
+            rec
+        }))
     }
 }
 

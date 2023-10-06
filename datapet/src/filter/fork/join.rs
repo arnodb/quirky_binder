@@ -48,7 +48,7 @@ impl Join {
             joined_fields
         };
 
-        let outputs = streams.build();
+        let outputs = streams.build(graph);
 
         Self {
             name,

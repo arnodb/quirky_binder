@@ -13,7 +13,10 @@ use std::{
     path::Path,
 };
 use truc::record::{
-    definition::{RecordDefinition, RecordDefinitionBuilder, RecordVariantId},
+    definition::{
+        DatumDefinitionOverride, DatumId, RecordDefinition, RecordDefinitionBuilder,
+        RecordVariantId,
+    },
     type_resolver::TypeResolver,
 };
 
@@ -64,6 +67,8 @@ pub struct GraphBuilder<R: TypeResolver + Copy> {
     #[new(default)]
     record_definitions: HashMap<StreamRecordType, RefCell<RecordDefinitionBuilder<R>>>,
     #[new(default)]
+    sub_streams: HashMap<(StreamRecordType, DatumId), NodeStream>,
+    #[new(default)]
     anchor_table_count: usize,
 }
 
@@ -93,6 +98,14 @@ impl<R: TypeResolver + Copy> GraphBuilder<R> {
         self.record_definitions.get(record_type)
     }
 
+    pub fn get_sub_stream(
+        &self,
+        record_type: StreamRecordType,
+        datum_id: DatumId,
+    ) -> Option<NodeStream> {
+        self.sub_streams.get(&(record_type, datum_id)).cloned()
+    }
+
     pub fn build(self, entry_nodes: Vec<Box<dyn DynNode>>) -> Graph {
         Graph {
             chain_customizer: self.chain_customizer,
@@ -102,6 +115,7 @@ impl<R: TypeResolver + Copy> GraphBuilder<R> {
                 .map(|(name, builder)| (name, builder.into_inner().build()))
                 .collect(),
             entry_nodes,
+            sub_streams: self.sub_streams,
         }
     }
 
@@ -115,6 +129,7 @@ pub struct StreamsBuilder<'a> {
     inputs: &'a [NodeStream],
     outputs: Vec<NodeStream>,
     in_out_links: Vec<Option<usize>>,
+    sub_streams: Vec<((StreamRecordType, DatumId), NodeStream)>,
 }
 
 impl<'a> StreamsBuilder<'a> {
@@ -128,6 +143,7 @@ impl<'a> StreamsBuilder<'a> {
             inputs,
             outputs: Vec::new(),
             in_out_links,
+            sub_streams: Vec::new(),
         }
     }
 
@@ -209,7 +225,15 @@ impl<'a> StreamsBuilder<'a> {
         }
     }
 
-    pub fn build<const OUT: usize>(self) -> [NodeStream; OUT] {
+    pub fn build<R: TypeResolver + Copy, const OUT: usize>(
+        self,
+        graph: &mut GraphBuilder<R>,
+    ) -> [NodeStream; OUT] {
+        let old_size = graph.sub_streams.len();
+        let added_size = self.sub_streams.len();
+        graph.sub_streams.extend(self.sub_streams);
+        let new_size = graph.sub_streams.len();
+        assert_eq!(new_size, old_size + added_size);
         self.outputs.try_into().unwrap_or_else(|v: Vec<_>| {
             panic!("Expected a Vec of length {} but it was {}", OUT, v.len())
         })
@@ -303,6 +327,25 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
             source: Default::default(),
         }
     }
+
+    pub fn add_vec_datum(&mut self, group_field: &str, record: &str, sub_stream: NodeStream) {
+        let datum_id = self
+            .record_definition
+            .borrow_mut()
+            .add_datum_override::<Vec<()>, _>(
+                group_field,
+                DatumDefinitionOverride {
+                    type_name: Some(format!("Vec<{}>", record)),
+                    size: None,
+                    align: None,
+                    allow_uninit: None,
+                },
+            );
+        // Could be done in drop
+        self.streams
+            .sub_streams
+            .push(((self.record_type.clone(), datum_id), sub_stream));
+    }
 }
 
 impl<'a, 'b, 'g, R: TypeResolver + Copy> Drop for OutputBuilderForUpdate<'a, 'b, 'g, R> {
@@ -343,6 +386,7 @@ pub struct Graph {
     chain_customizer: ChainCustomizer,
     record_definitions: HashMap<StreamRecordType, RecordDefinition>,
     entry_nodes: Vec<Box<dyn DynNode>>,
+    sub_streams: HashMap<(StreamRecordType, DatumId), NodeStream>,
 }
 
 impl Graph {
@@ -352,6 +396,14 @@ impl Graph {
 
     pub fn record_definitions(&self) -> &HashMap<StreamRecordType, RecordDefinition> {
         &self.record_definitions
+    }
+
+    pub fn get_sub_stream(
+        &self,
+        record_type: StreamRecordType,
+        datum_id: DatumId,
+    ) -> Option<NodeStream> {
+        self.sub_streams.get(&(record_type, datum_id)).cloned()
     }
 
     pub fn generate(&self, output: &Path) -> Result<(), std::io::Error> {

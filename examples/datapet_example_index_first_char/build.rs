@@ -38,7 +38,7 @@ impl Tokenize {
             output_stream_def.add_datum::<char, _>("first_char");
         }
 
-        let outputs = streams.build();
+        let outputs = streams.build(graph);
 
         Self {
             name,

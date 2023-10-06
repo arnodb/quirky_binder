@@ -1,0 +1,19 @@
+[package]
+name = "datapet_example_sub_sort"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.56.1"
+
+[dependencies]
+datapet_support = { path = "../../datapet_support" }
+fallible-iterator = "0.2"
+rand = "0.8"
+rand_chacha = "0.3"
+static_assertions = "1"
+truc_runtime = { git = "https://github.com/arnodb/truc.git" }
+
+[build-dependencies]
+datapet = { path = "../../datapet" }
+datapet_codegen = { path = "../../datapet_codegen" }
+quote = "1"
+truc = { git = "https://github.com/arnodb/truc.git" }

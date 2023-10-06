@@ -33,7 +33,7 @@ impl FunctionSource {
             }
         }
 
-        let outputs = streams.build();
+        let outputs = streams.build(graph);
 
         Self {
             name,

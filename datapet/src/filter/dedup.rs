@@ -18,7 +18,7 @@ impl Dedup {
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.output_from_input(0, graph).pass_through();
-        let outputs = streams.build();
+        let outputs = streams.build(graph);
         Self {
             name,
             inputs,

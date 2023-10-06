@@ -1,5 +1,5 @@
 use crate::{prelude::*, stream::UniqueNodeStream, support::fields_eq};
-use truc::record::{definition::DatumDefinitionOverride, type_resolver::TypeResolver};
+use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
 pub struct Group {
@@ -25,12 +25,12 @@ impl Group {
         streams.new_named_stream("group", graph);
 
         let group_stream = {
-            let output_stream = streams.output_from_input(0, graph).for_update();
+            let mut output_stream = streams.output_from_input(0, graph).for_update();
             let group_stream = output_stream.new_named_sub_stream("group", graph);
             let input_variant_id = output_stream.input_variant_id();
-            let mut output_stream_def = output_stream.borrow_mut();
 
             {
+                let mut output_stream_def = output_stream.borrow_mut();
                 let mut group_stream_def = group_stream.borrow_mut();
                 for &field in fields {
                     let datum = output_stream_def
@@ -47,24 +47,21 @@ impl Group {
                 .chain_customizer()
                 .streams_module_name
                 .sub_n(&***group_stream.record_type());
-            output_stream_def.add_datum_override::<Vec<()>, _>(
+
+            output_stream.add_vec_datum(
                 group_field,
-                DatumDefinitionOverride {
-                    type_name: Some(format!(
-                        "Vec<{module_name}::Record{group_variant_id}>",
-                        module_name = module_name,
-                        group_variant_id = group_stream.variant_id(),
-                    )),
-                    size: None,
-                    align: None,
-                    allow_uninit: None,
-                },
+                &format!(
+                    "{module_name}::Record{group_variant_id}",
+                    module_name = module_name,
+                    group_variant_id = group_stream.variant_id(),
+                ),
+                group_stream.clone(),
             );
 
             group_stream
         };
 
-        let outputs = streams.build();
+        let outputs = streams.build(graph);
 
         Group {
             name: name.clone(),
