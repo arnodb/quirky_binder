@@ -140,7 +140,7 @@ impl DynNode for SubSort {
         let flat_map = self.path_fields.iter().rev().fold(None, |tail, field| {
             let access = format_ident!("{}_mut", field);
             Some(if let Some(tail) = tail {
-                quote! {record.#access().flat_map(|record| #tail)}
+                quote! {record.#access().iter_mut().flat_map(|record| #tail)}
             } else {
                 quote! {Some(record.#access()).into_iter()}
             })
