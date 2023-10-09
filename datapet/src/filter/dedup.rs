@@ -33,10 +33,13 @@ impl DynNode for Dedup {
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
+        let record = chain
+            .stream_definition_fragments(self.inputs.unique())
+            .record();
         let record_definition = &graph.record_definitions()[self.inputs.unique().record_type()];
         let variant = &record_definition[self.inputs.unique().variant_id()];
 
-        let eq = fields_eq(variant.data().map(|d| record_definition[d].name()));
+        let eq = fields_eq(&record, variant.data().map(|d| record_definition[d].name()));
 
         let inline_body = quote! {
             datapet_support::iterator::dedup::Dedup::new(input, #eq)

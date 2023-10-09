@@ -1,4 +1,4 @@
-use crate::{prelude::*, stream::UniqueNodeStream, support::fields_eq};
+use crate::{prelude::*, stream::UniqueNodeStream, support::fields_eq_ab};
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
@@ -27,14 +27,14 @@ impl Group {
         let group_stream = {
             let mut output_stream = streams.output_from_input(0, graph).for_update();
             let group_stream = output_stream.new_named_sub_stream("group", graph);
-            let input_variant_id = output_stream.input_variant_id();
+            let variant_id = output_stream.input_variant_id();
 
             {
                 let mut output_stream_def = output_stream.borrow_mut();
                 let mut group_stream_def = group_stream.borrow_mut();
                 for &field in fields {
                     let datum = output_stream_def
-                        .get_variant_datum_definition_by_name(input_variant_id, field)
+                        .get_variant_datum_definition_by_name(variant_id, field)
                         .unwrap_or_else(|| panic!(r#"datum "{}""#, field));
                     group_stream_def.copy_datum(datum);
                     let datum_id = datum.id();
@@ -47,7 +47,6 @@ impl Group {
                 .chain_customizer()
                 .streams_module_name
                 .sub_n(&***group_stream.record_type());
-
             output_stream.add_vec_datum(
                 group_field,
                 &format!(
@@ -104,14 +103,27 @@ impl DynNode for Group {
 
         let record_definition = &graph.record_definitions()[self.inputs.unique().record_type()];
         let variant = &record_definition[self.inputs.unique().variant_id()];
-        let eq = fields_eq(variant.data().filter_map(|d| {
-            let datum = &record_definition[d];
-            if !self.fields.iter().any(|f| f == datum.name()) && datum.name() != self.group_field {
-                Some(datum.name())
-            } else {
-                None
-            }
-        }));
+        let eq = {
+            let fields = variant
+                .data()
+                .filter_map(|d| {
+                    let datum = &record_definition[d];
+                    if !self.fields.iter().any(|f| f == datum.name())
+                        && datum.name() != self.group_field
+                    {
+                        Some(datum.name())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            fields_eq_ab(
+                &def.record(),
+                fields.iter(),
+                &def_input.record(),
+                fields.iter(),
+            )
+        };
 
         let inline_body = quote! {
             datapet_support::iterator::group::Group::new(
