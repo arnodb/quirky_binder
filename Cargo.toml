@@ -6,7 +6,7 @@ members = [
     "datapet_lang",
     "datapet_support",
     "examples/datapet_example_index_first_char",
-    "examples/datapet_example_sub_sort",
+    "examples/datapet_example_sub_sort_sub_group",
     "examples/datapet_example_tree",
     "examples/datapet_example_wordlist",
 ]
