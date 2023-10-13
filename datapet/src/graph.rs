@@ -7,7 +7,7 @@ use crate::{
 use codegen::Scope;
 use std::{
     cell::RefCell,
-    collections::{hash_map::Entry, HashMap},
+    collections::{btree_map::Entry, BTreeMap},
     fs::File,
     ops::Deref,
     path::Path,
@@ -65,9 +65,9 @@ pub struct GraphBuilder<R: TypeResolver + Copy> {
     type_resolver: R,
     chain_customizer: ChainCustomizer,
     #[new(default)]
-    record_definitions: HashMap<StreamRecordType, RefCell<RecordDefinitionBuilder<R>>>,
+    record_definitions: BTreeMap<StreamRecordType, RefCell<RecordDefinitionBuilder<R>>>,
     #[new(default)]
-    sub_streams: HashMap<(StreamRecordType, DatumId), NodeStream>,
+    sub_streams: BTreeMap<(StreamRecordType, DatumId), NodeStream>,
     #[new(default)]
     anchor_table_count: usize,
 }
@@ -578,9 +578,9 @@ fn replace_vec_datum_in_record_definition<R: TypeResolver>(
 
 pub struct Graph {
     chain_customizer: ChainCustomizer,
-    record_definitions: HashMap<StreamRecordType, RecordDefinition>,
+    record_definitions: BTreeMap<StreamRecordType, RecordDefinition>,
     entry_nodes: Vec<Box<dyn DynNode>>,
-    sub_streams: HashMap<(StreamRecordType, DatumId), NodeStream>,
+    sub_streams: BTreeMap<(StreamRecordType, DatumId), NodeStream>,
 }
 
 impl Graph {
@@ -588,7 +588,7 @@ impl Graph {
         &self.chain_customizer
     }
 
-    pub fn record_definitions(&self) -> &HashMap<StreamRecordType, RecordDefinition> {
+    pub fn record_definitions(&self) -> &BTreeMap<StreamRecordType, RecordDefinition> {
         &self.record_definitions
     }
 

@@ -3,7 +3,7 @@ use std::ops::Deref;
 use truc::record::definition::RecordVariantId;
 
 /// Defines the type of records going through a given stream.
-#[derive(PartialEq, Eq, Clone, Hash, Default, Display, Debug, From)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Default, Display, Debug, From)]
 pub struct StreamRecordType(FullyQualifiedName);
 
 impl Deref for StreamRecordType {

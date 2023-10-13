@@ -4,7 +4,7 @@ use std::{
     ops::Deref,
 };
 
-#[derive(Clone, PartialEq, Eq, Hash, Default, Debug)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default, Debug)]
 pub struct FullyQualifiedName(Box<[Box<str>]>);
 
 /// Fully qualified name helper
