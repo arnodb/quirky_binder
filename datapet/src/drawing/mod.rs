@@ -298,9 +298,9 @@ where
         if tail.cx != head.cx {
             let to_right = tail.cx < head.cx;
             let arc_radius = if to_right {
-                head.cx - tail.cx
+                (head.cx - tail.cx) / 2
             } else {
-                tail.cx - head.cx
+                (tail.cx - head.cx) / 2
             }
             .min(ARC_RADIUS);
             write!(w, "V{} ", tail.row * 50 + 25 + 25 - arc_radius)?;
