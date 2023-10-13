@@ -8,6 +8,7 @@ extern crate getset;
 extern crate quote;
 
 pub mod chain;
+pub mod drawing;
 pub mod filter;
 pub mod graph;
 pub mod prelude;
