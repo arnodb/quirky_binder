@@ -134,18 +134,26 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
         let input_port_id = *port_count;
         *port_count += 1;
 
-        if let Some(prev_column) = port_columns
-            .iter_mut()
-            .find(|column| column.align == DrawingPortAlign::Bottom)
-        {
-            prev_column.ports.insert(
+        let index = port_columns
+            .iter()
+            .rposition(|column| column.align != DrawingPortAlign::Bottom)
+            .and_then(|after_index| {
+                port_columns[after_index + 1..]
+                    .iter()
+                    .position(|column| column.align == DrawingPortAlign::Bottom)
+                    .map(|index| after_index + 1 + index)
+            });
+
+        if let Some(index) = index {
+            let column = &mut port_columns[index];
+            column.ports.insert(
                 0,
                 DrawingPort {
                     id: input_port_id,
                     redundant: false,
                 },
             );
-            prev_column.align = DrawingPortAlign::Middle;
+            column.align = DrawingPortAlign::Middle;
         } else {
             port_columns.push(DrawingPortsColumn {
                 ports: vec![DrawingPort {
@@ -168,15 +176,23 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
         let output_port_id = *port_count;
         *port_count += 1;
 
-        if let Some(prev_column) = port_columns
-            .iter_mut()
-            .find(|column| column.align == DrawingPortAlign::Top)
-        {
-            prev_column.ports.push(DrawingPort {
+        let index = port_columns
+            .iter()
+            .rposition(|column| column.align != DrawingPortAlign::Top)
+            .and_then(|after_index| {
+                port_columns[after_index + 1..]
+                    .iter()
+                    .position(|column| column.align == DrawingPortAlign::Top)
+                    .map(|index| after_index + 1 + index)
+            });
+
+        if let Some(index) = index {
+            let column = &mut port_columns[index];
+            column.ports.push(DrawingPort {
                 id: output_port_id,
                 redundant: false,
             });
-            prev_column.align = DrawingPortAlign::Middle;
+            column.align = DrawingPortAlign::Middle;
         } else {
             port_columns.push(DrawingPortsColumn {
                 ports: vec![DrawingPort {
