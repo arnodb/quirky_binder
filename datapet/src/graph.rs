@@ -225,108 +225,6 @@ impl<'a> StreamsBuilder<'a> {
         }
     }
 
-    pub fn update_input_path<
-        'g,
-        R: TypeResolver + Copy,
-        UpdateLeafSubStream,
-        UpdatePathStream,
-        UpdateRootStream,
-    >(
-        &mut self,
-        input_index: usize,
-        path_fields: &[&str],
-        update_leaf_sub_stream: UpdateLeafSubStream,
-        update_path_stream: UpdatePathStream,
-        update_root_stream: UpdateRootStream,
-        graph: &'g GraphBuilder<R>,
-    ) -> Vec<PathUpdateElement>
-    where
-        UpdateLeafSubStream: for<'c, 'd> FnOnce(
-            &NodeStream,
-            &mut OutputBuilderForUpdate<'c, 'd, 'g, R>,
-        ) -> NodeStream,
-        UpdatePathStream: Fn(&str, &mut SubStreamBuilder<'g, R>, &NodeStream),
-        UpdateRootStream:
-            for<'c, 'd> FnOnce(&str, &mut OutputBuilderForUpdate<'c, 'd, 'g, R>, &NodeStream),
-    {
-        struct PathFieldDetails<'a> {
-            stream: &'a NodeStream,
-            field: &'a str,
-            sub_stream: &'a NodeStream,
-        }
-
-        let input = self.inputs[input_index].clone();
-
-        // First get the output stream builder
-        let mut output_stream = self.output_from_input(input_index, graph).for_update();
-
-        // Then find path input streams
-        let (mut path_details, leaf_sub_input_stream, _) = path_fields.iter().fold(
-            (Vec::new(), &input, &*output_stream),
-            |(mut path_data, stream, record_definition), field| {
-                let datum_id = record_definition
-                    .borrow()
-                    .get_latest_variant_datum_definition_by_name(field)
-                    .map(DatumDefinition::id);
-                if let Some(datum_id) = datum_id {
-                    let sub_stream = graph
-                        .get_sub_stream(stream.record_type().clone(), datum_id)
-                        .expect("sub stream");
-                    path_data.push(PathFieldDetails {
-                        stream,
-                        field,
-                        sub_stream,
-                    });
-                    let sub_record_definition = graph
-                        .get_stream(sub_stream.record_type())
-                        .unwrap_or_else(|| panic!(r#"stream "{}""#, sub_stream.record_type()));
-                    (path_data, sub_stream, sub_record_definition)
-                } else {
-                    panic!("could not find datum `{}`", field);
-                }
-            },
-        );
-
-        // Then update the leaf sub stream
-        let mut sub_output_stream =
-            update_leaf_sub_stream(leaf_sub_input_stream, &mut output_stream);
-
-        // Then all streams up to the root
-        let mut path_update_streams = Vec::<PathUpdateElement>::with_capacity(path_fields.len());
-
-        while path_details.len() > 1 {
-            if let Some(field_details) = path_details.pop() {
-                path_update_streams.push(PathUpdateElement {
-                    field: field_details.field.to_owned(),
-                    sub_input_stream: field_details.sub_stream.clone(),
-                    sub_output_stream: sub_output_stream.clone(),
-                });
-                let mut path_stream =
-                    output_stream.sub_stream_for_update(field_details.stream, graph);
-                update_path_stream(field_details.field, &mut path_stream, &sub_output_stream);
-                sub_output_stream = output_stream.close_sub_stream_variant(path_stream);
-            }
-        }
-
-        if let Some(field_details) = path_details.pop() {
-            path_update_streams.push(PathUpdateElement {
-                field: field_details.field.to_owned(),
-                sub_input_stream: field_details.sub_stream.clone(),
-                sub_output_stream: sub_output_stream.clone(),
-            });
-            assert_eq!(field_details.stream.record_type(), input.record_type());
-
-            update_root_stream(field_details.field, &mut output_stream, &sub_output_stream);
-        };
-
-        assert_eq!(path_details.len(), 0);
-
-        // They were pushed in reverse order
-        path_update_streams.reverse();
-
-        path_update_streams
-    }
-
     pub fn build<R: TypeResolver + Copy, const OUT: usize>(
         self,
         graph: &mut GraphBuilder<R>,
@@ -340,12 +238,6 @@ impl<'a> StreamsBuilder<'a> {
             panic!("Expected a Vec of length {} but it was {}", OUT, v.len())
         })
     }
-}
-
-pub struct PathUpdateElement {
-    pub field: String,
-    pub sub_input_stream: NodeStream,
-    pub sub_output_stream: NodeStream,
 }
 
 #[must_use]
@@ -406,11 +298,8 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> Deref for OutputBuilderForUpdate<'a, 'b
 
 impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
     pub fn input_variant_id(&self) -> RecordVariantId {
-        if let Some(input_variant_id) = self.input_variant_id {
-            input_variant_id
-        } else {
-            panic! {"output not derived from input"}
-        }
+        self.input_variant_id
+            .expect("output not derived from input")
     }
 
     pub fn new_named_sub_stream(
@@ -457,6 +346,100 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
         }
     }
 
+    pub fn update_path<UpdateLeafSubStream, UpdatePathStream, UpdateRootStream>(
+        &mut self,
+        path_fields: &[&str],
+        update_leaf_sub_stream: UpdateLeafSubStream,
+        update_path_stream: UpdatePathStream,
+        update_root_stream: UpdateRootStream,
+        graph: &'g GraphBuilder<R>,
+    ) -> Vec<PathUpdateElement>
+    where
+        UpdateLeafSubStream: for<'c, 'd> FnOnce(
+            &NodeStream,
+            &mut OutputBuilderForUpdate<'c, 'd, 'g, R>,
+        ) -> NodeStream,
+        UpdatePathStream: Fn(&str, &mut SubStreamBuilder<'g, R>, &NodeStream),
+        UpdateRootStream:
+            for<'c, 'd> FnOnce(&str, &mut OutputBuilderForUpdate<'c, 'd, 'g, R>, &NodeStream),
+    {
+        struct PathFieldDetails<'a> {
+            stream: &'a NodeStream,
+            field: &'a str,
+            sub_stream: &'a NodeStream,
+        }
+
+        let input = NodeStream::new(
+            self.record_type.clone(),
+            self.input_variant_id(),
+            self.source.clone(),
+        );
+
+        // Then find path input streams
+        let (mut path_details, leaf_sub_input_stream, _) = path_fields.iter().fold(
+            (Vec::new(), &input, &**self),
+            |(mut path_data, stream, record_definition), field| {
+                let datum_id = record_definition
+                    .borrow()
+                    .get_latest_variant_datum_definition_by_name(field)
+                    .map(DatumDefinition::id);
+                if let Some(datum_id) = datum_id {
+                    let sub_stream = graph
+                        .get_sub_stream(stream.record_type().clone(), datum_id)
+                        .expect("sub stream");
+                    path_data.push(PathFieldDetails {
+                        stream,
+                        field,
+                        sub_stream,
+                    });
+                    let sub_record_definition = graph
+                        .get_stream(sub_stream.record_type())
+                        .unwrap_or_else(|| panic!(r#"stream "{}""#, sub_stream.record_type()));
+                    (path_data, sub_stream, sub_record_definition)
+                } else {
+                    panic!("could not find datum `{}`", field);
+                }
+            },
+        );
+
+        // Then update the leaf sub stream
+        let mut sub_output_stream = update_leaf_sub_stream(leaf_sub_input_stream, self);
+
+        // Then all streams up to the root
+        let mut path_update_streams = Vec::<PathUpdateElement>::with_capacity(path_fields.len());
+
+        while path_details.len() > 1 {
+            if let Some(field_details) = path_details.pop() {
+                path_update_streams.push(PathUpdateElement {
+                    field: field_details.field.to_owned(),
+                    sub_input_stream: field_details.sub_stream.clone(),
+                    sub_output_stream: sub_output_stream.clone(),
+                });
+                let mut path_stream = self.sub_stream_for_update(field_details.stream, graph);
+                update_path_stream(field_details.field, &mut path_stream, &sub_output_stream);
+                sub_output_stream = self.close_sub_stream_variant(path_stream);
+            }
+        }
+
+        if let Some(field_details) = path_details.pop() {
+            path_update_streams.push(PathUpdateElement {
+                field: field_details.field.to_owned(),
+                sub_input_stream: field_details.sub_stream.clone(),
+                sub_output_stream: sub_output_stream.clone(),
+            });
+            assert_eq!(field_details.stream.record_type(), input.record_type());
+
+            update_root_stream(field_details.field, self, &sub_output_stream);
+        };
+
+        assert_eq!(path_details.len(), 0);
+
+        // They were pushed in reverse order
+        path_update_streams.reverse();
+
+        path_update_streams
+    }
+
     pub fn add_vec_datum(&mut self, field: &str, record: &str, sub_stream: NodeStream) {
         let datum_id = add_vec_datum_to_record_definition(
             &mut self.record_definition.borrow_mut(),
@@ -494,6 +477,12 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> Drop for OutputBuilderForUpdate<'a, 'b,
         std::mem::swap(&mut sub_streams, &mut self.sub_streams);
         self.streams.sub_streams.extend(sub_streams);
     }
+}
+
+pub struct PathUpdateElement {
+    pub field: String,
+    pub sub_input_stream: NodeStream,
+    pub sub_output_stream: NodeStream,
 }
 
 #[derive(Getters)]

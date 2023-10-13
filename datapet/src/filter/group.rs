@@ -194,74 +194,76 @@ impl SubGroup {
 
         let mut created_group_stream = None;
 
-        let path_streams = streams.update_input_path(
-            0,
-            path_fields,
-            |sub_input_stream, output_stream| {
-                let mut sub_output_stream =
-                    output_stream.sub_stream_for_update(sub_input_stream, graph);
-                let group_stream = output_stream.new_named_sub_stream("group", graph);
-                let variant_id = sub_output_stream.input_variant_id();
+        let path_streams = {
+            let mut output_stream = streams.output_from_input(0, graph).for_update();
+            output_stream.update_path(
+                path_fields,
+                |sub_input_stream, output_stream| {
+                    let mut sub_output_stream =
+                        output_stream.sub_stream_for_update(sub_input_stream, graph);
+                    let group_stream = output_stream.new_named_sub_stream("group", graph);
+                    let variant_id = sub_output_stream.input_variant_id();
 
-                {
-                    let mut output_stream_def = sub_output_stream.borrow_mut();
-                    let mut group_stream_def = group_stream.borrow_mut();
-                    for &field in fields {
-                        let datum = output_stream_def
-                            .get_variant_datum_definition_by_name(variant_id, field)
-                            .unwrap_or_else(|| panic!(r#"datum "{}""#, field));
-                        group_stream_def.copy_datum(datum);
-                        let datum_id = datum.id();
-                        output_stream_def.remove_datum(datum_id);
+                    {
+                        let mut output_stream_def = sub_output_stream.borrow_mut();
+                        let mut group_stream_def = group_stream.borrow_mut();
+                        for &field in fields {
+                            let datum = output_stream_def
+                                .get_variant_datum_definition_by_name(variant_id, field)
+                                .unwrap_or_else(|| panic!(r#"datum "{}""#, field));
+                            group_stream_def.copy_datum(datum);
+                            let datum_id = datum.id();
+                            output_stream_def.remove_datum(datum_id);
+                        }
                     }
-                }
 
-                let group_stream = output_stream.close_sub_stream_variant(group_stream);
+                    let group_stream = output_stream.close_sub_stream_variant(group_stream);
 
-                let module_name = graph
-                    .chain_customizer()
-                    .streams_module_name
-                    .sub_n(&***group_stream.record_type());
-                sub_output_stream.add_vec_datum(
-                    group_field,
-                    &format!(
+                    let module_name = graph
+                        .chain_customizer()
+                        .streams_module_name
+                        .sub_n(&***group_stream.record_type());
+                    sub_output_stream.add_vec_datum(
+                        group_field,
+                        &format!(
+                            "{module_name}::Record{group_variant_id}",
+                            module_name = module_name,
+                            group_variant_id = group_stream.variant_id(),
+                        ),
+                        group_stream.clone(),
+                    );
+
+                    created_group_stream = Some(group_stream);
+
+                    output_stream.close_sub_stream_variant(sub_output_stream)
+                },
+                |field: &str, path_stream, sub_output_stream| {
+                    let module_name = graph
+                        .chain_customizer()
+                        .streams_module_name
+                        .sub_n(&***sub_output_stream.record_type());
+                    let record = &format!(
                         "{module_name}::Record{group_variant_id}",
                         module_name = module_name,
-                        group_variant_id = group_stream.variant_id(),
-                    ),
-                    group_stream.clone(),
-                );
-
-                created_group_stream = Some(group_stream);
-
-                output_stream.close_sub_stream_variant(sub_output_stream)
-            },
-            |field: &str, path_stream, sub_output_stream| {
-                let module_name = graph
-                    .chain_customizer()
-                    .streams_module_name
-                    .sub_n(&***sub_output_stream.record_type());
-                let record = &format!(
-                    "{module_name}::Record{group_variant_id}",
-                    module_name = module_name,
-                    group_variant_id = sub_output_stream.variant_id(),
-                );
-                path_stream.replace_vec_datum(field, record, sub_output_stream.clone());
-            },
-            |field: &str, output_stream, sub_output_stream| {
-                let module_name = graph
-                    .chain_customizer()
-                    .streams_module_name
-                    .sub_n(&***sub_output_stream.record_type());
-                let record = &format!(
-                    "{module_name}::Record{group_variant_id}",
-                    module_name = module_name,
-                    group_variant_id = sub_output_stream.variant_id(),
-                );
-                output_stream.replace_vec_datum(field, record, sub_output_stream.clone());
-            },
-            graph,
-        );
+                        group_variant_id = sub_output_stream.variant_id(),
+                    );
+                    path_stream.replace_vec_datum(field, record, sub_output_stream.clone());
+                },
+                |field: &str, output_stream, sub_output_stream| {
+                    let module_name = graph
+                        .chain_customizer()
+                        .streams_module_name
+                        .sub_n(&***sub_output_stream.record_type());
+                    let record = &format!(
+                        "{module_name}::Record{group_variant_id}",
+                        module_name = module_name,
+                        group_variant_id = sub_output_stream.variant_id(),
+                    );
+                    output_stream.replace_vec_datum(field, record, sub_output_stream.clone());
+                },
+                graph,
+            )
+        };
 
         let outputs = streams.build(graph);
 
