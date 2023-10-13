@@ -38,6 +38,9 @@ pub struct NodeStream {
     /// The source to connect to in order to read records from it.
     #[getset(get = "pub")]
     source: NodeStreamSource,
+    /// Whether or not the stream is the source main stream.
+    #[getset(get_copy = "pub")]
+    is_source_main_stream: bool,
 }
 
 impl NodeStream {

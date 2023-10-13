@@ -1,6 +1,8 @@
 use crate::prelude::*;
 use std::collections::BTreeMap;
 
+pub mod graph;
+
 #[derive(Debug)]
 pub struct Drawing<'a> {
     pub columns: Vec<DrawingColumn<'a>>,

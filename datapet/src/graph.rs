@@ -1,13 +1,15 @@
 use crate::{
     chain::{Chain, ChainCustomizer},
+    drawing::{format_svg, graph::DrawingHelper, Drawing, DrawingPortsColumn},
     prelude::*,
     stream::{NodeStream, StreamRecordType},
     support::FullyQualifiedName,
 };
 use codegen::Scope;
+use itertools::{EitherOrBoth, Itertools};
 use std::{
     cell::RefCell,
-    collections::{btree_map::Entry, BTreeMap},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
     fs::File,
     ops::Deref,
     path::Path,
@@ -23,7 +25,13 @@ use truc::record::{
 pub trait DynNode {
     fn name(&self) -> &FullyQualifiedName;
 
+    fn inputs(&self) -> &[NodeStream];
+
+    fn outputs(&self) -> &[NodeStream];
+
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain);
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_>;
 }
 
 #[derive(new)]
@@ -53,10 +61,22 @@ impl<const IN: usize, const OUT: usize> DynNode for NodeCluster<IN, OUT> {
         &self.name
     }
 
+    fn inputs(&self) -> &[NodeStream] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[NodeStream] {
+        &self.outputs
+    }
+
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         for node in &self.ordered_nodes {
             node.gen_chain(graph, chain);
         }
+    }
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(self.ordered_nodes.iter().flat_map(|node| node.all_nodes()))
     }
 }
 
@@ -168,7 +188,7 @@ impl<'a> StreamsBuilder<'a> {
         graph: &'g GraphBuilder<R>,
     ) -> OutputBuilder<'a, 'b, 'g, R> {
         let full_name = self.name.clone();
-        self.new_output_internal(graph, full_name)
+        self.new_output_internal(graph, full_name, true)
     }
 
     pub fn new_named_output<'b, 'g, R: TypeResolver + Copy>(
@@ -177,13 +197,14 @@ impl<'a> StreamsBuilder<'a> {
         graph: &'g GraphBuilder<R>,
     ) -> OutputBuilder<'a, 'b, 'g, R> {
         let full_name = self.name.sub(name);
-        self.new_output_internal(graph, full_name)
+        self.new_output_internal(graph, full_name, false)
     }
 
     fn new_output_internal<'b, 'g, R: TypeResolver + Copy>(
         &'b mut self,
         graph: &'g GraphBuilder<R>,
         full_name: FullyQualifiedName,
+        is_output_main_stream: bool,
     ) -> OutputBuilder<'a, 'b, 'g, R> {
         let record_type = StreamRecordType::from(full_name.clone());
         let record_definition = graph
@@ -195,12 +216,14 @@ impl<'a> StreamsBuilder<'a> {
             record_definition,
             input_variant_id: None,
             source: full_name.into(),
+            is_output_main_stream,
         }
     }
 
     pub fn output_from_input<'b, 'g, R: TypeResolver + Copy>(
         &'b mut self,
         input_index: usize,
+        is_output_main_stream: bool,
         graph: &'g GraphBuilder<R>,
     ) -> OutputBuilder<'a, 'b, 'g, R> {
         let input = &self.inputs[input_index];
@@ -222,6 +245,7 @@ impl<'a> StreamsBuilder<'a> {
             record_definition,
             input_variant_id: Some(input.variant_id()),
             source,
+            is_output_main_stream,
         }
     }
 
@@ -249,6 +273,7 @@ pub struct OutputBuilder<'a, 'b, 'g, R: TypeResolver> {
     record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
     input_variant_id: Option<RecordVariantId>,
     source: NodeStreamSource,
+    is_output_main_stream: bool,
 }
 
 impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
@@ -259,6 +284,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
             record_definition: self.record_definition,
             input_variant_id: self.input_variant_id,
             source: self.source,
+            is_output_main_stream: self.is_output_main_stream,
             sub_streams: Vec::new(),
         }
     }
@@ -269,6 +295,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
                 self.record_type,
                 input_variant_id,
                 self.source,
+                self.is_output_main_stream,
             ));
             self.record_definition
         } else {
@@ -285,6 +312,7 @@ pub struct OutputBuilderForUpdate<'a, 'b, 'g, R: TypeResolver + Copy> {
     record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
     input_variant_id: Option<RecordVariantId>,
     source: NodeStreamSource,
+    is_output_main_stream: bool,
     sub_streams: Vec<((StreamRecordType, DatumId), NodeStream)>,
 }
 
@@ -325,6 +353,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
             record_definition,
             input_variant_id: None,
             source: Default::default(),
+            is_output_main_stream: self.is_output_main_stream,
             sub_streams: Vec::new(),
         }
     }
@@ -342,6 +371,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
             record_definition,
             input_variant_id: Some(sub_stream.variant_id()),
             source: Default::default(),
+            is_output_main_stream: self.is_output_main_stream,
             sub_streams: Vec::new(),
         }
     }
@@ -373,6 +403,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
             self.record_type.clone(),
             self.input_variant_id(),
             self.source.clone(),
+            self.is_output_main_stream,
         );
 
         // Then find path input streams
@@ -472,6 +503,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> Drop for OutputBuilderForUpdate<'a, 'b,
             self.record_type.clone(),
             variant_id,
             self.source.clone(),
+            self.is_output_main_stream,
         ));
         let mut sub_streams = Vec::new();
         std::mem::swap(&mut sub_streams, &mut self.sub_streams);
@@ -492,6 +524,7 @@ pub struct SubStreamBuilder<'g, R: TypeResolver> {
     record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
     input_variant_id: Option<RecordVariantId>,
     source: NodeStreamSource,
+    is_output_main_stream: bool,
     sub_streams: Vec<((StreamRecordType, DatumId), NodeStream)>,
 }
 
@@ -527,7 +560,12 @@ impl<'g, R: TypeResolver> SubStreamBuilder<'g, R> {
     fn close_record_variant(self, streams: &mut StreamsBuilder) -> NodeStream {
         let variant_id = self.record_definition.borrow_mut().close_record_variant();
         streams.sub_streams.extend(self.sub_streams);
-        NodeStream::new(self.record_type, variant_id, self.source)
+        NodeStream::new(
+            self.record_type,
+            variant_id,
+            self.source,
+            self.is_output_main_stream,
+        )
     }
 }
 
@@ -638,6 +676,264 @@ impl Graph {
         }
         rustfmt_generated_file(output.join("chain.rs").as_path()).unwrap();
         Ok(())
+    }
+
+    fn streams_to_abstract_drawing(&self) -> Drawing {
+        let mut helper = DrawingHelper::default();
+
+        let mut port_count = 0;
+
+        for node in self
+            .entry_nodes
+            .iter()
+            .flat_map(|entry_node| entry_node.all_nodes())
+        {
+            let (col, row) = helper.make_room_for_node(node);
+
+            let mut port_columns = Vec::new();
+
+            for input_output in node.inputs().iter().zip_longest(node.outputs().iter()) {
+                match input_output {
+                    EitherOrBoth::Both(input, output) => {
+                        let source = Self::drawing_source_node_name(input);
+
+                        let merge = input.record_type() == output.record_type()
+                            && input.variant_id() == output.variant_id();
+
+                        if merge {
+                            helper.push_connected_ports(
+                                &mut port_columns,
+                                &mut port_count,
+                                &(source, input.record_type(), input.variant_id()),
+                                (input.record_type(), input.variant_id()),
+                                (node.name(), output.record_type(), output.variant_id()),
+                            );
+                        } else {
+                            helper.push_input_port(
+                                &mut port_columns,
+                                &mut port_count,
+                                &(source, input.record_type(), input.variant_id()),
+                                (input.record_type(), input.variant_id()),
+                            );
+                            helper.push_output_port(
+                                &mut port_columns,
+                                &mut port_count,
+                                (node.name(), output.record_type(), output.variant_id()),
+                            );
+                        };
+                    }
+                    EitherOrBoth::Left(input) => {
+                        let source = Self::drawing_source_node_name(input);
+
+                        helper.push_input_port(
+                            &mut port_columns,
+                            &mut port_count,
+                            &(source, input.record_type(), input.variant_id()),
+                            (input.record_type(), input.variant_id()),
+                        );
+                    }
+                    EitherOrBoth::Right(output) => {
+                        helper.push_output_port(
+                            &mut port_columns,
+                            &mut port_count,
+                            (node.name(), output.record_type(), output.variant_id()),
+                        );
+                    }
+                }
+            }
+
+            helper.push_node_into_column(col, row, node, port_columns)
+        }
+
+        helper.into()
+    }
+
+    fn records_to_abstract_drawing(&self) -> Drawing {
+        let mut helper = DrawingHelper::default();
+
+        let mut port_count = 0;
+
+        for node in self
+            .entry_nodes
+            .iter()
+            .flat_map(|entry_node| entry_node.all_nodes())
+        {
+            let (col, row) = helper.make_room_for_node(node);
+
+            let mut port_columns = Vec::<DrawingPortsColumn>::new();
+
+            for input_output in node.inputs().iter().zip_longest(node.outputs().iter()) {
+                match input_output {
+                    EitherOrBoth::Both(input, output) => {
+                        let source = Self::drawing_source_node_name(input);
+
+                        let input_record_definition = &self.record_definitions[input.record_type()];
+                        let input_variant = &input_record_definition[input.variant_id()];
+                        let output_record_definition =
+                            &self.record_definitions[input.record_type()];
+                        let output_variant = &output_record_definition[output.variant_id()];
+                        let merge = input.record_type() == output.record_type();
+
+                        let mut merged = BTreeSet::<DatumId>::new();
+
+                        if merge {
+                            for input_output in input_variant
+                                .data()
+                                .merge_join_by(output_variant.data(), DatumId::cmp)
+                            {
+                                match input_output {
+                                    EitherOrBoth::Both(in_d, out_d) => {
+                                        let in_datum = &input_record_definition[in_d];
+                                        let out_datum = &output_record_definition[out_d];
+                                        helper.push_connected_ports(
+                                            &mut port_columns,
+                                            &mut port_count,
+                                            &(
+                                                source,
+                                                input.record_type(),
+                                                input.variant_id(),
+                                                in_datum.name(),
+                                            ),
+                                            (input.record_type(), in_d),
+                                            (
+                                                node.name(),
+                                                output.record_type(),
+                                                output.variant_id(),
+                                                out_datum.name(),
+                                            ),
+                                        );
+                                        merged.insert(in_d);
+                                    }
+                                    EitherOrBoth::Left(in_d) => {
+                                        let in_datum = &input_record_definition[in_d];
+                                        helper.push_input_port(
+                                            &mut port_columns,
+                                            &mut port_count,
+                                            &(
+                                                source,
+                                                input.record_type(),
+                                                input.variant_id(),
+                                                in_datum.name(),
+                                            ),
+                                            (input.record_type(), in_d),
+                                        );
+                                    }
+                                    EitherOrBoth::Right(out_d) => {
+                                        let out_datum = &output_record_definition[out_d];
+                                        helper.push_output_port(
+                                            &mut port_columns,
+                                            &mut port_count,
+                                            (
+                                                node.name(),
+                                                output.record_type(),
+                                                output.variant_id(),
+                                                out_datum.name(),
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+                        } else {
+                            for in_d in input_variant.data() {
+                                let in_datum = &input_record_definition[in_d];
+                                helper.push_input_port(
+                                    &mut port_columns,
+                                    &mut port_count,
+                                    &(
+                                        source,
+                                        input.record_type(),
+                                        input.variant_id(),
+                                        in_datum.name(),
+                                    ),
+                                    (input.record_type(), in_d),
+                                );
+                            }
+
+                            for out_d in output_variant.data() {
+                                let out_datum = &output_record_definition[out_d];
+                                helper.push_output_port(
+                                    &mut port_columns,
+                                    &mut port_count,
+                                    (
+                                        node.name(),
+                                        output.record_type(),
+                                        output.variant_id(),
+                                        out_datum.name(),
+                                    ),
+                                );
+                            }
+                        }
+                    }
+                    EitherOrBoth::Left(input) => {
+                        let source = Self::drawing_source_node_name(input);
+
+                        let input_record_definition = &self.record_definitions[input.record_type()];
+                        let input_variant = &input_record_definition[input.variant_id()];
+
+                        for in_d in input_variant.data() {
+                            let in_datum = &input_record_definition[in_d];
+                            helper.push_input_port(
+                                &mut port_columns,
+                                &mut port_count,
+                                &(
+                                    source,
+                                    input.record_type(),
+                                    input.variant_id(),
+                                    in_datum.name(),
+                                ),
+                                (input.record_type(), in_d),
+                            );
+                        }
+                    }
+                    EitherOrBoth::Right(output) => {
+                        let output_record_definition =
+                            &self.record_definitions[output.record_type()];
+                        let output_variant = &output_record_definition[output.variant_id()];
+
+                        for out_d in output_variant.data() {
+                            let out_datum = &output_record_definition[out_d];
+                            helper.push_output_port(
+                                &mut port_columns,
+                                &mut port_count,
+                                (
+                                    node.name(),
+                                    output.record_type(),
+                                    output.variant_id(),
+                                    out_datum.name(),
+                                ),
+                            );
+                        }
+                    }
+                }
+            }
+
+            helper.push_node_into_column(col, row, node, port_columns);
+        }
+
+        helper.into()
+    }
+
+    pub fn drawing_source_node_name(input: &NodeStream) -> &[Box<str>] {
+        let source = input.source();
+        if input.is_source_main_stream() {
+            source
+        } else {
+            &source[0..source.len() - 1]
+        }
+    }
+
+    pub fn streams_to_svg(&self) -> Result<String, std::fmt::Error> {
+        let drawing = self.streams_to_abstract_drawing();
+        let mut svg = String::new();
+        format_svg(&mut svg, &drawing).unwrap();
+        Ok(svg)
+    }
+
+    pub fn records_to_svg(&self) -> Result<String, std::fmt::Error> {
+        let drawing = self.records_to_abstract_drawing();
+        let mut svg = String::new();
+        format_svg(&mut svg, &drawing).unwrap();
+        Ok(svg)
     }
 }
 

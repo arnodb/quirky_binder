@@ -20,7 +20,7 @@ impl ExtractFields {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("extracted", graph);
 
-        let input_stream = streams.output_from_input(0, graph).pass_through();
+        let input_stream = streams.output_from_input(0, true, graph).pass_through();
 
         {
             let output_extracted_stream = streams.new_named_output("extracted", graph).for_update();
@@ -48,6 +48,14 @@ impl ExtractFields {
 impl DynNode for ExtractFields {
     fn name(&self) -> &FullyQualifiedName {
         &self.name
+    }
+
+    fn inputs(&self) -> &[NodeStream] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[NodeStream] {
+        &self.outputs
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
@@ -96,6 +104,10 @@ impl DynNode for ExtractFields {
         };
 
         chain.implement_node_thread(self, thread_id, &thread_body);
+    }
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(Some(self as &dyn DynNode).into_iter())
     }
 }
 

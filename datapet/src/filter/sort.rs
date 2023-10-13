@@ -19,7 +19,7 @@ impl Sort {
         fields: &[&str],
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams.output_from_input(0, graph).pass_through();
+        streams.output_from_input(0, true, graph).pass_through();
         let outputs = streams.build(graph);
         Self {
             name,
@@ -33,6 +33,14 @@ impl Sort {
 impl DynNode for Sort {
     fn name(&self) -> &FullyQualifiedName {
         &self.name
+    }
+
+    fn inputs(&self) -> &[NodeStream] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[NodeStream] {
+        &self.outputs
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
@@ -52,6 +60,10 @@ impl DynNode for Sort {
             self.outputs.unique(),
             &inline_body,
         );
+    }
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(Some(self as &dyn DynNode).into_iter())
     }
 }
 
@@ -85,7 +97,7 @@ impl SubSort {
         fields: &[&str],
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        let input_stream = streams.output_from_input(0, graph).pass_through();
+        let input_stream = streams.output_from_input(0, true, graph).pass_through();
         let path_sub_stream = path_fields
             .iter()
             .fold(
@@ -129,6 +141,14 @@ impl DynNode for SubSort {
         &self.name
     }
 
+    fn inputs(&self) -> &[NodeStream] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[NodeStream] {
+        &self.outputs
+    }
+
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
         let record = chain
             .stream_definition_fragments(self.inputs.unique())
@@ -165,6 +185,10 @@ impl DynNode for SubSort {
             self.outputs.unique(),
             &inline_body,
         );
+    }
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(Some(self as &dyn DynNode).into_iter())
     }
 }
 

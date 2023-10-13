@@ -21,7 +21,7 @@ impl InPlaceFilter {
         inputs: [NodeStream; 1],
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams.output_from_input(0, graph).pass_through();
+        streams.output_from_input(0, true, graph).pass_through();
         let outputs = streams.build(graph);
         Self {
             name,
@@ -118,6 +118,14 @@ pub mod string {
             &self.in_place.name
         }
 
+        fn inputs(&self) -> &[NodeStream] {
+            &self.in_place.inputs
+        }
+
+        fn outputs(&self) -> &[NodeStream] {
+            &self.in_place.outputs
+        }
+
         fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
             self.in_place.gen_chain_simple(
                 self,
@@ -126,6 +134,10 @@ pub mod string {
                 self.fields.iter().map(Box::as_ref),
                 quote! { .to_lowercase() },
             );
+        }
+
+        fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+            Box::new(Some(self as &dyn DynNode).into_iter())
         }
     }
 
@@ -166,6 +178,14 @@ pub mod string {
             &self.in_place.name
         }
 
+        fn inputs(&self) -> &[NodeStream] {
+            &self.in_place.inputs
+        }
+
+        fn outputs(&self) -> &[NodeStream] {
+            &self.in_place.outputs
+        }
+
         fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
             self.in_place.gen_chain_simple(
                 self,
@@ -174,6 +194,10 @@ pub mod string {
                 self.fields.iter().map(Box::as_ref),
                 quote! { .chars().rev().collect::<String>() },
             );
+        }
+
+        fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+            Box::new(Some(self as &dyn DynNode).into_iter())
         }
     }
 

@@ -17,7 +17,7 @@ impl Dedup {
         inputs: [NodeStream; 1],
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams.output_from_input(0, graph).pass_through();
+        streams.output_from_input(0, true, graph).pass_through();
         let outputs = streams.build(graph);
         Self {
             name,
@@ -30,6 +30,14 @@ impl Dedup {
 impl DynNode for Dedup {
     fn name(&self) -> &FullyQualifiedName {
         &self.name
+    }
+
+    fn inputs(&self) -> &[NodeStream] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[NodeStream] {
+        &self.outputs
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
@@ -51,6 +59,10 @@ impl DynNode for Dedup {
             self.outputs.unique(),
             &inline_body,
         );
+    }
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(Some(self as &dyn DynNode).into_iter())
     }
 }
 

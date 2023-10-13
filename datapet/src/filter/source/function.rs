@@ -53,6 +53,14 @@ impl DynNode for FunctionSource {
         &self.name
     }
 
+    fn inputs(&self) -> &[NodeStream] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[NodeStream] {
+        &self.outputs
+    }
+
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.new_threaded_source(&self.name, &self.inputs, &self.outputs);
 
@@ -87,6 +95,10 @@ impl DynNode for FunctionSource {
         };
 
         chain.implement_node_thread(self, thread_id, &thread_body);
+    }
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(Some(self as &dyn DynNode).into_iter())
     }
 }
 

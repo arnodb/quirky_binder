@@ -23,7 +23,7 @@ impl Unwrap {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
         {
-            let output_stream = streams.output_from_input(0, graph).for_update();
+            let output_stream = streams.output_from_input(0, true, graph).for_update();
             let input_variant_id = output_stream.input_variant_id();
             let mut output_stream_def = output_stream.borrow_mut();
             for &field in fields {
@@ -72,6 +72,14 @@ impl Unwrap {
 impl DynNode for Unwrap {
     fn name(&self) -> &FullyQualifiedName {
         &self.name
+    }
+
+    fn inputs(&self) -> &[NodeStream] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[NodeStream] {
+        &self.outputs
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
@@ -135,6 +143,10 @@ impl DynNode for Unwrap {
             self.outputs.unique(),
             &inline_body,
         );
+    }
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(Some(self as &dyn DynNode).into_iter())
     }
 }
 

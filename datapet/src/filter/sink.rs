@@ -36,6 +36,14 @@ impl DynNode for Sink {
         &self.name
     }
 
+    fn inputs(&self) -> &[NodeStream] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[NodeStream] {
+        &self.outputs
+    }
+
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread = chain.get_thread_id_and_module_by_source(
             self.inputs.unique(),
@@ -66,6 +74,10 @@ impl DynNode for Sink {
         chain.implement_node_thread(self, thread.thread_id, &thread_body);
 
         chain.set_thread_main(thread.thread_id, self.name.clone());
+    }
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(Some(self as &dyn DynNode).into_iter())
     }
 }
 

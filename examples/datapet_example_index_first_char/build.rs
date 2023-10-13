@@ -26,7 +26,7 @@ impl Tokenize {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
         {
-            let output_stream = streams.output_from_input(0, graph).for_update();
+            let output_stream = streams.output_from_input(0, true, graph).for_update();
             let input_variant_id = output_stream.input_variant_id();
             let mut output_stream_def = output_stream.borrow_mut();
             let datum = output_stream_def
@@ -53,6 +53,14 @@ impl DynNode for Tokenize {
         &self.name
     }
 
+    fn inputs(&self) -> &[NodeStream] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[NodeStream] {
+        &self.outputs
+    }
+
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
         let inline_body = quote! {
             crate::chain::tokenize::tokenize(input)
@@ -64,6 +72,10 @@ impl DynNode for Tokenize {
             self.outputs.unique(),
             &inline_body,
         );
+    }
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(Some(self as &dyn DynNode).into_iter())
     }
 }
 

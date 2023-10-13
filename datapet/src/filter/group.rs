@@ -30,7 +30,7 @@ impl Group {
         streams.new_named_stream("group", graph);
 
         let group_stream = {
-            let mut output_stream = streams.output_from_input(0, graph).for_update();
+            let mut output_stream = streams.output_from_input(0, true, graph).for_update();
             let group_stream = output_stream.new_named_sub_stream("group", graph);
             let variant_id = output_stream.input_variant_id();
 
@@ -81,6 +81,14 @@ impl Group {
 impl DynNode for Group {
     fn name(&self) -> &FullyQualifiedName {
         &self.name
+    }
+
+    fn inputs(&self) -> &[NodeStream] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[NodeStream] {
+        &self.outputs
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
@@ -155,6 +163,10 @@ impl DynNode for Group {
             &inline_body,
         );
     }
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(Some(self as &dyn DynNode).into_iter())
+    }
 }
 
 pub fn group<R: TypeResolver + Copy>(
@@ -195,7 +207,7 @@ impl SubGroup {
         let mut created_group_stream = None;
 
         let path_streams = {
-            let mut output_stream = streams.output_from_input(0, graph).for_update();
+            let mut output_stream = streams.output_from_input(0, true, graph).for_update();
             output_stream.update_path(
                 path_fields,
                 |sub_input_stream, output_stream| {
@@ -282,6 +294,14 @@ impl SubGroup {
 impl DynNode for SubGroup {
     fn name(&self) -> &FullyQualifiedName {
         &self.name
+    }
+
+    fn inputs(&self) -> &[NodeStream] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[NodeStream] {
+        &self.outputs
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
@@ -431,6 +451,10 @@ impl DynNode for SubGroup {
             self.outputs.unique(),
             &inline_body,
         );
+    }
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(Some(self as &dyn DynNode).into_iter())
     }
 }
 

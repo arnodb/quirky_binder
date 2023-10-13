@@ -17,7 +17,7 @@ impl Accumulate {
         inputs: [NodeStream; 1],
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams.output_from_input(0, graph).pass_through();
+        streams.output_from_input(0, true, graph).pass_through();
         let outputs = streams.build(graph);
 
         Self {
@@ -33,6 +33,14 @@ impl DynNode for Accumulate {
         &self.name
     }
 
+    fn inputs(&self) -> &[NodeStream] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[NodeStream] {
+        &self.outputs
+    }
+
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
         let inline_body = quote! {
             datapet_support::iterator::accumulate::Accumulate::new(input)
@@ -44,6 +52,10 @@ impl DynNode for Accumulate {
             self.outputs.unique(),
             &inline_body,
         );
+    }
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(Some(self as &dyn DynNode).into_iter())
     }
 }
 

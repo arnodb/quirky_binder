@@ -24,7 +24,7 @@ impl Join {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
         let joined_fields = {
-            let output_stream = streams.output_from_input(0, graph).for_update();
+            let output_stream = streams.output_from_input(0, true, graph).for_update();
             let mut output_stream_def = output_stream.borrow_mut();
             let secondary_stream_def = graph
                 .get_stream(inputs[1].record_type())
@@ -70,6 +70,14 @@ impl Join {
 impl DynNode for Join {
     fn name(&self) -> &FullyQualifiedName {
         &self.name
+    }
+
+    fn inputs(&self) -> &[NodeStream] {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &[NodeStream] {
+        &self.outputs
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
@@ -162,6 +170,10 @@ impl DynNode for Join {
         };
 
         chain.implement_node_thread(self, thread_id, &thread_body);
+    }
+
+    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(Some(self as &dyn DynNode).into_iter())
     }
 }
 
