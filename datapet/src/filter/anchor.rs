@@ -1,4 +1,4 @@
-use crate::{prelude::*, stream::UniqueNodeStream};
+use crate::prelude::*;
 use datapet_support::AnchorId;
 use truc::record::{definition::DatumDefinitionOverride, type_resolver::TypeResolver};
 
@@ -62,7 +62,7 @@ impl DynNode for Anchor {
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
-        let def_output = chain.stream_definition_fragments(self.outputs.unique());
+        let def_output = chain.stream_definition_fragments(self.outputs.single());
 
         let output_record = def_output.record();
         let output_unpacked_record_in = def_output.unpacked_record_in();
@@ -83,8 +83,8 @@ impl DynNode for Anchor {
 
         chain.implement_inline_node(
             self,
-            self.inputs.unique(),
-            self.outputs.unique(),
+            self.inputs.single(),
+            self.outputs.single(),
             &inline_body,
         );
     }

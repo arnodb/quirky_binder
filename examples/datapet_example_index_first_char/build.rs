@@ -3,7 +3,7 @@ extern crate getset;
 #[macro_use]
 extern crate quote;
 
-use datapet::{graph::StreamsBuilder, prelude::*, stream::UniqueNodeStream};
+use datapet::prelude::*;
 use datapet_codegen::dtpt_mod;
 use std::path::Path;
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
@@ -68,8 +68,8 @@ impl DynNode for Tokenize {
 
         chain.implement_inline_node(
             self,
-            self.inputs.unique(),
-            self.outputs.unique(),
+            self.inputs.single(),
+            self.outputs.single(),
             &inline_body,
         );
     }

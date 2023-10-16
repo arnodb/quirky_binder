@@ -1,4 +1,4 @@
-use crate::{prelude::*, stream::UniqueNodeStream};
+use crate::prelude::*;
 use proc_macro2::TokenStream;
 use truc::record::type_resolver::TypeResolver;
 
@@ -64,7 +64,7 @@ impl DynNode for FunctionSource {
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.new_threaded_source(&self.name, &self.inputs, &self.outputs);
 
-        let def = chain.stream_definition_fragments(self.outputs.unique());
+        let def = chain.stream_definition_fragments(self.outputs.single());
         let record = def.record();
         let unpacked_record = def.unpacked_record();
 

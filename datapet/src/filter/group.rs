@@ -1,7 +1,5 @@
 use crate::{
-    graph::PathUpdateElement,
     prelude::*,
-    stream::UniqueNodeStream,
     support::{fields_eq, fields_eq_ab},
 };
 use truc::record::type_resolver::TypeResolver;
@@ -92,8 +90,8 @@ impl DynNode for Group {
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let def_input = chain.stream_definition_fragments(self.inputs.unique());
-        let def = chain.stream_definition_fragments(self.outputs.unique());
+        let def_input = chain.stream_definition_fragments(self.inputs.single());
+        let def = chain.stream_definition_fragments(self.outputs.single());
         let def_group = chain.stream_definition_fragments(&self.group_stream);
 
         let input_unpacked_record = def_input.unpacked_record();
@@ -114,8 +112,8 @@ impl DynNode for Group {
         let group_field = format_ident!("{}", self.group_field);
         let mut_group_field = format_ident!("{}_mut", self.group_field);
 
-        let record_definition = &graph.record_definitions()[self.inputs.unique().record_type()];
-        let variant = &record_definition[self.inputs.unique().variant_id()];
+        let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
+        let variant = &record_definition[self.inputs.single().variant_id()];
         let eq = {
             let fields = variant
                 .data()
@@ -158,8 +156,8 @@ impl DynNode for Group {
 
         chain.implement_inline_node(
             self,
-            self.inputs.unique(),
-            self.outputs.unique(),
+            self.inputs.single(),
+            self.outputs.single(),
             &inline_body,
         );
     }
@@ -305,7 +303,7 @@ impl DynNode for SubGroup {
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let def = chain.stream_definition_fragments(self.outputs.unique());
+        let def = chain.stream_definition_fragments(self.outputs.single());
         let def_group = chain.stream_definition_fragments(&self.group_stream);
 
         let group_record = def_group.record();
@@ -447,8 +445,8 @@ impl DynNode for SubGroup {
 
         chain.implement_inline_node(
             self,
-            self.inputs.unique(),
-            self.outputs.unique(),
+            self.inputs.single(),
+            self.outputs.single(),
             &inline_body,
         );
     }

@@ -1,13 +1,10 @@
 use crate::{
-    chain::{Chain, ChainCustomizer},
     drawing::{
         format_svg,
         graph::{RecordsDrawingHelper, StreamsDrawingHelper},
         Drawing, DrawingPortsColumn,
     },
     prelude::*,
-    stream::{NodeStream, StreamRecordType},
-    support::FullyQualifiedName,
 };
 use codegen::Scope;
 use itertools::{EitherOrBoth, Itertools};

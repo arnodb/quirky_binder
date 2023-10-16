@@ -1,4 +1,4 @@
-use crate::{prelude::*, stream::UniqueNodeStream};
+use crate::prelude::*;
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
@@ -29,7 +29,7 @@ impl ExtractFields {
                 output_extracted_stream_def.copy_datum(
                     input_stream
                         .borrow()
-                        .get_variant_datum_definition_by_name(inputs.unique().variant_id(), field)
+                        .get_variant_datum_definition_by_name(inputs.single().variant_id(), field)
                         .unwrap_or_else(|| panic!(r#"datum "{}""#, field)),
                 );
             }

@@ -1,4 +1,4 @@
-use crate::{prelude::*, stream::UniqueNodeStream};
+use crate::prelude::*;
 use proc_macro2::TokenStream;
 use truc::record::{
     definition::{RecordDefinition, RecordVariant},
@@ -34,8 +34,8 @@ impl InPlaceFilter {
     where
         B: FnOnce(&RecordDefinition, &RecordVariant) -> TokenStream,
     {
-        let record_definition = &graph.record_definitions()[self.inputs.unique().record_type()];
-        let record_variant = &record_definition[self.inputs.unique().variant_id()];
+        let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
+        let record_variant = &record_definition[self.inputs.single().variant_id()];
         let body = body(record_definition, record_variant);
 
         let inline_body = quote! {
@@ -47,8 +47,8 @@ impl InPlaceFilter {
 
         chain.implement_inline_node(
             node,
-            self.inputs.unique(),
-            self.outputs.unique(),
+            self.inputs.single(),
+            self.outputs.single(),
             &inline_body,
         );
     }

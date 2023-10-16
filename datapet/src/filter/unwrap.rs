@@ -1,4 +1,4 @@
-use crate::{prelude::*, stream::UniqueNodeStream};
+use crate::prelude::*;
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
@@ -83,12 +83,12 @@ impl DynNode for Unwrap {
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let def = chain.stream_definition_fragments(self.outputs.unique());
+        let def = chain.stream_definition_fragments(self.outputs.single());
         let record = def.record();
         let unpacked_record = def.unpacked_record();
 
-        let record_definition = &graph.record_definitions()[self.inputs.unique().record_type()];
-        let variant = &record_definition[self.inputs.unique().variant_id()];
+        let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
+        let variant = &record_definition[self.inputs.single().variant_id()];
 
         let error_type = graph.chain_customizer().error_type.to_name();
 
@@ -139,8 +139,8 @@ impl DynNode for Unwrap {
 
         chain.implement_inline_node(
             self,
-            self.inputs.unique(),
-            self.outputs.unique(),
+            self.inputs.single(),
+            self.outputs.single(),
             &inline_body,
         );
     }

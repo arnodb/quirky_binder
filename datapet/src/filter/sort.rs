@@ -1,4 +1,4 @@
-use crate::{prelude::*, stream::UniqueNodeStream, support::fields_cmp};
+use crate::{prelude::*, support::fields_cmp};
 use truc::record::{definition::DatumDefinition, type_resolver::TypeResolver};
 
 #[derive(Getters)]
@@ -45,7 +45,7 @@ impl DynNode for Sort {
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
         let record = chain
-            .stream_definition_fragments(self.outputs.unique())
+            .stream_definition_fragments(self.outputs.single())
             .record();
 
         let cmp = fields_cmp(&record, &self.fields);
@@ -56,8 +56,8 @@ impl DynNode for Sort {
 
         chain.implement_inline_node(
             self,
-            self.inputs.unique(),
-            self.outputs.unique(),
+            self.inputs.single(),
+            self.outputs.single(),
             &inline_body,
         );
     }
@@ -101,7 +101,7 @@ impl SubSort {
         let path_sub_stream = path_fields
             .iter()
             .fold(
-                (inputs.unique().clone(), input_stream),
+                (inputs.single().clone(), input_stream),
                 |(stream, def), field| {
                     let datum_id = def
                         .borrow()
@@ -151,7 +151,7 @@ impl DynNode for SubSort {
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
         let record = chain
-            .stream_definition_fragments(self.inputs.unique())
+            .stream_definition_fragments(self.inputs.single())
             .record();
         let sub_record = chain
             .stream_definition_fragments(&self.path_sub_stream)
@@ -181,8 +181,8 @@ impl DynNode for SubSort {
 
         chain.implement_inline_node(
             self,
-            self.inputs.unique(),
-            self.outputs.unique(),
+            self.inputs.single(),
+            self.outputs.single(),
             &inline_body,
         );
     }

@@ -1,4 +1,4 @@
-use crate::{prelude::*, stream::UniqueNodeStream, support::fields_cmp_ab};
+use crate::{prelude::*, support::fields_cmp_ab};
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
@@ -85,7 +85,7 @@ impl DynNode for Join {
 
         let primary_input_def = chain.stream_definition_fragments(&self.inputs[0]);
         let secondary_input_def = chain.stream_definition_fragments(&self.inputs[1]);
-        let output_def = chain.stream_definition_fragments(self.outputs.unique());
+        let output_def = chain.stream_definition_fragments(self.outputs.single());
 
         let secondary_unpacked_record = secondary_input_def.unpacked_record();
         let record_and_unpacked_out = output_def.record_and_unpacked_out();

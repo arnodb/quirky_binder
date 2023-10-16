@@ -1,4 +1,4 @@
-use crate::{prelude::*, stream::UniqueNodeStream, support::fields_eq};
+use crate::{prelude::*, support::fields_eq};
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
@@ -42,10 +42,10 @@ impl DynNode for Dedup {
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let record = chain
-            .stream_definition_fragments(self.inputs.unique())
+            .stream_definition_fragments(self.inputs.single())
             .record();
-        let record_definition = &graph.record_definitions()[self.inputs.unique().record_type()];
-        let variant = &record_definition[self.inputs.unique().variant_id()];
+        let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
+        let variant = &record_definition[self.inputs.single().variant_id()];
 
         let eq = fields_eq(&record, variant.data().map(|d| record_definition[d].name()));
 
@@ -55,8 +55,8 @@ impl DynNode for Dedup {
 
         chain.implement_inline_node(
             self,
-            self.inputs.unique(),
-            self.outputs.unique(),
+            self.inputs.single(),
+            self.outputs.single(),
             &inline_body,
         );
     }

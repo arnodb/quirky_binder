@@ -1,4 +1,4 @@
-use crate::support::FullyQualifiedName;
+use crate::prelude::*;
 use std::ops::Deref;
 use truc::record::definition::RecordVariantId;
 
@@ -73,19 +73,19 @@ impl NoneNodeStream for [NodeStream; 0] {
     }
 }
 
-pub trait UniqueNodeStream {
-    fn unique(&self) -> &NodeStream;
+pub trait SingleNodeStream {
+    fn single(&self) -> &NodeStream;
 
-    fn some_unique(&self) -> Option<&NodeStream>;
+    fn some_single(&self) -> Option<&NodeStream>;
 }
 
-impl UniqueNodeStream for [NodeStream; 1] {
-    fn unique(&self) -> &NodeStream {
+impl SingleNodeStream for [NodeStream; 1] {
+    fn single(&self) -> &NodeStream {
         &self[0]
     }
 
-    fn some_unique(&self) -> Option<&NodeStream> {
-        Some(self.unique())
+    fn some_single(&self) -> Option<&NodeStream> {
+        Some(self.single())
     }
 }
 

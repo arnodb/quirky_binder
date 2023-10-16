@@ -1,4 +1,4 @@
-use crate::{prelude::*, stream::UniqueNodeStream};
+use crate::prelude::*;
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
@@ -48,8 +48,8 @@ impl DynNode for Accumulate {
 
         chain.implement_inline_node(
             self,
-            self.inputs.unique(),
-            self.outputs.unique(),
+            self.inputs.single(),
+            self.outputs.single(),
             &inline_body,
         );
     }
