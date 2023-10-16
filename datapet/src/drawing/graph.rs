@@ -1,9 +1,10 @@
 use super::{
     Drawing, DrawingColumn, DrawingEdge, DrawingNode, DrawingPort, DrawingPortAlign,
-    DrawingPortsColumn,
+    DrawingPortSize, DrawingPortsColumn,
 };
-use crate::prelude::{DynNode, Graph};
+use crate::prelude::*;
 use std::collections::{btree_map::Entry, BTreeMap};
+use truc::record::definition::{DatumId, RecordVariantId};
 
 const COLORS: [&str; 20] = [
     "#e6194B", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#42d4f4", "#f032e6",
@@ -134,22 +135,22 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
         let input_port_id = *port_count;
         *port_count += 1;
 
-        let index = port_columns
-            .iter()
-            .rposition(|column| column.align != DrawingPortAlign::Bottom)
-            .and_then(|after_index| {
-                port_columns[after_index + 1..]
-                    .iter()
-                    .position(|column| column.align == DrawingPortAlign::Bottom)
-                    .map(|index| after_index + 1 + index)
-            });
+        let mut index = port_columns.len();
+        loop {
+            if index > 0 && port_columns[index - 1].align == DrawingPortAlign::Bottom {
+                index -= 1;
+            } else {
+                break;
+            }
+        }
 
-        if let Some(index) = index {
+        if index < port_columns.len() {
             let column = &mut port_columns[index];
             column.ports.insert(
                 0,
                 DrawingPort {
                     id: input_port_id,
+                    size: DrawingPortSize::Normal,
                     redundant: false,
                 },
             );
@@ -158,6 +159,7 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
             port_columns.push(DrawingPortsColumn {
                 ports: vec![DrawingPort {
                     id: input_port_id,
+                    size: DrawingPortSize::Normal,
                     redundant: false,
                 }],
                 align: DrawingPortAlign::Top,
@@ -176,20 +178,20 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
         let output_port_id = *port_count;
         *port_count += 1;
 
-        let index = port_columns
-            .iter()
-            .rposition(|column| column.align != DrawingPortAlign::Top)
-            .and_then(|after_index| {
-                port_columns[after_index + 1..]
-                    .iter()
-                    .position(|column| column.align == DrawingPortAlign::Top)
-                    .map(|index| after_index + 1 + index)
-            });
+        let mut index = port_columns.len();
+        loop {
+            if index > 0 && port_columns[index - 1].align == DrawingPortAlign::Top {
+                index -= 1;
+            } else {
+                break;
+            }
+        }
 
-        if let Some(index) = index {
+        if index < port_columns.len() {
             let column = &mut port_columns[index];
             column.ports.push(DrawingPort {
                 id: output_port_id,
+                size: DrawingPortSize::Normal,
                 redundant: false,
             });
             column.align = DrawingPortAlign::Middle;
@@ -197,6 +199,7 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
             port_columns.push(DrawingPortsColumn {
                 ports: vec![DrawingPort {
                     id: output_port_id,
+                    size: DrawingPortSize::Normal,
                     redundant: false,
                 }],
                 align: DrawingPortAlign::Bottom,
@@ -222,10 +225,12 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
             ports: vec![
                 DrawingPort {
                     id: input_port_id,
+                    size: DrawingPortSize::Normal,
                     redundant: false,
                 },
                 DrawingPort {
                     id: output_port_id,
+                    size: DrawingPortSize::Normal,
                     redundant: true,
                 },
             ],
@@ -244,6 +249,328 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
             head,
             color,
         });
+    }
+}
+
+pub type StreamsDrawingHelper<'a> = DrawingHelper<
+    'a,
+    (&'a [Box<str>], &'a StreamRecordType, RecordVariantId),
+    (&'a StreamRecordType, RecordVariantId),
+>;
+
+impl<'a> StreamsDrawingHelper<'a> {
+    pub fn push_input_sub_stream_port(
+        &mut self,
+        graph: &'a Graph,
+        port_columns: &mut Vec<DrawingPortsColumn>,
+        port_count: &mut usize,
+        stream: &'a NodeStream,
+        depth: usize,
+    ) {
+        let input_port_id = *port_count;
+        *port_count += 1;
+        port_columns.push(DrawingPortsColumn {
+            ports: vec![DrawingPort {
+                id: input_port_id,
+                size: if depth <= 1 {
+                    DrawingPortSize::Small
+                } else {
+                    DrawingPortSize::Dot
+                },
+                redundant: false,
+            }],
+            align: DrawingPortAlign::Top,
+        });
+
+        self.push_edge(
+            &(
+                &***stream.source(),
+                stream.record_type(),
+                stream.variant_id(),
+            ),
+            input_port_id,
+            (stream.record_type(), stream.variant_id()),
+        );
+
+        let record_definition = &graph.record_definitions()[stream.record_type()];
+        let variant = &record_definition[stream.variant_id()];
+
+        for d in variant.data() {
+            if let Some(sub_stream) = graph.get_sub_stream(stream.record_type().clone(), d) {
+                self.push_input_sub_stream_port(
+                    graph,
+                    port_columns,
+                    port_count,
+                    sub_stream,
+                    depth + 1,
+                );
+            }
+        }
+    }
+
+    pub fn push_output_sub_stream_port(
+        &mut self,
+        graph: &'a Graph,
+        port_columns: &mut Vec<DrawingPortsColumn>,
+        port_count: &mut usize,
+        stream: &'a NodeStream,
+        depth: usize,
+    ) {
+        let output_port_id = *port_count;
+        *port_count += 1;
+        port_columns.push(DrawingPortsColumn {
+            ports: vec![DrawingPort {
+                id: output_port_id,
+                size: if depth <= 1 {
+                    DrawingPortSize::Small
+                } else {
+                    DrawingPortSize::Dot
+                },
+                redundant: false,
+            }],
+            align: DrawingPortAlign::Bottom,
+        });
+
+        self.output_ports.insert(
+            (stream.source(), stream.record_type(), stream.variant_id()),
+            output_port_id,
+        );
+
+        let record_definition = &graph.record_definitions()[stream.record_type()];
+        let variant = &record_definition[stream.variant_id()];
+
+        for d in variant.data() {
+            if let Some(sub_stream) = graph.get_sub_stream(stream.record_type().clone(), d) {
+                self.push_output_sub_stream_port(
+                    graph,
+                    port_columns,
+                    port_count,
+                    sub_stream,
+                    depth + 1,
+                );
+            }
+        }
+    }
+
+    pub fn push_pass_through_sub_stream_ports(
+        &mut self,
+        graph: &'a Graph,
+        port_columns: &mut Vec<DrawingPortsColumn>,
+        port_count: &mut usize,
+        stream: &'a NodeStream,
+        depth: usize,
+    ) {
+        let input_port_id = *port_count;
+        let output_port_id = *port_count + 1;
+        *port_count += 2;
+        port_columns.push(DrawingPortsColumn {
+            ports: vec![
+                DrawingPort {
+                    id: input_port_id,
+                    size: if depth <= 1 {
+                        DrawingPortSize::Small
+                    } else {
+                        DrawingPortSize::Dot
+                    },
+                    redundant: false,
+                },
+                DrawingPort {
+                    id: output_port_id,
+                    size: if depth <= 1 {
+                        DrawingPortSize::Small
+                    } else {
+                        DrawingPortSize::Dot
+                    },
+                    redundant: true,
+                },
+            ],
+            align: DrawingPortAlign::Middle,
+        });
+
+        self.push_edge(
+            &(
+                &***stream.source(),
+                stream.record_type(),
+                stream.variant_id(),
+            ),
+            input_port_id,
+            (stream.record_type(), stream.variant_id()),
+        );
+
+        self.output_ports.insert(
+            (stream.source(), stream.record_type(), stream.variant_id()),
+            output_port_id,
+        );
+
+        let record_definition = &graph.record_definitions()[stream.record_type()];
+        let variant = &record_definition[stream.variant_id()];
+
+        for d in variant.data() {
+            if let Some(sub_stream) = graph.get_sub_stream(stream.record_type().clone(), d) {
+                self.push_pass_through_sub_stream_ports(
+                    graph,
+                    port_columns,
+                    port_count,
+                    sub_stream,
+                    depth + 1,
+                );
+            }
+        }
+    }
+}
+
+pub type RecordsDrawingHelper<'a> = DrawingHelper<
+    'a,
+    (&'a [Box<str>], &'a StreamRecordType, DatumId),
+    (&'a StreamRecordType, DatumId),
+>;
+
+impl<'a> RecordsDrawingHelper<'a> {
+    pub fn push_input_sub_stream_port(
+        &mut self,
+        graph: &'a Graph,
+        port_columns: &mut Vec<DrawingPortsColumn>,
+        port_count: &mut usize,
+        stream: &'a NodeStream,
+        depth: usize,
+    ) {
+        let record_definition = &graph.record_definitions()[stream.record_type()];
+        let variant = &record_definition[stream.variant_id()];
+
+        for d in variant.data() {
+            let input_port_id = *port_count;
+            *port_count += 1;
+            port_columns.push(DrawingPortsColumn {
+                ports: vec![DrawingPort {
+                    id: input_port_id,
+                    size: if depth <= 1 {
+                        DrawingPortSize::Small
+                    } else {
+                        DrawingPortSize::Dot
+                    },
+                    redundant: false,
+                }],
+                align: DrawingPortAlign::Top,
+            });
+
+            self.push_edge(
+                &(&***stream.source(), stream.record_type(), d),
+                input_port_id,
+                (stream.record_type(), d),
+            );
+
+            if let Some(sub_stream) = graph.get_sub_stream(stream.record_type().clone(), d) {
+                self.push_input_sub_stream_port(
+                    graph,
+                    port_columns,
+                    port_count,
+                    sub_stream,
+                    depth + 1,
+                );
+            }
+        }
+    }
+
+    pub fn push_output_sub_stream_port(
+        &mut self,
+        graph: &'a Graph,
+        port_columns: &mut Vec<DrawingPortsColumn>,
+        port_count: &mut usize,
+        stream: &'a NodeStream,
+        depth: usize,
+    ) {
+        let record_definition = &graph.record_definitions()[stream.record_type()];
+        let variant = &record_definition[stream.variant_id()];
+
+        for d in variant.data() {
+            let output_port_id = *port_count;
+            *port_count += 1;
+            port_columns.push(DrawingPortsColumn {
+                ports: vec![DrawingPort {
+                    id: output_port_id,
+                    size: if depth <= 1 {
+                        DrawingPortSize::Small
+                    } else {
+                        DrawingPortSize::Dot
+                    },
+                    redundant: false,
+                }],
+                align: DrawingPortAlign::Bottom,
+            });
+
+            self.output_ports
+                .insert((stream.source(), stream.record_type(), d), output_port_id);
+
+            if let Some(sub_stream) = graph.get_sub_stream(stream.record_type().clone(), d) {
+                self.push_output_sub_stream_port(
+                    graph,
+                    port_columns,
+                    port_count,
+                    sub_stream,
+                    depth + 1,
+                );
+            }
+        }
+    }
+
+    pub fn push_pass_through_sub_stream_ports(
+        &mut self,
+        graph: &'a Graph,
+        port_columns: &mut Vec<DrawingPortsColumn>,
+        port_count: &mut usize,
+        stream: &'a NodeStream,
+        depth: usize,
+    ) {
+        let record_definition = &graph.record_definitions()[stream.record_type()];
+        let variant = &record_definition[stream.variant_id()];
+
+        for d in variant.data() {
+            let input_port_id = *port_count;
+            let output_port_id = *port_count + 1;
+            *port_count += 2;
+            port_columns.push(DrawingPortsColumn {
+                ports: vec![
+                    DrawingPort {
+                        id: input_port_id,
+                        size: if depth <= 1 {
+                            DrawingPortSize::Small
+                        } else {
+                            DrawingPortSize::Dot
+                        },
+                        redundant: false,
+                    },
+                    DrawingPort {
+                        id: output_port_id,
+                        size: if depth <= 1 {
+                            DrawingPortSize::Small
+                        } else {
+                            DrawingPortSize::Dot
+                        },
+                        redundant: true,
+                    },
+                ],
+                align: DrawingPortAlign::Middle,
+            });
+
+            self.push_edge(
+                &(&***stream.source(), stream.record_type(), d),
+                input_port_id,
+                (stream.record_type(), d),
+            );
+
+            self.output_ports
+                .insert((stream.source(), stream.record_type(), d), output_port_id);
+
+            if let Some(sub_stream) = graph.get_sub_stream(stream.record_type().clone(), d) {
+                self.push_pass_through_sub_stream_ports(
+                    graph,
+                    port_columns,
+                    port_count,
+                    sub_stream,
+                    depth + 1,
+                );
+            }
+        }
     }
 }
 

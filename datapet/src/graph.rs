@@ -1,6 +1,10 @@
 use crate::{
     chain::{Chain, ChainCustomizer},
-    drawing::{format_svg, graph::DrawingHelper, Drawing, DrawingPortsColumn},
+    drawing::{
+        format_svg,
+        graph::{RecordsDrawingHelper, StreamsDrawingHelper},
+        Drawing, DrawingPortsColumn,
+    },
     prelude::*,
     stream::{NodeStream, StreamRecordType},
     support::FullyQualifiedName,
@@ -634,8 +638,8 @@ impl Graph {
         &self,
         record_type: StreamRecordType,
         datum_id: DatumId,
-    ) -> Option<NodeStream> {
-        self.sub_streams.get(&(record_type, datum_id)).cloned()
+    ) -> Option<&NodeStream> {
+        self.sub_streams.get(&(record_type, datum_id))
     }
 
     pub fn generate(&self, output: &Path) -> Result<(), std::io::Error> {
@@ -679,7 +683,7 @@ impl Graph {
     }
 
     fn streams_to_abstract_drawing(&self) -> Drawing {
-        let mut helper = DrawingHelper::default();
+        let mut helper = StreamsDrawingHelper::default();
 
         let mut port_count = 0;
 
@@ -696,6 +700,11 @@ impl Graph {
                 match input_output {
                     EitherOrBoth::Both(input, output) => {
                         let source = Self::drawing_source_node_name(input);
+                        let input_record_definition = &self.record_definitions[input.record_type()];
+                        let input_variant = &input_record_definition[input.variant_id()];
+                        let output_record_definition =
+                            &self.record_definitions[output.record_type()];
+                        let output_variant = &output_record_definition[output.variant_id()];
 
                         let merge = input.record_type() == output.record_type()
                             && input.variant_id() == output.variant_id();
@@ -708,6 +717,52 @@ impl Graph {
                                 (input.record_type(), input.variant_id()),
                                 (node.name(), output.record_type(), output.variant_id()),
                             );
+                            for input_output in input_variant
+                                .data()
+                                .merge_join_by(output_variant.data(), DatumId::cmp)
+                            {
+                                match input_output {
+                                    EitherOrBoth::Both(in_d, _out_d) => {
+                                        if let Some(sub_stream) =
+                                            self.get_sub_stream(input.record_type().clone(), in_d)
+                                        {
+                                            helper.push_pass_through_sub_stream_ports(
+                                                self,
+                                                &mut port_columns,
+                                                &mut port_count,
+                                                sub_stream,
+                                                1,
+                                            );
+                                        }
+                                    }
+                                    EitherOrBoth::Left(in_d) => {
+                                        if let Some(sub_stream) =
+                                            self.get_sub_stream(input.record_type().clone(), in_d)
+                                        {
+                                            helper.push_input_sub_stream_port(
+                                                self,
+                                                &mut port_columns,
+                                                &mut port_count,
+                                                sub_stream,
+                                                1,
+                                            );
+                                        }
+                                    }
+                                    EitherOrBoth::Right(out_d) => {
+                                        if let Some(sub_stream) =
+                                            self.get_sub_stream(output.record_type().clone(), out_d)
+                                        {
+                                            helper.push_output_sub_stream_port(
+                                                self,
+                                                &mut port_columns,
+                                                &mut port_count,
+                                                sub_stream,
+                                                1,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
                         } else {
                             helper.push_input_port(
                                 &mut port_columns,
@@ -715,15 +770,46 @@ impl Graph {
                                 &(source, input.record_type(), input.variant_id()),
                                 (input.record_type(), input.variant_id()),
                             );
+
                             helper.push_output_port(
                                 &mut port_columns,
                                 &mut port_count,
                                 (node.name(), output.record_type(), output.variant_id()),
                             );
+
+                            for in_d in input_variant.data() {
+                                if let Some(sub_stream) =
+                                    self.get_sub_stream(input.record_type().clone(), in_d)
+                                {
+                                    helper.push_input_sub_stream_port(
+                                        self,
+                                        &mut port_columns,
+                                        &mut port_count,
+                                        sub_stream,
+                                        1,
+                                    );
+                                }
+                            }
+
+                            for out_d in output_variant.data() {
+                                if let Some(sub_stream) =
+                                    self.get_sub_stream(output.record_type().clone(), out_d)
+                                {
+                                    helper.push_output_sub_stream_port(
+                                        self,
+                                        &mut port_columns,
+                                        &mut port_count,
+                                        sub_stream,
+                                        1,
+                                    );
+                                }
+                            }
                         };
                     }
                     EitherOrBoth::Left(input) => {
                         let source = Self::drawing_source_node_name(input);
+                        let input_record_definition = &self.record_definitions[input.record_type()];
+                        let input_variant = &input_record_definition[input.variant_id()];
 
                         helper.push_input_port(
                             &mut port_columns,
@@ -731,13 +817,45 @@ impl Graph {
                             &(source, input.record_type(), input.variant_id()),
                             (input.record_type(), input.variant_id()),
                         );
+
+                        for in_d in input_variant.data() {
+                            if let Some(sub_stream) =
+                                self.get_sub_stream(input.record_type().clone(), in_d)
+                            {
+                                helper.push_input_sub_stream_port(
+                                    self,
+                                    &mut port_columns,
+                                    &mut port_count,
+                                    sub_stream,
+                                    1,
+                                );
+                            }
+                        }
                     }
                     EitherOrBoth::Right(output) => {
+                        let output_record_definition =
+                            &self.record_definitions[output.record_type()];
+                        let output_variant = &output_record_definition[output.variant_id()];
+
                         helper.push_output_port(
                             &mut port_columns,
                             &mut port_count,
                             (node.name(), output.record_type(), output.variant_id()),
                         );
+
+                        for out_d in output_variant.data() {
+                            if let Some(sub_stream) =
+                                self.get_sub_stream(output.record_type().clone(), out_d)
+                            {
+                                helper.push_output_sub_stream_port(
+                                    self,
+                                    &mut port_columns,
+                                    &mut port_count,
+                                    sub_stream,
+                                    1,
+                                );
+                            }
+                        }
                     }
                 }
             }
@@ -749,7 +867,7 @@ impl Graph {
     }
 
     fn records_to_abstract_drawing(&self) -> Drawing {
-        let mut helper = DrawingHelper::default();
+        let mut helper = RecordsDrawingHelper::default();
 
         let mut port_count = 0;
 
@@ -770,7 +888,7 @@ impl Graph {
                         let input_record_definition = &self.record_definitions[input.record_type()];
                         let input_variant = &input_record_definition[input.variant_id()];
                         let output_record_definition =
-                            &self.record_definitions[input.record_type()];
+                            &self.record_definitions[output.record_type()];
                         let output_variant = &output_record_definition[output.variant_id()];
                         let merge = input.record_type() == output.record_type();
 
@@ -783,84 +901,103 @@ impl Graph {
                             {
                                 match input_output {
                                     EitherOrBoth::Both(in_d, out_d) => {
-                                        let in_datum = &input_record_definition[in_d];
-                                        let out_datum = &output_record_definition[out_d];
                                         helper.push_connected_ports(
                                             &mut port_columns,
                                             &mut port_count,
-                                            &(
-                                                source,
-                                                input.record_type(),
-                                                input.variant_id(),
-                                                in_datum.name(),
-                                            ),
+                                            &(source, input.record_type(), in_d),
                                             (input.record_type(), in_d),
-                                            (
-                                                node.name(),
-                                                output.record_type(),
-                                                output.variant_id(),
-                                                out_datum.name(),
-                                            ),
+                                            (node.name(), output.record_type(), out_d),
                                         );
                                         merged.insert(in_d);
+                                        if let Some(sub_stream) =
+                                            self.get_sub_stream(input.record_type().clone(), in_d)
+                                        {
+                                            helper.push_pass_through_sub_stream_ports(
+                                                self,
+                                                &mut port_columns,
+                                                &mut port_count,
+                                                sub_stream,
+                                                1,
+                                            );
+                                        }
                                     }
                                     EitherOrBoth::Left(in_d) => {
-                                        let in_datum = &input_record_definition[in_d];
                                         helper.push_input_port(
                                             &mut port_columns,
                                             &mut port_count,
-                                            &(
-                                                source,
-                                                input.record_type(),
-                                                input.variant_id(),
-                                                in_datum.name(),
-                                            ),
+                                            &(source, input.record_type(), in_d),
                                             (input.record_type(), in_d),
                                         );
+                                        if let Some(sub_stream) =
+                                            self.get_sub_stream(input.record_type().clone(), in_d)
+                                        {
+                                            helper.push_input_sub_stream_port(
+                                                self,
+                                                &mut port_columns,
+                                                &mut port_count,
+                                                sub_stream,
+                                                1,
+                                            );
+                                        }
                                     }
                                     EitherOrBoth::Right(out_d) => {
-                                        let out_datum = &output_record_definition[out_d];
                                         helper.push_output_port(
                                             &mut port_columns,
                                             &mut port_count,
-                                            (
-                                                node.name(),
-                                                output.record_type(),
-                                                output.variant_id(),
-                                                out_datum.name(),
-                                            ),
+                                            (node.name(), output.record_type(), out_d),
                                         );
+                                        if let Some(sub_stream) =
+                                            self.get_sub_stream(output.record_type().clone(), out_d)
+                                        {
+                                            helper.push_output_sub_stream_port(
+                                                self,
+                                                &mut port_columns,
+                                                &mut port_count,
+                                                sub_stream,
+                                                1,
+                                            );
+                                        }
                                     }
                                 }
                             }
                         } else {
                             for in_d in input_variant.data() {
-                                let in_datum = &input_record_definition[in_d];
                                 helper.push_input_port(
                                     &mut port_columns,
                                     &mut port_count,
-                                    &(
-                                        source,
-                                        input.record_type(),
-                                        input.variant_id(),
-                                        in_datum.name(),
-                                    ),
+                                    &(source, input.record_type(), in_d),
                                     (input.record_type(), in_d),
                                 );
+                                if let Some(sub_stream) =
+                                    self.get_sub_stream(input.record_type().clone(), in_d)
+                                {
+                                    helper.push_input_sub_stream_port(
+                                        self,
+                                        &mut port_columns,
+                                        &mut port_count,
+                                        sub_stream,
+                                        1,
+                                    );
+                                }
                             }
 
                             for out_d in output_variant.data() {
-                                let out_datum = &output_record_definition[out_d];
                                 helper.push_output_port(
                                     &mut port_columns,
                                     &mut port_count,
-                                    (
-                                        node.name(),
-                                        output.record_type(),
-                                        output.variant_id(),
-                                        out_datum.name(),
-                                    ),
+                                    (node.name(), output.record_type(), out_d),
                                 );
+                                if let Some(sub_stream) =
+                                    self.get_sub_stream(output.record_type().clone(), out_d)
+                                {
+                                    helper.push_output_sub_stream_port(
+                                        self,
+                                        &mut port_columns,
+                                        &mut port_count,
+                                        sub_stream,
+                                        1,
+                                    );
+                                }
                             }
                         }
                     }
@@ -871,18 +1008,23 @@ impl Graph {
                         let input_variant = &input_record_definition[input.variant_id()];
 
                         for in_d in input_variant.data() {
-                            let in_datum = &input_record_definition[in_d];
                             helper.push_input_port(
                                 &mut port_columns,
                                 &mut port_count,
-                                &(
-                                    source,
-                                    input.record_type(),
-                                    input.variant_id(),
-                                    in_datum.name(),
-                                ),
+                                &(source, input.record_type(), in_d),
                                 (input.record_type(), in_d),
                             );
+                            if let Some(sub_stream) =
+                                self.get_sub_stream(input.record_type().clone(), in_d)
+                            {
+                                helper.push_input_sub_stream_port(
+                                    self,
+                                    &mut port_columns,
+                                    &mut port_count,
+                                    sub_stream,
+                                    1,
+                                );
+                            }
                         }
                     }
                     EitherOrBoth::Right(output) => {
@@ -891,17 +1033,22 @@ impl Graph {
                         let output_variant = &output_record_definition[output.variant_id()];
 
                         for out_d in output_variant.data() {
-                            let out_datum = &output_record_definition[out_d];
                             helper.push_output_port(
                                 &mut port_columns,
                                 &mut port_count,
-                                (
-                                    node.name(),
-                                    output.record_type(),
-                                    output.variant_id(),
-                                    out_datum.name(),
-                                ),
+                                (node.name(), output.record_type(), out_d),
                             );
+                            if let Some(sub_stream) =
+                                self.get_sub_stream(output.record_type().clone(), out_d)
+                            {
+                                helper.push_output_sub_stream_port(
+                                    self,
+                                    &mut port_columns,
+                                    &mut port_count,
+                                    sub_stream,
+                                    1,
+                                );
+                            }
                         }
                     }
                 }

@@ -30,10 +30,18 @@ pub struct DrawingPortsColumn {
 #[derive(Debug)]
 pub struct DrawingPort {
     pub id: usize,
+    pub size: DrawingPortSize,
     pub redundant: bool,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub enum DrawingPortSize {
+    Normal,
+    Small,
+    Dot,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub enum DrawingPortAlign {
     Top,
     Middle,
@@ -204,25 +212,38 @@ where
         "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">"
     )?;
 
-    #[derive(Debug)]
-    struct SvgPort {
-        row: usize,
-        cx: usize,
-        cy: usize,
-        redundant: bool,
-    }
-
-    let mut svg_ports = BTreeMap::<usize, SvgPort>::new();
-
     const NODE_HEIGHT_WITH_MARGINS: usize = 50;
     const NODE_HEIGHT: usize = 30;
     const LABEL_MAX_WIDTH: usize = 200;
     const BLANK_WIDTH: usize = 0;
     const PORT_RADIUS: usize = 4;
     const PORT_STROKE_WIDTH: usize = 2;
+    const SMALL_PORT_RADIUS: usize = 2;
+    const DOT_PORT_RADIUS: usize = 1;
     const PORT_X_DISTANCE: usize = 12;
     const PORT_Y_DISTANCE: usize = 12;
     const ARC_RADIUS: usize = 8;
+
+    #[derive(Debug)]
+    struct SvgPort {
+        row: usize,
+        cx: usize,
+        cy: usize,
+        size: DrawingPortSize,
+        redundant: bool,
+    }
+
+    impl SvgPort {
+        fn radius(&self) -> usize {
+            match self.size {
+                DrawingPortSize::Normal => PORT_RADIUS,
+                DrawingPortSize::Small => SMALL_PORT_RADIUS,
+                DrawingPortSize::Dot => DOT_PORT_RADIUS,
+            }
+        }
+    }
+
+    let mut svg_ports = BTreeMap::<usize, SvgPort>::new();
 
     let mut ports_count = 0;
 
@@ -264,7 +285,12 @@ where
                     }
                 };
                 let mut go_down_next = false;
-                for DrawingPort { id, redundant } in ports {
+                for DrawingPort {
+                    id,
+                    size,
+                    redundant,
+                } in ports
+                {
                     if !redundant {
                         if go_down_next {
                             top += PORT_Y_DISTANCE;
@@ -281,6 +307,7 @@ where
                                 + col * (LABEL_MAX_WIDTH + BLANK_WIDTH)
                                 + (ports_count + port_col) * PORT_X_DISTANCE,
                             cy: top,
+                            size: *size,
                             redundant: *redundant,
                         },
                     );
@@ -294,7 +321,7 @@ where
     for DrawingEdge { tail, head, color } in edges {
         let tail = &svg_ports[tail];
         let head = &svg_ports[head];
-        write!(w, "<path d=\"M{},{} ", tail.cx, tail.cy + PORT_RADIUS)?;
+        write!(w, "<path d=\"M{},{} ", tail.cx, tail.cy + tail.radius())?;
         if tail.cx != head.cx {
             let to_right = tail.cx < head.cx;
             let arc_radius = if to_right {
@@ -303,7 +330,11 @@ where
                 (tail.cx - head.cx) / 2
             }
             .min(ARC_RADIUS);
-            write!(w, "V{} ", tail.row * 50 + 25 + 25 - arc_radius)?;
+            write!(
+                w,
+                "V{} ",
+                (tail.row + head.row + 1) * NODE_HEIGHT_WITH_MARGINS / 2 - arc_radius
+            )?;
             write!(
                 w,
                 "A{},{} 0 0,{} {},{}",
@@ -315,7 +346,7 @@ where
                 } else {
                     tail.cx - arc_radius
                 },
-                (tail.row + 1) * NODE_HEIGHT_WITH_MARGINS
+                (tail.row + head.row + 1) * NODE_HEIGHT_WITH_MARGINS / 2
             )?;
             write!(
                 w,
@@ -333,10 +364,10 @@ where
                 arc_radius,
                 if to_right { 1 } else { 0 },
                 head.cx,
-                (tail.row + 1) * NODE_HEIGHT_WITH_MARGINS + arc_radius
+                (tail.row + head.row + 1) * NODE_HEIGHT_WITH_MARGINS / 2 + arc_radius
             )?;
         }
-        write!(w, "V{}", head.cy - PORT_RADIUS)?;
+        write!(w, "V{}", head.cy - head.radius())?;
         writeln!(
             w,
             "\" style=\"stroke:{};stroke-width:3;fill:none;\" />",
@@ -349,7 +380,7 @@ where
         W: std::fmt::Write,
     {
         write!(w, "<circle cx=\"{}\" cy=\"{}\" ", port.cx, port.cy)?;
-        write!(w, "r=\"{}\" ", PORT_RADIUS)?;
+        write!(w, "r=\"{}\" ", port.radius())?;
         writeln!(
             w,
             "style=\"stroke:#000000;stroke-width:{};fill:none;\" />",
