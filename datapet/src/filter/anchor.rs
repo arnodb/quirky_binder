@@ -3,7 +3,7 @@ use datapet_support::AnchorId;
 use truc::record::{definition::DatumDefinitionOverride, type_resolver::TypeResolver};
 
 #[derive(Getters)]
-pub struct Anchorize {
+pub struct Anchor {
     name: FullyQualifiedName,
     #[getset(get = "pub")]
     inputs: [NodeStream; 1],
@@ -12,7 +12,7 @@ pub struct Anchorize {
     anchor_field: String,
 }
 
-impl Anchorize {
+impl Anchor {
     fn new<R: TypeResolver + Copy>(
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
@@ -48,7 +48,7 @@ impl Anchorize {
     }
 }
 
-impl DynNode for Anchorize {
+impl DynNode for Anchor {
     fn name(&self) -> &FullyQualifiedName {
         &self.name
     }
@@ -94,11 +94,11 @@ impl DynNode for Anchorize {
     }
 }
 
-pub fn anchorize<R: TypeResolver + Copy>(
+pub fn anchor<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     anchor_field: &str,
-) -> Anchorize {
-    Anchorize::new(graph, name, inputs, anchor_field)
+) -> Anchor {
+    Anchor::new(graph, name, inputs, anchor_field)
 }

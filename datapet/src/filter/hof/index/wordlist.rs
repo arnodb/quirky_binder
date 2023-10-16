@@ -4,7 +4,7 @@ dtpt_mod_crate! {
     r#"
 use crate::{
     filter::{
-        anchor::anchorize,
+        anchor::anchor,
         fork::extract_fields::extract_fields,
         group::group,
         in_place::string::{reverse_chars, to_lowercase},
@@ -50,7 +50,7 @@ pub [] build_word_list(token_field, anchor_field, ci_anchor_field, ci_refs_field
   )
 
   ( < case_insensitive
-    - anchorize#anchorize(ci_anchor_field)
+    - anchor#anchor(ci_anchor_field)
     - build_rev_table#ci_rev(token_field, ci_anchor_field) [rev_ci_token]
     -> ci_token
   )

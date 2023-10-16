@@ -12,7 +12,7 @@ fn main() {
         r###"
 use datapet::{
     filter::{
-        anchor::anchorize, dedup::dedup, hof::index::wordlist::build_word_list, sink::sink,
+        anchor::anchor, dedup::dedup, hof::index::wordlist::build_word_list, sink::sink,
         sort::sort,
         source::function::function_source,
     },
@@ -44,7 +44,7 @@ use datapet::{
       )
     - sort#sort_token(&["token"])
     - dedup#dedup_token()
-    - anchorize#anchor("anchor")
+    - anchor#anchor("anchor")
     - build_word_list#word_list("token", "anchor", "ci_anchor", "ci_refs") [s2, s3, s4]
     - sink#sink_1(
         Some(quote! { println!("sink_1 {} (id = {:?})", record.token(), record.anchor()); })

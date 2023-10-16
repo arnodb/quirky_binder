@@ -12,12 +12,12 @@ fn main() {
 use datapet::{
     filter::{
         accumulate::accumulate,
-        anchor::anchorize, dedup::dedup, hof::index::wordlist::build_word_list, sink::sink,
         fork::{
             extract_fields::extract_fields,
             join::join,
         },
         group::group,
+        sink::sink,
         sort::sort,
         source::function::function_source,
         unwrap::unwrap,
