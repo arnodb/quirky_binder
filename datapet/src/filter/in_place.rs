@@ -21,7 +21,9 @@ impl InPlaceFilter {
         inputs: [NodeStream; 1],
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams.output_from_input(0, true, graph).pass_through();
+        streams
+            .output_from_input(0, true, graph)
+            .pass_through(|_| {});
         let outputs = streams.build();
         Self {
             name,
@@ -92,7 +94,7 @@ impl InPlaceFilter {
 
 pub mod string {
     use super::InPlaceFilter;
-    use crate::graph::{DynNode, GraphBuilder};
+    use crate::graph::{builder::GraphBuilder, node::DynNode};
     use crate::support::FullyQualifiedName;
     use crate::{chain::Chain, graph::Graph, stream::NodeStream};
     use std::ops::Deref;

@@ -1,5 +1,5 @@
 use crate::{prelude::*, support::fields_cmp};
-use truc::record::{definition::DatumDefinition, type_resolver::TypeResolver};
+use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
 pub struct Sort {
@@ -19,7 +19,11 @@ impl Sort {
         fields: &[&str],
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams.output_from_input(0, true, graph).pass_through();
+        streams
+            .output_from_input(0, true, graph)
+            .pass_through(|builder| {
+                builder.set_facts_order(fields);
+            });
         let outputs = streams.build();
         Self {
             name,
@@ -97,45 +101,25 @@ impl SubSort {
         fields: &[&str],
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        let input_stream = streams.output_from_input(0, true, graph).pass_through();
-        let (root_sub_stream, root_sub_stream_record_definition) = {
-            let field = path_fields.first().expect("first path field");
-            let datum_id = input_stream
-                .borrow()
-                .get_latest_variant_datum_definition_by_name(field)
-                .map(DatumDefinition::id);
-            if let Some(datum_id) = datum_id {
-                let sub_stream = &inputs.single().sub_streams()[&datum_id];
-                let sub_def = graph
-                    .get_stream(sub_stream.record_type())
-                    .expect("sub stream def");
-                (sub_stream.clone(), sub_def)
-            } else {
-                panic!("could not find datum `{}`", field);
-            }
-        };
-        let path_sub_stream = path_fields[1..]
-            .iter()
-            .fold(
-                (root_sub_stream, root_sub_stream_record_definition),
-                |(stream, def), field| {
-                    let datum_id = def
-                        .borrow()
-                        .get_latest_variant_datum_definition_by_name(field)
-                        .map(DatumDefinition::id);
-                    if let Some(datum_id) = datum_id {
-                        let sub_stream = &stream.sub_streams()[&datum_id];
-                        let sub_def = graph
-                            .get_stream(sub_stream.record_type())
-                            .expect("sub stream def");
-                        (sub_stream.clone(), sub_def)
-                    } else {
-                        panic!("could not find datum `{}`", field);
-                    }
-                },
-            )
-            .0;
+        let path_sub_stream =
+            streams
+                .output_from_input(0, true, graph)
+                .pass_through(|output_stream| {
+                    output_stream.pass_through_path(
+                        path_fields,
+                        |sub_input_stream, output_stream| {
+                            output_stream.pass_through_sub_stream(
+                                sub_input_stream,
+                                graph,
+                                |sub_output_stream| sub_output_stream.set_facts_order(fields),
+                            )
+                        },
+                        graph,
+                    )
+                });
+
         let outputs = streams.build();
+
         Self {
             name,
             inputs,

@@ -25,18 +25,19 @@ impl Tokenize {
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
-        {
-            let output_stream = streams.output_from_input(0, true, graph).for_update();
-            let input_variant_id = output_stream.input_variant_id();
-            let mut output_stream_def = output_stream.borrow_mut();
-            let datum = output_stream_def
-                .get_variant_datum_definition_by_name(input_variant_id, "words")
-                .unwrap_or_else(|| panic!(r#"datum "{}""#, "words"));
-            let datum_id = datum.id();
-            output_stream_def.remove_datum(datum_id);
-            output_stream_def.add_datum::<Box<str>, _>("word");
-            output_stream_def.add_datum::<char, _>("first_char");
-        }
+        streams
+            .output_from_input(0, true, graph)
+            .update(|output_stream| {
+                let input_variant_id = output_stream.input_variant_id();
+                let mut output_stream_def = output_stream.record_definition().borrow_mut();
+                let datum = output_stream_def
+                    .get_variant_datum_definition_by_name(input_variant_id, "words")
+                    .unwrap_or_else(|| panic!(r#"datum "{}""#, "words"));
+                let datum_id = datum.id();
+                output_stream_def.remove_datum(datum_id);
+                output_stream_def.add_datum::<Box<str>, _>("word");
+                output_stream_def.add_datum::<char, _>("first_char");
+            });
 
         let outputs = streams.build();
 

@@ -23,19 +23,20 @@ impl Anchor {
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
-        {
-            let output_stream = streams.output_from_input(0, true, graph).for_update();
-            let mut output_stream_def = output_stream.borrow_mut();
-            output_stream_def.add_datum_override::<AnchorId<0>, _>(
-                anchor_field,
-                DatumDefinitionOverride {
-                    type_name: Some(format!("datapet_support::AnchorId<{}>", anchor_table_id)),
-                    size: None,
-                    align: None,
-                    allow_uninit: Some(true),
-                },
-            );
-        }
+        streams
+            .output_from_input(0, true, graph)
+            .update(|output_stream| {
+                let mut output_stream_def = output_stream.record_definition().borrow_mut();
+                output_stream_def.add_datum_override::<AnchorId<0>, _>(
+                    anchor_field,
+                    DatumDefinitionOverride {
+                        type_name: Some(format!("datapet_support::AnchorId<{}>", anchor_table_id)),
+                        size: None,
+                        align: None,
+                        allow_uninit: Some(true),
+                    },
+                );
+            });
 
         let outputs = streams.build();
 

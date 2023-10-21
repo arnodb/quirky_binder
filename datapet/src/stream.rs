@@ -44,6 +44,9 @@ pub struct NodeStream {
     /// Whether or not the stream is the source main stream.
     #[getset(get_copy = "pub")]
     is_source_main_stream: bool,
+    /// The facts (order and distinct) of the stream.
+    #[getset(get = "pub")]
+    facts: StreamFacts,
 }
 
 impl NodeStream {
@@ -105,6 +108,9 @@ pub struct NodeSubStream {
     /// The sub-streams indexed by datum ID.
     #[getset(get = "pub", get_mut = "pub")]
     sub_streams: BTreeMap<DatumId, NodeSubStream>,
+    /// The facts (order and distinct) of the sub-stream.
+    #[getset(get = "pub")]
+    facts: StreamFacts,
 }
 
 impl NodeSubStream {
@@ -114,8 +120,14 @@ impl NodeSubStream {
         StreamRecordType,
         RecordVariantId,
         BTreeMap<DatumId, NodeSubStream>,
+        StreamFacts,
     ) {
-        (self.record_type, self.variant_id, self.sub_streams)
+        (
+            self.record_type,
+            self.variant_id,
+            self.sub_streams,
+            self.facts,
+        )
     }
 
     pub fn definition_fragments<'a>(
@@ -168,4 +180,10 @@ impl<'a> RecordDefinitionFragments<'a> {
         ))
         .expect("record_and_unpacked_out")
     }
+}
+
+#[derive(Clone, Default, Getters, Setters, Debug)]
+pub struct StreamFacts {
+    #[getset(get = "pub", set = "pub")]
+    order: Box<[DatumId]>,
 }

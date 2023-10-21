@@ -22,40 +22,44 @@ impl Unwrap {
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
-        {
-            let output_stream = streams.output_from_input(0, true, graph).for_update();
-            let input_variant_id = output_stream.input_variant_id();
-            let mut output_stream_def = output_stream.borrow_mut();
-            for &field in fields {
-                let datum = output_stream_def
-                    .get_variant_datum_definition_by_name(input_variant_id, field)
-                    .unwrap_or_else(|| panic!(r#"datum "{}""#, field));
-                let datum_id = datum.id();
-                let optional_type_name = datum.type_name().to_string();
-                let type_name = {
-                    let s = optional_type_name.trim();
-                    let t = s.strip_prefix("Option").and_then(|t| {
-                        let t = t.trim();
-                        if t.starts_with('<') && t.ends_with('>') {
-                            Some(&t[1..t.len() - 1])
-                        } else {
-                            None
+        streams
+            .output_from_input(0, true, graph)
+            .update(|output_stream| {
+                let input_variant_id = output_stream.input_variant_id();
+                let mut output_stream_def = output_stream.record_definition().borrow_mut();
+                for &field in fields {
+                    let datum = output_stream_def
+                        .get_variant_datum_definition_by_name(input_variant_id, field)
+                        .unwrap_or_else(|| panic!(r#"datum "{}""#, field));
+                    let datum_id = datum.id();
+                    let optional_type_name = datum.type_name().to_string();
+                    let type_name = {
+                        let s = optional_type_name.trim();
+                        let t = s.strip_prefix("Option").and_then(|t| {
+                            let t = t.trim();
+                            if t.starts_with('<') && t.ends_with('>') {
+                                Some(&t[1..t.len() - 1])
+                            } else {
+                                None
+                            }
+                        });
+                        match t {
+                            Some(t) => t,
+                            None => {
+                                panic!(
+                                    "field `{}` is not an option: {}",
+                                    field, optional_type_name
+                                );
+                            }
                         }
-                    });
-                    match t {
-                        Some(t) => t,
-                        None => {
-                            panic!("field `{}` is not an option: {}", field, optional_type_name);
-                        }
-                    }
-                };
-                // TODO Make truc support Option<T> replacement with T where the T value is stored
-                // at the same offset so that records may remain identical, the enum discriminant
-                // becoming a void space.
-                output_stream_def.remove_datum(datum_id);
-                output_stream_def.add_dynamic_datum(field, type_name);
-            }
-        }
+                    };
+                    // TODO Make truc support Option<T> replacement with T where the T value is stored
+                    // at the same offset so that records may remain identical, the enum discriminant
+                    // becoming a void space.
+                    output_stream_def.remove_datum(datum_id);
+                    output_stream_def.add_dynamic_datum(field, type_name);
+                }
+            });
 
         let outputs = streams.build();
 

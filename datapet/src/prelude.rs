@@ -1,9 +1,14 @@
 pub use crate::{
     chain::{Chain, ChainCustomizer, ImportScope},
-    graph::{DynNode, Graph, GraphBuilder, NodeCluster, PathUpdateElement, StreamsBuilder},
+    graph::{
+        builder::StreamsBuilder,
+        builder::{update::PathUpdateElement, GraphBuilder},
+        node::{DynNode, NodeCluster},
+        Graph,
+    },
     stream::{
         NodeStream, NodeStreamSource, NodeSubStream, NoneNodeStream, RecordDefinitionFragments,
-        SingleNodeStream, StreamRecordType,
+        SingleNodeStream, StreamFacts, StreamRecordType,
     },
     support::FullyQualifiedName,
 };
