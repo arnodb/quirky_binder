@@ -5,6 +5,7 @@ use crate::{
         Drawing, DrawingPortsColumn,
     },
     prelude::*,
+    stream::NodeSubStream,
 };
 use codegen::Scope;
 use itertools::{EitherOrBoth, Itertools};
@@ -88,8 +89,6 @@ pub struct GraphBuilder<R: TypeResolver + Copy> {
     #[new(default)]
     record_definitions: BTreeMap<StreamRecordType, RefCell<RecordDefinitionBuilder<R>>>,
     #[new(default)]
-    sub_streams: BTreeMap<(StreamRecordType, DatumId), NodeStream>,
-    #[new(default)]
     anchor_table_count: usize,
 }
 
@@ -119,14 +118,6 @@ impl<R: TypeResolver + Copy> GraphBuilder<R> {
         self.record_definitions.get(record_type)
     }
 
-    pub fn get_sub_stream(
-        &self,
-        record_type: StreamRecordType,
-        datum_id: DatumId,
-    ) -> Option<&NodeStream> {
-        self.sub_streams.get(&(record_type, datum_id))
-    }
-
     pub fn build(self, entry_nodes: Vec<Box<dyn DynNode>>) -> Graph {
         Graph {
             chain_customizer: self.chain_customizer,
@@ -136,7 +127,6 @@ impl<R: TypeResolver + Copy> GraphBuilder<R> {
                 .map(|(name, builder)| (name, builder.into_inner().build()))
                 .collect(),
             entry_nodes,
-            sub_streams: self.sub_streams,
         }
     }
 
@@ -150,7 +140,6 @@ pub struct StreamsBuilder<'a> {
     inputs: &'a [NodeStream],
     outputs: Vec<NodeStream>,
     in_out_links: Vec<Option<usize>>,
-    sub_streams: Vec<((StreamRecordType, DatumId), NodeStream)>,
 }
 
 impl<'a> StreamsBuilder<'a> {
@@ -164,7 +153,6 @@ impl<'a> StreamsBuilder<'a> {
             inputs,
             outputs: Vec::new(),
             in_out_links,
-            sub_streams: Vec::new(),
         }
     }
 
@@ -216,6 +204,7 @@ impl<'a> StreamsBuilder<'a> {
             record_type,
             record_definition,
             input_variant_id: None,
+            input_sub_streams: BTreeMap::new(),
             source: full_name.into(),
             is_output_main_stream,
         }
@@ -245,20 +234,13 @@ impl<'a> StreamsBuilder<'a> {
             record_type: input.record_type().clone(),
             record_definition,
             input_variant_id: Some(input.variant_id()),
+            input_sub_streams: input.sub_streams().clone(),
             source,
             is_output_main_stream,
         }
     }
 
-    pub fn build<R: TypeResolver + Copy, const OUT: usize>(
-        self,
-        graph: &mut GraphBuilder<R>,
-    ) -> [NodeStream; OUT] {
-        let old_size = graph.sub_streams.len();
-        let added_size = self.sub_streams.len();
-        graph.sub_streams.extend(self.sub_streams);
-        let new_size = graph.sub_streams.len();
-        assert_eq!(new_size, old_size + added_size);
+    pub fn build<const OUT: usize>(self) -> [NodeStream; OUT] {
         self.outputs.try_into().unwrap_or_else(|v: Vec<_>| {
             panic!("Expected a Vec of length {} but it was {}", OUT, v.len())
         })
@@ -273,6 +255,7 @@ pub struct OutputBuilder<'a, 'b, 'g, R: TypeResolver> {
     record_type: StreamRecordType,
     record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
     input_variant_id: Option<RecordVariantId>,
+    input_sub_streams: BTreeMap<DatumId, NodeSubStream>,
     source: NodeStreamSource,
     is_output_main_stream: bool,
 }
@@ -284,9 +267,9 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
             record_type: self.record_type,
             record_definition: self.record_definition,
             input_variant_id: self.input_variant_id,
+            sub_streams: self.input_sub_streams,
             source: self.source,
             is_output_main_stream: self.is_output_main_stream,
-            sub_streams: Vec::new(),
         }
     }
 
@@ -295,6 +278,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
             self.streams.outputs.push(NodeStream::new(
                 self.record_type,
                 input_variant_id,
+                self.input_sub_streams,
                 self.source,
                 self.is_output_main_stream,
             ));
@@ -312,9 +296,9 @@ pub struct OutputBuilderForUpdate<'a, 'b, 'g, R: TypeResolver + Copy> {
     record_type: StreamRecordType,
     record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
     input_variant_id: Option<RecordVariantId>,
+    sub_streams: BTreeMap<DatumId, NodeSubStream>,
     source: NodeStreamSource,
     is_output_main_stream: bool,
-    sub_streams: Vec<((StreamRecordType, DatumId), NodeStream)>,
 }
 
 impl<'a, 'b, 'g, R: TypeResolver + Copy> Deref for OutputBuilderForUpdate<'a, 'b, 'g, R> {
@@ -353,27 +337,24 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
             record_type,
             record_definition,
             input_variant_id: None,
-            source: Default::default(),
-            is_output_main_stream: self.is_output_main_stream,
-            sub_streams: Vec::new(),
+            sub_streams: BTreeMap::new(),
         }
     }
 
     pub fn sub_stream_for_update(
         &mut self,
-        sub_stream: &NodeStream,
+        sub_stream: NodeSubStream,
         graph: &'g GraphBuilder<R>,
     ) -> SubStreamBuilder<'g, R> {
         let record_definition = graph
             .get_stream(sub_stream.record_type())
             .unwrap_or_else(|| panic!(r#"stream "{}""#, sub_stream.record_type()));
+        let (record_type, variant_id, sub_streams) = sub_stream.destructure();
         SubStreamBuilder {
-            record_type: sub_stream.record_type().clone(),
+            record_type,
             record_definition,
-            input_variant_id: Some(sub_stream.variant_id()),
-            source: Default::default(),
-            is_output_main_stream: self.is_output_main_stream,
-            sub_streams: Vec::new(),
+            input_variant_id: Some(variant_id),
+            sub_streams,
         }
     }
 
@@ -387,46 +368,63 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
     ) -> Vec<PathUpdateElement>
     where
         UpdateLeafSubStream: for<'c, 'd> FnOnce(
-            &NodeStream,
+            NodeSubStream,
             &mut OutputBuilderForUpdate<'c, 'd, 'g, R>,
-        ) -> NodeStream,
-        UpdatePathStream: Fn(&str, &mut SubStreamBuilder<'g, R>, &NodeStream),
+        ) -> NodeSubStream,
+        UpdatePathStream: Fn(&str, &mut SubStreamBuilder<'g, R>, NodeSubStream),
         UpdateRootStream:
-            for<'c, 'd> FnOnce(&str, &mut OutputBuilderForUpdate<'c, 'd, 'g, R>, &NodeStream),
+            for<'c, 'd> FnOnce(&str, &mut OutputBuilderForUpdate<'c, 'd, 'g, R>, NodeSubStream),
     {
         struct PathFieldDetails<'a> {
-            stream: &'a NodeStream,
+            stream: NodeSubStream,
             field: &'a str,
-            sub_stream: &'a NodeStream,
+            datum_id: DatumId,
         }
 
-        let input = NodeStream::new(
-            self.record_type.clone(),
-            self.input_variant_id(),
-            self.source.clone(),
-            self.is_output_main_stream,
-        );
+        // Find the sub stream of the first path field
+        let (root_field, root_datum_id, root_sub_stream, root_sub_stream_record_definition) = {
+            let field = path_fields.first().expect("first path field");
+            let datum_id = self
+                .record_definition
+                .borrow()
+                .get_latest_variant_datum_definition_by_name(field)
+                .map(DatumDefinition::id);
+            if let Some(datum_id) = datum_id {
+                let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
+                let sub_record_definition = graph
+                    .get_stream(sub_stream.record_type())
+                    .unwrap_or_else(|| panic!(r#"stream "{}""#, sub_stream.record_type()));
+                (*field, datum_id, sub_stream, sub_record_definition)
+            } else {
+                panic!("could not find datum `{}`", field);
+            }
+        };
 
         // Then find path input streams
-        let (mut path_details, leaf_sub_input_stream, _) = path_fields.iter().fold(
-            (Vec::new(), &input, &**self),
-            |(mut path_data, stream, record_definition), field| {
+        let (mut path_details, leaf_sub_input_stream, _) = path_fields[1..].iter().fold(
+            (
+                Vec::new(),
+                root_sub_stream,
+                root_sub_stream_record_definition,
+            ),
+            |(mut path_data, mut stream, record_definition), field| {
                 let datum_id = record_definition
                     .borrow()
                     .get_latest_variant_datum_definition_by_name(field)
                     .map(DatumDefinition::id);
                 if let Some(datum_id) = datum_id {
-                    let sub_stream = graph
-                        .get_sub_stream(stream.record_type().clone(), datum_id)
+                    let sub_stream = stream
+                        .sub_streams_mut()
+                        .remove(&datum_id)
                         .expect("sub stream");
-                    path_data.push(PathFieldDetails {
-                        stream,
-                        field,
-                        sub_stream,
-                    });
                     let sub_record_definition = graph
                         .get_stream(sub_stream.record_type())
                         .unwrap_or_else(|| panic!(r#"stream "{}""#, sub_stream.record_type()));
+                    path_data.push(PathFieldDetails {
+                        stream,
+                        field,
+                        datum_id,
+                    });
                     (path_data, sub_stream, sub_record_definition)
                 } else {
                     panic!("could not find datum `{}`", field);
@@ -435,34 +433,48 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
         );
 
         // Then update the leaf sub stream
-        let mut sub_output_stream = update_leaf_sub_stream(leaf_sub_input_stream, self);
+        let mut sub_input_stream = Some(leaf_sub_input_stream.clone());
+        let mut sub_output_stream = Some(update_leaf_sub_stream(leaf_sub_input_stream, self));
 
         // Then all streams up to the root
         let mut path_update_streams = Vec::<PathUpdateElement>::with_capacity(path_fields.len());
 
-        while path_details.len() > 1 {
-            if let Some(field_details) = path_details.pop() {
+        while !path_details.is_empty() {
+            let sub_stream = sub_output_stream.take().expect("sub_output_stream");
+            if let Some(mut field_details) = path_details.pop() {
+                let old = field_details
+                    .stream
+                    .sub_streams_mut()
+                    .insert(field_details.datum_id, sub_stream.clone());
+                if old.is_some() {
+                    panic!("sub stream should have been removed");
+                }
                 path_update_streams.push(PathUpdateElement {
                     field: field_details.field.to_owned(),
-                    sub_input_stream: field_details.sub_stream.clone(),
-                    sub_output_stream: sub_output_stream.clone(),
+                    sub_input_stream: sub_input_stream.take().expect("sub_input_stream"),
+                    sub_output_stream: sub_stream.clone(),
                 });
-                let mut path_stream = self.sub_stream_for_update(field_details.stream, graph);
-                update_path_stream(field_details.field, &mut path_stream, &sub_output_stream);
-                sub_output_stream = self.close_sub_stream_variant(path_stream);
+                let mut path_stream =
+                    self.sub_stream_for_update(field_details.stream.clone(), graph);
+                update_path_stream(field_details.field, &mut path_stream, sub_stream);
+                sub_input_stream = Some(field_details.stream);
+                sub_output_stream = Some(path_stream.close_record_variant());
             }
         }
 
-        if let Some(field_details) = path_details.pop() {
+        {
+            let sub_stream = sub_output_stream.take().expect("sub_output_stream");
+            let old = self.sub_streams.insert(root_datum_id, sub_stream.clone());
+            if old.is_some() {
+                panic!("sub stream should have been removed");
+            }
             path_update_streams.push(PathUpdateElement {
-                field: field_details.field.to_owned(),
-                sub_input_stream: field_details.sub_stream.clone(),
-                sub_output_stream: sub_output_stream.clone(),
+                field: root_field.to_owned(),
+                sub_input_stream: sub_input_stream.take().expect("sub_input_stream"),
+                sub_output_stream: sub_stream.clone(),
             });
-            assert_eq!(field_details.stream.record_type(), input.record_type());
-
-            update_root_stream(field_details.field, self, &sub_output_stream);
-        };
+            update_root_stream(root_field, self, sub_stream);
+        }
 
         assert_eq!(path_details.len(), 0);
 
@@ -472,50 +484,54 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
         path_update_streams
     }
 
-    pub fn add_vec_datum(&mut self, field: &str, record: &str, sub_stream: NodeStream) {
+    pub fn add_vec_datum(&mut self, field: &str, record: &str, sub_stream: NodeSubStream) {
         let datum_id = add_vec_datum_to_record_definition(
             &mut self.record_definition.borrow_mut(),
             field,
             record,
         );
-        self.sub_streams
-            .push(((self.record_type.clone(), datum_id), sub_stream));
+        let old = self.sub_streams.insert(datum_id, sub_stream);
+        if old.is_some() {
+            panic!("the datum should not be registered yet");
+        }
     }
 
-    pub fn replace_vec_datum(&mut self, field: &str, record: &str, sub_stream: NodeStream) {
-        let datum_id = replace_vec_datum_in_record_definition(
+    pub fn replace_vec_datum(&mut self, field: &str, record: &str, sub_stream: NodeSubStream) {
+        let (old_datum_id, new_datum_id) = replace_vec_datum_in_record_definition(
             &mut self.record_definition.borrow_mut(),
             field,
             record,
         );
-        self.sub_streams
-            .push(((self.record_type.clone(), datum_id), sub_stream));
-    }
-
-    pub fn close_sub_stream_variant(&mut self, sub_stream: SubStreamBuilder<'g, R>) -> NodeStream {
-        sub_stream.close_record_variant(self.streams)
+        let old = self.sub_streams.remove(&old_datum_id);
+        if old.is_none() {
+            panic!("the replaced datum should be registered");
+        }
+        let old = self.sub_streams.insert(new_datum_id, sub_stream);
+        if old.is_some() {
+            panic!("the datum should not be registered yet");
+        }
     }
 }
 
 impl<'a, 'b, 'g, R: TypeResolver + Copy> Drop for OutputBuilderForUpdate<'a, 'b, 'g, R> {
     fn drop(&mut self) {
         let variant_id = self.record_definition.borrow_mut().close_record_variant();
+        let mut sub_streams = BTreeMap::new();
+        std::mem::swap(&mut sub_streams, &mut self.sub_streams);
         self.streams.outputs.push(NodeStream::new(
             self.record_type.clone(),
             variant_id,
+            sub_streams,
             self.source.clone(),
             self.is_output_main_stream,
         ));
-        let mut sub_streams = Vec::new();
-        std::mem::swap(&mut sub_streams, &mut self.sub_streams);
-        self.streams.sub_streams.extend(sub_streams);
     }
 }
 
 pub struct PathUpdateElement {
     pub field: String,
-    pub sub_input_stream: NodeStream,
-    pub sub_output_stream: NodeStream,
+    pub sub_input_stream: NodeSubStream,
+    pub sub_output_stream: NodeSubStream,
 }
 
 #[derive(Getters)]
@@ -524,9 +540,7 @@ pub struct SubStreamBuilder<'g, R: TypeResolver> {
     record_type: StreamRecordType,
     record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
     input_variant_id: Option<RecordVariantId>,
-    source: NodeStreamSource,
-    is_output_main_stream: bool,
-    sub_streams: Vec<((StreamRecordType, DatumId), NodeStream)>,
+    sub_streams: BTreeMap<DatumId, NodeSubStream>,
 }
 
 impl<'g, R: TypeResolver> SubStreamBuilder<'g, R> {
@@ -538,35 +552,37 @@ impl<'g, R: TypeResolver> SubStreamBuilder<'g, R> {
         }
     }
 
-    pub fn add_vec_datum(&mut self, field: &str, record: &str, sub_stream: NodeStream) {
+    pub fn add_vec_datum(&mut self, field: &str, record: &str, sub_stream: NodeSubStream) {
         let datum_id = add_vec_datum_to_record_definition(
             &mut self.record_definition.borrow_mut(),
             field,
             record,
         );
-        self.sub_streams
-            .push(((self.record_type.clone(), datum_id), sub_stream));
+        let old = self.sub_streams.insert(datum_id, sub_stream);
+        if old.is_some() {
+            panic!("the datum should not be registered yet");
+        }
     }
 
-    pub fn replace_vec_datum(&mut self, field: &str, record: &str, sub_stream: NodeStream) {
-        let datum_id = replace_vec_datum_in_record_definition(
+    pub fn replace_vec_datum(&mut self, field: &str, record: &str, sub_stream: NodeSubStream) {
+        let (old_datum_id, new_datum_id) = replace_vec_datum_in_record_definition(
             &mut self.record_definition.borrow_mut(),
             field,
             record,
         );
-        self.sub_streams
-            .push(((self.record_type.clone(), datum_id), sub_stream));
+        let old = self.sub_streams.remove(&old_datum_id);
+        if old.is_none() {
+            panic!("the replaced datum should be registered");
+        }
+        let old = self.sub_streams.insert(new_datum_id, sub_stream);
+        if old.is_some() {
+            panic!("the datum should not be registered yet");
+        }
     }
 
-    fn close_record_variant(self, streams: &mut StreamsBuilder) -> NodeStream {
+    pub fn close_record_variant(self) -> NodeSubStream {
         let variant_id = self.record_definition.borrow_mut().close_record_variant();
-        streams.sub_streams.extend(self.sub_streams);
-        NodeStream::new(
-            self.record_type,
-            variant_id,
-            self.source,
-            self.is_output_main_stream,
-        )
+        NodeSubStream::new(self.record_type, variant_id, self.sub_streams)
     }
 }
 
@@ -598,20 +614,23 @@ fn replace_vec_datum_in_record_definition<R: TypeResolver>(
     record_definition: &mut RecordDefinitionBuilder<R>,
     field: &str,
     record: &str,
-) -> DatumId {
+) -> (DatumId, DatumId) {
     let old_datum = record_definition
         .get_latest_variant_datum_definition_by_name(field)
         .unwrap_or_else(|| panic!(r#"datum "{}""#, field));
     let old_datum_id = old_datum.id();
     record_definition.remove_datum(old_datum_id);
-    record_definition.add_datum_override::<Vec<()>, _>(
-        field,
-        DatumDefinitionOverride {
-            type_name: Some(format!("Vec<{}>", record)),
-            size: None,
-            align: None,
-            allow_uninit: None,
-        },
+    (
+        old_datum_id,
+        record_definition.add_datum_override::<Vec<()>, _>(
+            field,
+            DatumDefinitionOverride {
+                type_name: Some(format!("Vec<{}>", record)),
+                size: None,
+                align: None,
+                allow_uninit: None,
+            },
+        ),
     )
 }
 
@@ -619,7 +638,6 @@ pub struct Graph {
     chain_customizer: ChainCustomizer,
     record_definitions: BTreeMap<StreamRecordType, RecordDefinition>,
     entry_nodes: Vec<Box<dyn DynNode>>,
-    sub_streams: BTreeMap<(StreamRecordType, DatumId), NodeStream>,
 }
 
 impl Graph {
@@ -629,14 +647,6 @@ impl Graph {
 
     pub fn record_definitions(&self) -> &BTreeMap<StreamRecordType, RecordDefinition> {
         &self.record_definitions
-    }
-
-    pub fn get_sub_stream(
-        &self,
-        record_type: StreamRecordType,
-        datum_id: DatumId,
-    ) -> Option<&NodeStream> {
-        self.sub_streams.get(&(record_type, datum_id))
     }
 
     pub fn generate(&self, output: &Path) -> Result<(), std::io::Error> {
@@ -720,9 +730,7 @@ impl Graph {
                             {
                                 match input_output {
                                     EitherOrBoth::Both(in_d, _out_d) => {
-                                        if let Some(sub_stream) =
-                                            self.get_sub_stream(input.record_type().clone(), in_d)
-                                        {
+                                        if let Some(sub_stream) = input.sub_streams().get(&in_d) {
                                             helper.push_pass_through_sub_stream_ports(
                                                 self,
                                                 &mut port_columns,
@@ -733,9 +741,7 @@ impl Graph {
                                         }
                                     }
                                     EitherOrBoth::Left(in_d) => {
-                                        if let Some(sub_stream) =
-                                            self.get_sub_stream(input.record_type().clone(), in_d)
-                                        {
+                                        if let Some(sub_stream) = input.sub_streams().get(&in_d) {
                                             helper.push_input_sub_stream_port(
                                                 self,
                                                 &mut port_columns,
@@ -746,9 +752,7 @@ impl Graph {
                                         }
                                     }
                                     EitherOrBoth::Right(out_d) => {
-                                        if let Some(sub_stream) =
-                                            self.get_sub_stream(output.record_type().clone(), out_d)
-                                        {
+                                        if let Some(sub_stream) = output.sub_streams().get(&out_d) {
                                             helper.push_output_sub_stream_port(
                                                 self,
                                                 &mut port_columns,
@@ -775,9 +779,7 @@ impl Graph {
                             );
 
                             for in_d in input_variant.data() {
-                                if let Some(sub_stream) =
-                                    self.get_sub_stream(input.record_type().clone(), in_d)
-                                {
+                                if let Some(sub_stream) = input.sub_streams().get(&in_d) {
                                     helper.push_input_sub_stream_port(
                                         self,
                                         &mut port_columns,
@@ -789,9 +791,7 @@ impl Graph {
                             }
 
                             for out_d in output_variant.data() {
-                                if let Some(sub_stream) =
-                                    self.get_sub_stream(output.record_type().clone(), out_d)
-                                {
+                                if let Some(sub_stream) = output.sub_streams().get(&out_d) {
                                     helper.push_output_sub_stream_port(
                                         self,
                                         &mut port_columns,
@@ -816,9 +816,7 @@ impl Graph {
                         );
 
                         for in_d in input_variant.data() {
-                            if let Some(sub_stream) =
-                                self.get_sub_stream(input.record_type().clone(), in_d)
-                            {
+                            if let Some(sub_stream) = input.sub_streams().get(&in_d) {
                                 helper.push_input_sub_stream_port(
                                     self,
                                     &mut port_columns,
@@ -841,9 +839,7 @@ impl Graph {
                         );
 
                         for out_d in output_variant.data() {
-                            if let Some(sub_stream) =
-                                self.get_sub_stream(output.record_type().clone(), out_d)
-                            {
+                            if let Some(sub_stream) = output.sub_streams().get(&out_d) {
                                 helper.push_output_sub_stream_port(
                                     self,
                                     &mut port_columns,
@@ -906,9 +902,7 @@ impl Graph {
                                             (node.name(), output.record_type(), out_d),
                                         );
                                         merged.insert(in_d);
-                                        if let Some(sub_stream) =
-                                            self.get_sub_stream(input.record_type().clone(), in_d)
-                                        {
+                                        if let Some(sub_stream) = input.sub_streams().get(&in_d) {
                                             helper.push_pass_through_sub_stream_ports(
                                                 self,
                                                 &mut port_columns,
@@ -925,9 +919,7 @@ impl Graph {
                                             &(source, input.record_type(), in_d),
                                             (input.record_type(), in_d),
                                         );
-                                        if let Some(sub_stream) =
-                                            self.get_sub_stream(input.record_type().clone(), in_d)
-                                        {
+                                        if let Some(sub_stream) = input.sub_streams().get(&in_d) {
                                             helper.push_input_sub_stream_port(
                                                 self,
                                                 &mut port_columns,
@@ -943,9 +935,7 @@ impl Graph {
                                             &mut port_count,
                                             (node.name(), output.record_type(), out_d),
                                         );
-                                        if let Some(sub_stream) =
-                                            self.get_sub_stream(output.record_type().clone(), out_d)
-                                        {
+                                        if let Some(sub_stream) = output.sub_streams().get(&out_d) {
                                             helper.push_output_sub_stream_port(
                                                 self,
                                                 &mut port_columns,
@@ -965,9 +955,7 @@ impl Graph {
                                     &(source, input.record_type(), in_d),
                                     (input.record_type(), in_d),
                                 );
-                                if let Some(sub_stream) =
-                                    self.get_sub_stream(input.record_type().clone(), in_d)
-                                {
+                                if let Some(sub_stream) = input.sub_streams().get(&in_d) {
                                     helper.push_input_sub_stream_port(
                                         self,
                                         &mut port_columns,
@@ -984,9 +972,7 @@ impl Graph {
                                     &mut port_count,
                                     (node.name(), output.record_type(), out_d),
                                 );
-                                if let Some(sub_stream) =
-                                    self.get_sub_stream(output.record_type().clone(), out_d)
-                                {
+                                if let Some(sub_stream) = output.sub_streams().get(&out_d) {
                                     helper.push_output_sub_stream_port(
                                         self,
                                         &mut port_columns,
@@ -1011,9 +997,7 @@ impl Graph {
                                 &(source, input.record_type(), in_d),
                                 (input.record_type(), in_d),
                             );
-                            if let Some(sub_stream) =
-                                self.get_sub_stream(input.record_type().clone(), in_d)
-                            {
+                            if let Some(sub_stream) = input.sub_streams().get(&in_d) {
                                 helper.push_input_sub_stream_port(
                                     self,
                                     &mut port_columns,
@@ -1035,9 +1019,7 @@ impl Graph {
                                 &mut port_count,
                                 (node.name(), output.record_type(), out_d),
                             );
-                            if let Some(sub_stream) =
-                                self.get_sub_stream(output.record_type().clone(), out_d)
-                            {
+                            if let Some(sub_stream) = output.sub_streams().get(&out_d) {
                                 helper.push_output_sub_stream_port(
                                     self,
                                     &mut port_columns,

@@ -1,8 +1,4 @@
-use crate::{
-    prelude::DynNode,
-    stream::{NodeStream, NodeStreamSource, RecordDefinitionFragments},
-    support::FullyQualifiedName,
-};
+use crate::prelude::*;
 use codegen::{Module, Scope};
 use itertools::Itertools;
 use proc_macro2::TokenStream;
@@ -70,6 +66,13 @@ impl<'a> Chain<'a> {
     pub fn stream_definition_fragments(
         &self,
         stream: &'a NodeStream,
+    ) -> RecordDefinitionFragments<'a> {
+        stream.definition_fragments(&self.customizer.streams_module_name)
+    }
+
+    pub fn sub_stream_definition_fragments(
+        &self,
+        stream: &'a NodeSubStream,
     ) -> RecordDefinitionFragments<'a> {
         stream.definition_fragments(&self.customizer.streams_module_name)
     }

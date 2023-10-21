@@ -20,7 +20,7 @@ impl Sort {
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.output_from_input(0, true, graph).pass_through();
-        let outputs = streams.build(graph);
+        let outputs = streams.build();
         Self {
             name,
             inputs,
@@ -84,7 +84,7 @@ pub struct SubSort {
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     path_fields: Vec<String>,
-    path_sub_stream: NodeStream,
+    path_sub_stream: NodeSubStream,
     fields: Vec<String>,
 }
 
@@ -98,19 +98,33 @@ impl SubSort {
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         let input_stream = streams.output_from_input(0, true, graph).pass_through();
-        let path_sub_stream = path_fields
+        let (root_sub_stream, root_sub_stream_record_definition) = {
+            let field = path_fields.first().expect("first path field");
+            let datum_id = input_stream
+                .borrow()
+                .get_latest_variant_datum_definition_by_name(field)
+                .map(DatumDefinition::id);
+            if let Some(datum_id) = datum_id {
+                let sub_stream = &inputs.single().sub_streams()[&datum_id];
+                let sub_def = graph
+                    .get_stream(sub_stream.record_type())
+                    .expect("sub stream def");
+                (sub_stream.clone(), sub_def)
+            } else {
+                panic!("could not find datum `{}`", field);
+            }
+        };
+        let path_sub_stream = path_fields[1..]
             .iter()
             .fold(
-                (inputs.single().clone(), input_stream),
+                (root_sub_stream, root_sub_stream_record_definition),
                 |(stream, def), field| {
                     let datum_id = def
                         .borrow()
                         .get_latest_variant_datum_definition_by_name(field)
                         .map(DatumDefinition::id);
                     if let Some(datum_id) = datum_id {
-                        let sub_stream = graph
-                            .get_sub_stream(stream.record_type().clone(), datum_id)
-                            .expect("sub stream");
+                        let sub_stream = &stream.sub_streams()[&datum_id];
                         let sub_def = graph
                             .get_stream(sub_stream.record_type())
                             .expect("sub stream def");
@@ -121,7 +135,7 @@ impl SubSort {
                 },
             )
             .0;
-        let outputs = streams.build(graph);
+        let outputs = streams.build();
         Self {
             name,
             inputs,
@@ -154,7 +168,7 @@ impl DynNode for SubSort {
             .stream_definition_fragments(self.inputs.single())
             .record();
         let sub_record = chain
-            .stream_definition_fragments(&self.path_sub_stream)
+            .sub_stream_definition_fragments(&self.path_sub_stream)
             .record();
 
         let flat_map = self.path_fields.iter().rev().fold(None, |tail, field| {

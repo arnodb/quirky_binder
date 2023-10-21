@@ -1,6 +1,6 @@
 use crate::prelude::*;
-use std::ops::Deref;
-use truc::record::definition::RecordVariantId;
+use std::{collections::BTreeMap, ops::Deref};
+use truc::record::definition::{DatumId, RecordVariantId};
 
 /// Defines the type of records going through a given stream.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Default, Display, Debug, From)]
@@ -27,7 +27,7 @@ impl Deref for NodeStreamSource {
 }
 
 /// Node stream information
-#[derive(Clone, Debug, new, Getters, CopyGetters, MutGetters)]
+#[derive(Clone, Debug, new, Getters, CopyGetters)]
 pub struct NodeStream {
     /// The type of the records going through the entire stream.
     #[getset(get = "pub")]
@@ -35,6 +35,9 @@ pub struct NodeStream {
     /// The record variant for a specific node.
     #[getset(get_copy = "pub")]
     variant_id: RecordVariantId,
+    /// The sub-streams indexed by datum ID.
+    #[getset(get = "pub")]
+    sub_streams: BTreeMap<DatumId, NodeSubStream>,
     /// The source to connect to in order to read records from it.
     #[getset(get = "pub")]
     source: NodeStreamSource,
@@ -57,7 +60,8 @@ impl NodeStream {
         module_prefix: &'a FullyQualifiedName,
     ) -> RecordDefinitionFragments<'a> {
         RecordDefinitionFragments {
-            stream: self,
+            record_type: &self.record_type,
+            variant_id: self.variant_id,
             module_prefix,
         }
     }
@@ -89,8 +93,46 @@ impl SingleNodeStream for [NodeStream; 1] {
     }
 }
 
+/// Node sub stream information
+#[derive(Clone, Debug, new, Getters, CopyGetters, MutGetters)]
+pub struct NodeSubStream {
+    /// The type of the records going through the entire stream.
+    #[getset(get = "pub")]
+    record_type: StreamRecordType,
+    /// The record variant for a specific node.
+    #[getset(get_copy = "pub")]
+    variant_id: RecordVariantId,
+    /// The sub-streams indexed by datum ID.
+    #[getset(get = "pub", get_mut = "pub")]
+    sub_streams: BTreeMap<DatumId, NodeSubStream>,
+}
+
+impl NodeSubStream {
+    pub fn destructure(
+        self,
+    ) -> (
+        StreamRecordType,
+        RecordVariantId,
+        BTreeMap<DatumId, NodeSubStream>,
+    ) {
+        (self.record_type, self.variant_id, self.sub_streams)
+    }
+
+    pub fn definition_fragments<'a>(
+        &'a self,
+        module_prefix: &'a FullyQualifiedName,
+    ) -> RecordDefinitionFragments<'a> {
+        RecordDefinitionFragments {
+            record_type: &self.record_type,
+            variant_id: self.variant_id,
+            module_prefix,
+        }
+    }
+}
+
 pub struct RecordDefinitionFragments<'a> {
-    stream: &'a NodeStream,
+    record_type: &'a StreamRecordType,
+    variant_id: RecordVariantId,
     module_prefix: &'a FullyQualifiedName,
 }
 
@@ -98,7 +140,7 @@ impl<'a> RecordDefinitionFragments<'a> {
     pub fn record(&self) -> syn::Type {
         syn::parse_str::<syn::Type>(&format!(
             "{}::{}::Record{}",
-            self.module_prefix, self.stream.record_type, self.stream.variant_id
+            self.module_prefix, self.record_type, self.variant_id
         ))
         .expect("record")
     }
@@ -106,7 +148,7 @@ impl<'a> RecordDefinitionFragments<'a> {
     pub fn unpacked_record(&self) -> syn::Type {
         syn::parse_str::<syn::Type>(&format!(
             "{}::{}::UnpackedRecord{}",
-            self.module_prefix, self.stream.record_type, self.stream.variant_id
+            self.module_prefix, self.record_type, self.variant_id
         ))
         .expect("unpacked_record")
     }
@@ -114,7 +156,7 @@ impl<'a> RecordDefinitionFragments<'a> {
     pub fn unpacked_record_in(&self) -> syn::Type {
         syn::parse_str::<syn::Type>(&format!(
             "{}::{}::UnpackedRecordIn{}",
-            self.module_prefix, self.stream.record_type, self.stream.variant_id
+            self.module_prefix, self.record_type, self.variant_id
         ))
         .expect("unpacked_record_in")
     }
@@ -122,7 +164,7 @@ impl<'a> RecordDefinitionFragments<'a> {
     pub fn record_and_unpacked_out(&self) -> syn::Type {
         syn::parse_str::<syn::Type>(&format!(
             "{}::{}::Record{}AndUnpackedOut",
-            self.module_prefix, self.stream.record_type, self.stream.variant_id
+            self.module_prefix, self.record_type, self.variant_id
         ))
         .expect("record_and_unpacked_out")
     }

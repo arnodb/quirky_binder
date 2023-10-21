@@ -12,7 +12,7 @@ pub struct Group {
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     group_field: String,
-    group_stream: NodeStream,
+    group_stream: NodeSubStream,
     fields: Vec<String>,
 }
 
@@ -44,7 +44,7 @@ impl Group {
                     output_stream_def.remove_datum(datum_id);
                 }
             }
-            let group_stream = output_stream.close_sub_stream_variant(group_stream);
+            let group_stream = group_stream.close_record_variant();
 
             let module_name = graph
                 .chain_customizer()
@@ -63,7 +63,7 @@ impl Group {
             group_stream
         };
 
-        let outputs = streams.build(graph);
+        let outputs = streams.build();
 
         Group {
             name: name.clone(),
@@ -92,7 +92,7 @@ impl DynNode for Group {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let def_input = chain.stream_definition_fragments(self.inputs.single());
         let def = chain.stream_definition_fragments(self.outputs.single());
-        let def_group = chain.stream_definition_fragments(&self.group_stream);
+        let def_group = chain.sub_stream_definition_fragments(&self.group_stream);
 
         let input_unpacked_record = def_input.unpacked_record();
         let unpacked_record_in = def.unpacked_record_in();
@@ -186,7 +186,7 @@ pub struct SubGroup {
     outputs: [NodeStream; 1],
     path_streams: Vec<PathUpdateElement>,
     group_field: String,
-    group_stream: NodeStream,
+    group_stream: NodeSubStream,
     fields: Vec<String>,
 }
 
@@ -227,7 +227,7 @@ impl SubGroup {
                         }
                     }
 
-                    let group_stream = output_stream.close_sub_stream_variant(group_stream);
+                    let group_stream = group_stream.close_record_variant();
 
                     let module_name = graph
                         .chain_customizer()
@@ -245,7 +245,7 @@ impl SubGroup {
 
                     created_group_stream = Some(group_stream);
 
-                    output_stream.close_sub_stream_variant(sub_output_stream)
+                    sub_output_stream.close_record_variant()
                 },
                 |field: &str, path_stream, sub_output_stream| {
                     let module_name = graph
@@ -257,7 +257,7 @@ impl SubGroup {
                         module_name = module_name,
                         group_variant_id = sub_output_stream.variant_id(),
                     );
-                    path_stream.replace_vec_datum(field, record, sub_output_stream.clone());
+                    path_stream.replace_vec_datum(field, record, sub_output_stream);
                 },
                 |field: &str, output_stream, sub_output_stream| {
                     let module_name = graph
@@ -269,13 +269,13 @@ impl SubGroup {
                         module_name = module_name,
                         group_variant_id = sub_output_stream.variant_id(),
                     );
-                    output_stream.replace_vec_datum(field, record, sub_output_stream.clone());
+                    output_stream.replace_vec_datum(field, record, sub_output_stream);
                 },
                 graph,
             )
         };
 
-        let outputs = streams.build(graph);
+        let outputs = streams.build();
 
         SubGroup {
             name: name.clone(),
@@ -304,7 +304,7 @@ impl DynNode for SubGroup {
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let def = chain.stream_definition_fragments(self.outputs.single());
-        let def_group = chain.stream_definition_fragments(&self.group_stream);
+        let def_group = chain.sub_stream_definition_fragments(&self.group_stream);
 
         let group_record = def_group.record();
         let group_unpacked_record = def_group.unpacked_record();
@@ -329,7 +329,7 @@ impl DynNode for SubGroup {
             let variant = &leaf_record_definition[path_stream.sub_input_stream.variant_id()];
 
             let record = chain
-                .stream_definition_fragments(&path_stream.sub_output_stream)
+                .sub_stream_definition_fragments(&path_stream.sub_output_stream)
                 .record();
 
             fields_eq(
@@ -353,9 +353,9 @@ impl DynNode for SubGroup {
             .rev()
             .fold(None, |tail, path_stream| {
                 let out_record_definition =
-                    chain.stream_definition_fragments(&path_stream.sub_output_stream);
+                    chain.sub_stream_definition_fragments(&path_stream.sub_output_stream);
                 let in_record_definition =
-                    chain.stream_definition_fragments(&path_stream.sub_input_stream);
+                    chain.sub_stream_definition_fragments(&path_stream.sub_input_stream);
                 let input_record = in_record_definition.record();
                 let record = out_record_definition.record();
                 let unpacked_record_in = out_record_definition.unpacked_record_in();

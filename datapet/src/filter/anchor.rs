@@ -37,7 +37,7 @@ impl Anchor {
             );
         }
 
-        let outputs = streams.build(graph);
+        let outputs = streams.build();
 
         Self {
             name,

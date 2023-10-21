@@ -264,7 +264,7 @@ impl<'a> StreamsDrawingHelper<'a> {
         graph: &'a Graph,
         port_columns: &mut Vec<DrawingPortsColumn>,
         port_count: &mut usize,
-        stream: &'a NodeStream,
+        stream: &'a NodeSubStream,
         depth: usize,
     ) {
         let input_port_id = *port_count;
@@ -283,11 +283,7 @@ impl<'a> StreamsDrawingHelper<'a> {
         });
 
         self.push_edge(
-            &(
-                &***stream.source(),
-                stream.record_type(),
-                stream.variant_id(),
-            ),
+            &(&[], stream.record_type(), stream.variant_id()),
             input_port_id,
             (stream.record_type(), stream.variant_id()),
         );
@@ -296,7 +292,7 @@ impl<'a> StreamsDrawingHelper<'a> {
         let variant = &record_definition[stream.variant_id()];
 
         for d in variant.data() {
-            if let Some(sub_stream) = graph.get_sub_stream(stream.record_type().clone(), d) {
+            if let Some(sub_stream) = stream.sub_streams().get(&d) {
                 self.push_input_sub_stream_port(
                     graph,
                     port_columns,
@@ -313,7 +309,7 @@ impl<'a> StreamsDrawingHelper<'a> {
         graph: &'a Graph,
         port_columns: &mut Vec<DrawingPortsColumn>,
         port_count: &mut usize,
-        stream: &'a NodeStream,
+        stream: &'a NodeSubStream,
         depth: usize,
     ) {
         let output_port_id = *port_count;
@@ -332,7 +328,7 @@ impl<'a> StreamsDrawingHelper<'a> {
         });
 
         self.output_ports.insert(
-            (stream.source(), stream.record_type(), stream.variant_id()),
+            (&[], stream.record_type(), stream.variant_id()),
             output_port_id,
         );
 
@@ -340,7 +336,7 @@ impl<'a> StreamsDrawingHelper<'a> {
         let variant = &record_definition[stream.variant_id()];
 
         for d in variant.data() {
-            if let Some(sub_stream) = graph.get_sub_stream(stream.record_type().clone(), d) {
+            if let Some(sub_stream) = stream.sub_streams().get(&d) {
                 self.push_output_sub_stream_port(
                     graph,
                     port_columns,
@@ -357,7 +353,7 @@ impl<'a> StreamsDrawingHelper<'a> {
         graph: &'a Graph,
         port_columns: &mut Vec<DrawingPortsColumn>,
         port_count: &mut usize,
-        stream: &'a NodeStream,
+        stream: &'a NodeSubStream,
         depth: usize,
     ) {
         let input_port_id = *port_count;
@@ -388,17 +384,13 @@ impl<'a> StreamsDrawingHelper<'a> {
         });
 
         self.push_edge(
-            &(
-                &***stream.source(),
-                stream.record_type(),
-                stream.variant_id(),
-            ),
+            &(&[], stream.record_type(), stream.variant_id()),
             input_port_id,
             (stream.record_type(), stream.variant_id()),
         );
 
         self.output_ports.insert(
-            (stream.source(), stream.record_type(), stream.variant_id()),
+            (&[], stream.record_type(), stream.variant_id()),
             output_port_id,
         );
 
@@ -406,7 +398,7 @@ impl<'a> StreamsDrawingHelper<'a> {
         let variant = &record_definition[stream.variant_id()];
 
         for d in variant.data() {
-            if let Some(sub_stream) = graph.get_sub_stream(stream.record_type().clone(), d) {
+            if let Some(sub_stream) = stream.sub_streams().get(&d) {
                 self.push_pass_through_sub_stream_ports(
                     graph,
                     port_columns,
@@ -431,7 +423,7 @@ impl<'a> RecordsDrawingHelper<'a> {
         graph: &'a Graph,
         port_columns: &mut Vec<DrawingPortsColumn>,
         port_count: &mut usize,
-        stream: &'a NodeStream,
+        stream: &'a NodeSubStream,
         depth: usize,
     ) {
         let record_definition = &graph.record_definitions()[stream.record_type()];
@@ -454,12 +446,12 @@ impl<'a> RecordsDrawingHelper<'a> {
             });
 
             self.push_edge(
-                &(&***stream.source(), stream.record_type(), d),
+                &(&[], stream.record_type(), d),
                 input_port_id,
                 (stream.record_type(), d),
             );
 
-            if let Some(sub_stream) = graph.get_sub_stream(stream.record_type().clone(), d) {
+            if let Some(sub_stream) = stream.sub_streams().get(&d) {
                 self.push_input_sub_stream_port(
                     graph,
                     port_columns,
@@ -476,7 +468,7 @@ impl<'a> RecordsDrawingHelper<'a> {
         graph: &'a Graph,
         port_columns: &mut Vec<DrawingPortsColumn>,
         port_count: &mut usize,
-        stream: &'a NodeStream,
+        stream: &'a NodeSubStream,
         depth: usize,
     ) {
         let record_definition = &graph.record_definitions()[stream.record_type()];
@@ -499,9 +491,9 @@ impl<'a> RecordsDrawingHelper<'a> {
             });
 
             self.output_ports
-                .insert((stream.source(), stream.record_type(), d), output_port_id);
+                .insert((&[], stream.record_type(), d), output_port_id);
 
-            if let Some(sub_stream) = graph.get_sub_stream(stream.record_type().clone(), d) {
+            if let Some(sub_stream) = stream.sub_streams().get(&d) {
                 self.push_output_sub_stream_port(
                     graph,
                     port_columns,
@@ -518,7 +510,7 @@ impl<'a> RecordsDrawingHelper<'a> {
         graph: &'a Graph,
         port_columns: &mut Vec<DrawingPortsColumn>,
         port_count: &mut usize,
-        stream: &'a NodeStream,
+        stream: &'a NodeSubStream,
         depth: usize,
     ) {
         let record_definition = &graph.record_definitions()[stream.record_type()];
@@ -553,15 +545,15 @@ impl<'a> RecordsDrawingHelper<'a> {
             });
 
             self.push_edge(
-                &(&***stream.source(), stream.record_type(), d),
+                &(&[], stream.record_type(), d),
                 input_port_id,
                 (stream.record_type(), d),
             );
 
             self.output_ports
-                .insert((stream.source(), stream.record_type(), d), output_port_id);
+                .insert((&[], stream.record_type(), d), output_port_id);
 
-            if let Some(sub_stream) = graph.get_sub_stream(stream.record_type().clone(), d) {
+            if let Some(sub_stream) = stream.sub_streams().get(&d) {
                 self.push_pass_through_sub_stream_ports(
                     graph,
                     port_columns,
