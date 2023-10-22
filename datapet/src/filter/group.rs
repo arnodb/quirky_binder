@@ -411,12 +411,12 @@ impl DynNode for SubGroup {
                 let record_and_unpacked_out = out_record_definition.record_and_unpacked_out();
 
                 let access = format_ident!("{}", path_stream.field);
-                let swap_ref_mut = format_ident!("{}_mut", path_stream.field);
+                let access_mut = format_ident!("{}_mut", path_stream.field);
                 Some(if let Some((tail, sub_access)) = tail {
                     (
                         quote! {
                             // TODO optimize this code in truc
-                            let mut converted = convert_vec_in_place::<#input_record, #record, _>(
+                            let converted = convert_vec_in_place::<#input_record, #record, _>(
                                 #access,
                                 |rec, _| {
                                     let #record_and_unpacked_out {
@@ -430,7 +430,7 @@ impl DynNode for SubGroup {
                                     VecElementConversionResult::Converted(record)
                                 },
                             );
-                            std::mem::swap(record.#swap_ref_mut(), &mut converted);
+                            *record.#access_mut() = converted;
                         },
                         access,
                     )
@@ -438,7 +438,7 @@ impl DynNode for SubGroup {
                     (
                         quote! {
                             // TODO optimize this code in truc
-                            let mut converted = convert_vec_in_place::<#input_record, #record, _>(
+                            let converted = convert_vec_in_place::<#input_record, #record, _>(
                                 #access,
                                 |rec, prev_rec| {
                                     let #record_and_unpacked_out {
@@ -464,7 +464,7 @@ impl DynNode for SubGroup {
                                     VecElementConversionResult::Converted(record)
                                 },
                             );
-                            std::mem::swap(record.#swap_ref_mut(), &mut converted);
+                            *record.#access_mut() = converted;
                         },
                         access,
                     )
