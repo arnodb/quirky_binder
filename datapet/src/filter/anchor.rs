@@ -25,7 +25,7 @@ impl Anchor {
 
         streams
             .output_from_input(0, true, graph)
-            .update(|output_stream| {
+            .update(|output_stream, facts_proof| {
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
                 output_stream_def.add_datum_override::<AnchorId<0>, _>(
                     anchor_field,
@@ -36,6 +36,7 @@ impl Anchor {
                         allow_uninit: Some(true),
                     },
                 );
+                facts_proof.order_facts_updated()
             });
 
         let outputs = streams.build();

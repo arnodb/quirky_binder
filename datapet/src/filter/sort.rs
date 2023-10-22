@@ -21,8 +21,9 @@ impl Sort {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
-            .pass_through(|builder| {
+            .pass_through(|builder, facts_proof| {
                 builder.set_facts_order(fields);
+                facts_proof.order_facts_updated()
             });
         let outputs = streams.build();
         Self {
@@ -104,8 +105,8 @@ impl SubSort {
         let path_sub_stream =
             streams
                 .output_from_input(0, true, graph)
-                .pass_through(|output_stream| {
-                    output_stream.pass_through_path(
+                .pass_through(|output_stream, facts_proof| {
+                    let path_sub_stream = output_stream.pass_through_path(
                         path_fields,
                         |sub_input_stream, output_stream| {
                             output_stream.pass_through_sub_stream(
@@ -115,7 +116,10 @@ impl SubSort {
                             )
                         },
                         graph,
-                    )
+                    );
+                    facts_proof
+                        .order_facts_updated()
+                        .with_output(path_sub_stream)
                 });
 
         let outputs = streams.build();

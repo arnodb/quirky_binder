@@ -20,13 +20,18 @@ impl ExtractFields {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("extracted", graph);
 
-        let output_stream_def = streams
-            .output_from_input(0, true, graph)
-            .pass_through(|output_stream| output_stream.record_definition());
+        let output_stream_def =
+            streams
+                .output_from_input(0, true, graph)
+                .pass_through(|output_stream, facts_proof| {
+                    let record_definition = output_stream.record_definition();
+                    facts_proof
+                        .order_facts_updated()
+                        .with_output(record_definition)
+                });
 
-        streams
-            .new_named_output("extracted", graph)
-            .update(|output_extracted_stream| {
+        streams.new_named_output("extracted", graph).update(
+            |output_extracted_stream, facts_proof| {
                 let mut output_extracted_stream_def =
                     output_extracted_stream.record_definition().borrow_mut();
                 for field in fields.iter() {
@@ -40,7 +45,10 @@ impl ExtractFields {
                             .unwrap_or_else(|| panic!(r#"datum "{}""#, field)),
                     );
                 }
-            });
+                // XXX That is actually not true, let's see what we can do later.
+                facts_proof.order_facts_updated()
+            },
+        );
 
         let outputs = streams.build();
 

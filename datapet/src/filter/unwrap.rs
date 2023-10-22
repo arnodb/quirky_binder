@@ -24,7 +24,7 @@ impl Unwrap {
 
         streams
             .output_from_input(0, true, graph)
-            .update(|output_stream| {
+            .update(|output_stream, facts_proof| {
                 let input_variant_id = output_stream.input_variant_id();
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
                 for &field in fields {
@@ -59,6 +59,7 @@ impl Unwrap {
                     output_stream_def.remove_datum(datum_id);
                     output_stream_def.add_dynamic_datum(field, type_name);
                 }
+                facts_proof.order_facts_updated()
             });
 
         let outputs = streams.build();

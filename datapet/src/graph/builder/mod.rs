@@ -197,7 +197,10 @@ pub struct OutputBuilder<'a, 'b, 'g, R: TypeResolver> {
 impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
     pub fn update<B, O>(self, build: B) -> O
     where
-        B: FnOnce(&mut OutputBuilderForUpdate<'a, 'b, 'g, R>) -> O,
+        B: FnOnce(
+            &mut OutputBuilderForUpdate<'a, 'b, 'g, R>,
+            NoFactsUpdated<()>,
+        ) -> FactsFullyUpdated<O>,
     {
         let mut builder = OutputBuilderForUpdate {
             streams: self.streams,
@@ -209,14 +212,17 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
             is_output_main_stream: self.is_output_main_stream,
             facts: self.facts,
         };
-        let output = build(&mut builder);
+        let output = build(&mut builder, NoFactsUpdated(()));
         builder.build();
-        output
+        output.unwrap()
     }
 
     pub fn pass_through<B, O>(self, build: B) -> O
     where
-        B: FnOnce(&mut OutputBuilderForPassThrough<'a, 'b, 'g, R>) -> O,
+        B: FnOnce(
+            &mut OutputBuilderForPassThrough<'a, 'b, 'g, R>,
+            NoFactsUpdated<()>,
+        ) -> FactsFullyUpdated<O>,
     {
         let mut builder = OutputBuilderForPassThrough {
             streams: self.streams,
@@ -230,9 +236,34 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
             is_output_main_stream: self.is_output_main_stream,
             facts: self.facts,
         };
-        let output = build(&mut builder);
+        let output = build(&mut builder, NoFactsUpdated(()));
         builder.build();
-        output
+        output.unwrap()
+    }
+}
+
+pub struct NoFactsUpdated<O>(O);
+
+impl<O> NoFactsUpdated<O> {
+    /// I am a facts updater and I hereby confirm I updated the order facts.
+    pub fn order_facts_updated(self) -> OrderFactsUpdated<O> {
+        OrderFactsUpdated(self)
+    }
+}
+
+pub struct OrderFactsUpdated<O>(NoFactsUpdated<O>);
+
+pub type FactsFullyUpdated<O> = OrderFactsUpdated<O>;
+
+impl<O> FactsFullyUpdated<O> {
+    fn unwrap(self) -> O {
+        self.0 .0
+    }
+}
+
+impl FactsFullyUpdated<()> {
+    pub fn with_output<O>(self, output: O) -> FactsFullyUpdated<O> {
+        NoFactsUpdated(output).order_facts_updated()
     }
 }
 
@@ -296,7 +327,24 @@ pub fn set_facts_order<R: TypeResolver>(
         })
         .collect::<Vec<DatumId>>();
     assert_eq!(seen.len(), order.len());
-    facts.set_order(order.into_boxed_slice());
+    facts.set_order(order);
+}
+
+pub fn break_facts_order_at<R: TypeResolver>(
+    facts: &mut StreamFacts,
+    fields: &[&str],
+    record_definition: &RecordDefinitionBuilder<R>,
+) {
+    let datum_ids = fields
+        .iter()
+        .map(|field| {
+            record_definition
+                .get_latest_variant_datum_definition_by_name(field)
+                .expect("datum")
+                .id()
+        })
+        .collect::<BTreeSet<DatumId>>();
+    facts.break_order_at(&datum_ids);
 }
 
 pub fn assert_order_starts_with<R: TypeResolver>(

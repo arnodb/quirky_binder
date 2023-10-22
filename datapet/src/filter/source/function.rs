@@ -24,12 +24,15 @@ impl FunctionSource {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_main_stream(graph);
 
-        streams.new_main_output(graph).update(|output_stream| {
-            let mut output_stream_def = output_stream.record_definition().borrow_mut();
-            for (name, r#type) in fields.iter() {
-                output_stream_def.add_dynamic_datum(*name, r#type);
-            }
-        });
+        streams
+            .new_main_output(graph)
+            .update(|output_stream, facts_proof| {
+                let mut output_stream_def = output_stream.record_definition().borrow_mut();
+                for (name, r#type) in fields.iter() {
+                    output_stream_def.add_dynamic_datum(*name, r#type);
+                }
+                facts_proof.order_facts_updated()
+            });
 
         let outputs = streams.build();
 

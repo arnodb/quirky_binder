@@ -23,29 +23,32 @@ impl Join {
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
-        let joined_fields = streams
-            .output_from_input(0, true, graph)
-            .update(|output_stream| {
-                let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                let secondary_stream_def = graph
-                    .get_stream(inputs[1].record_type())
-                    .expect("secondary stream definition")
-                    .borrow();
-                let variant = &secondary_stream_def[inputs[1].variant_id()];
+        let joined_fields =
+            streams
+                .output_from_input(0, true, graph)
+                .update(|output_stream, facts_proof| {
+                    let mut output_stream_def = output_stream.record_definition().borrow_mut();
+                    let secondary_stream_def = graph
+                        .get_stream(inputs[1].record_type())
+                        .expect("secondary stream definition")
+                        .borrow();
+                    let variant = &secondary_stream_def[inputs[1].variant_id()];
 
-                variant
-                    .data()
-                    .filter_map(|d| {
-                        let datum = &secondary_stream_def[d];
-                        if !secondary_fields.iter().any(|field| *field == datum.name()) {
-                            output_stream_def.copy_datum(datum);
-                            Some(datum.name().to_owned())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<String>>()
-            });
+                    let joined_fields = variant
+                        .data()
+                        .filter_map(|d| {
+                            let datum = &secondary_stream_def[d];
+                            if !secondary_fields.iter().any(|field| *field == datum.name()) {
+                                output_stream_def.copy_datum(datum);
+                                Some(datum.name().to_owned())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<String>>();
+                    // XXX That is actually not true, let's see what we can do later.
+                    facts_proof.order_facts_updated().with_output(joined_fields)
+                });
 
         let outputs = streams.build();
 

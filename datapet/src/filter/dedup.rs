@@ -19,7 +19,7 @@ impl Dedup {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
-            .pass_through(|_| {});
+            .pass_through(|_, facts_proof| facts_proof.order_facts_updated());
         let outputs = streams.build();
         Self {
             name,

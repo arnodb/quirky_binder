@@ -19,11 +19,15 @@ impl InPlaceFilter {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
+        break_facts_order_at: &[&str],
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
-            .pass_through(|_| {});
+            .pass_through(|output_stream, facts_proof| {
+                output_stream.break_facts_order_at(break_facts_order_at);
+                facts_proof.order_facts_updated()
+            });
         let outputs = streams.build();
         Self {
             name,
@@ -150,7 +154,7 @@ pub mod string {
         fields: &[&str],
     ) -> ToLowercase {
         ToLowercase {
-            in_place: InPlaceFilter::new(graph, name, inputs),
+            in_place: InPlaceFilter::new(graph, name, inputs, fields),
             fields: fields
                 .iter()
                 .map(Deref::deref)
@@ -210,7 +214,9 @@ pub mod string {
         fields: &[&str],
     ) -> ReverseChars {
         ReverseChars {
-            in_place: InPlaceFilter::new(graph, name, inputs),
+            in_place: InPlaceFilter::new(
+                graph, name, inputs, /* TODO nice to have: change order direction */ fields,
+            ),
             fields: fields
                 .iter()
                 .map(Deref::deref)

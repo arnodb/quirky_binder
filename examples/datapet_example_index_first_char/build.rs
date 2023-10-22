@@ -27,7 +27,7 @@ impl Tokenize {
 
         streams
             .output_from_input(0, true, graph)
-            .update(|output_stream| {
+            .update(|output_stream, facts_proof| {
                 let input_variant_id = output_stream.input_variant_id();
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
                 let datum = output_stream_def
@@ -37,6 +37,7 @@ impl Tokenize {
                 output_stream_def.remove_datum(datum_id);
                 output_stream_def.add_datum::<Box<str>, _>("word");
                 output_stream_def.add_datum::<char, _>("first_char");
+                facts_proof.order_facts_updated()
             });
 
         let outputs = streams.build();

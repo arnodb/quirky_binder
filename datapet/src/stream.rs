@@ -1,5 +1,8 @@
 use crate::prelude::*;
-use std::{collections::BTreeMap, ops::Deref};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    ops::Deref,
+};
 use truc::record::definition::{DatumId, RecordVariantId};
 
 /// Defines the type of records going through a given stream.
@@ -185,5 +188,14 @@ impl<'a> RecordDefinitionFragments<'a> {
 #[derive(Clone, Default, Getters, Setters, Debug)]
 pub struct StreamFacts {
     #[getset(get = "pub", set = "pub")]
-    order: Box<[DatumId]>,
+    order: Vec<DatumId>,
+}
+
+impl StreamFacts {
+    pub fn break_order_at(&mut self, datum_ids: &BTreeSet<DatumId>) {
+        let position = self.order.iter().position(|d| datum_ids.contains(d));
+        if let Some(position) = position {
+            self.order.truncate(position);
+        }
+    }
 }

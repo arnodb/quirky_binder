@@ -1,4 +1,4 @@
-use super::set_facts_order;
+use super::{break_facts_order_at, set_facts_order};
 use crate::{
     prelude::*,
     stream::{NodeSubStream, StreamFacts},
@@ -150,6 +150,10 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
             order_fields,
             &*self.record_definition.borrow(),
         );
+    }
+
+    pub fn break_facts_order_at(&mut self, fields: &[&str]) {
+        break_facts_order_at(&mut self.facts, fields, &*self.record_definition.borrow());
     }
 
     pub fn build(self) -> &'g RefCell<RecordDefinitionBuilder<R>> {
