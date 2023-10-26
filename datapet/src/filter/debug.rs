@@ -1,8 +1,8 @@
-use crate::{prelude::*, support::fields_eq};
+use crate::prelude::*;
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
-pub struct Dedup {
+pub struct Debug {
     name: FullyQualifiedName,
     #[getset(get = "pub")]
     inputs: [NodeStream; 1],
@@ -10,7 +10,7 @@ pub struct Dedup {
     outputs: [NodeStream; 1],
 }
 
-impl Dedup {
+impl Debug {
     fn new<R: TypeResolver + Copy>(
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
@@ -19,8 +19,13 @@ impl Dedup {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
-            .pass_through(|output_stream, facts_proof| {
-                output_stream.set_distinct_fact_all_fields();
+            .pass_through(|builder, facts_proof| {
+                let def = builder.record_definition().borrow();
+                eprintln!("=== Filter {}:", name);
+                for d in def.get_current_data() {
+                    eprintln!("    {:?}", def.get_datum_definition(d).expect("datum"));
+                }
+                eprintln!("    {:?}", builder.facts());
                 facts_proof.order_facts_updated().distinct_facts_updated()
             });
         let outputs = streams.build();
@@ -32,7 +37,7 @@ impl Dedup {
     }
 }
 
-impl DynNode for Dedup {
+impl DynNode for Debug {
     fn name(&self) -> &FullyQualifiedName {
         &self.name
     }
@@ -45,24 +50,15 @@ impl DynNode for Dedup {
         &self.outputs
     }
 
-    fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let record = chain
-            .stream_definition_fragments(self.inputs.single())
-            .record();
-        let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
-        let variant = &record_definition[self.inputs.single().variant_id()];
-
-        let eq = fields_eq(&record, variant.data().map(|d| record_definition[d].name()));
-
-        let inline_body = quote! {
-            datapet_support::iterator::dedup::Dedup::new(input, #eq)
-        };
-
+    fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
         chain.implement_inline_node(
             self,
             self.inputs.single(),
             self.outputs.single(),
-            &inline_body,
+            &quote! {
+                #[allow(clippy::let_and_return)]
+                input
+            },
         );
     }
 
@@ -71,10 +67,10 @@ impl DynNode for Dedup {
     }
 }
 
-pub fn dedup<R: TypeResolver + Copy>(
+pub fn debug<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
-) -> Dedup {
-    Dedup::new(graph, name, inputs)
+) -> Debug {
+    Debug::new(graph, name, inputs)
 }

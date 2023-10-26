@@ -27,6 +27,7 @@ impl ExtractFields {
                     let record_definition = output_stream.record_definition();
                     facts_proof
                         .order_facts_updated()
+                        .distinct_facts_updated()
                         .with_output(record_definition)
                 });
 
@@ -46,7 +47,7 @@ impl ExtractFields {
                     );
                 }
                 // XXX That is actually not true, let's see what we can do later.
-                facts_proof.order_facts_updated()
+                facts_proof.order_facts_updated().distinct_facts_updated()
             },
         );
 

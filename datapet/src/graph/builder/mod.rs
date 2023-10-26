@@ -253,17 +253,28 @@ impl<O> NoFactsUpdated<O> {
 
 pub struct OrderFactsUpdated<O>(NoFactsUpdated<O>);
 
-pub type FactsFullyUpdated<O> = OrderFactsUpdated<O>;
+impl<O> OrderFactsUpdated<O> {
+    /// I am a facts updater and I hereby confirm I updated the order facts.
+    pub fn distinct_facts_updated(self) -> DistinctFactsUpdated<O> {
+        DistinctFactsUpdated(self)
+    }
+}
+
+pub struct DistinctFactsUpdated<O>(OrderFactsUpdated<O>);
+
+pub type FactsFullyUpdated<O> = DistinctFactsUpdated<O>;
 
 impl<O> FactsFullyUpdated<O> {
     fn unwrap(self) -> O {
-        self.0 .0
+        self.0 .0 .0
     }
 }
 
 impl FactsFullyUpdated<()> {
     pub fn with_output<O>(self, output: O) -> FactsFullyUpdated<O> {
-        NoFactsUpdated(output).order_facts_updated()
+        NoFactsUpdated(output)
+            .order_facts_updated()
+            .distinct_facts_updated()
     }
 }
 
@@ -289,7 +300,7 @@ fn replace_vec_datum_in_record_definition<R: TypeResolver>(
     record: &str,
 ) -> (DatumId, DatumId) {
     let old_datum = record_definition
-        .get_latest_variant_datum_definition_by_name(field)
+        .get_current_datum_definition_by_name(field)
         .unwrap_or_else(|| panic!(r#"datum "{}""#, field));
     let old_datum_id = old_datum.id();
     record_definition.remove_datum(old_datum_id);
@@ -307,17 +318,18 @@ fn replace_vec_datum_in_record_definition<R: TypeResolver>(
     )
 }
 
-pub fn set_facts_order<R: TypeResolver>(
+pub fn set_order_fact<R: TypeResolver>(
     facts: &mut StreamFacts,
     order_fields: &[&str],
     record_definition: &RecordDefinitionBuilder<R>,
 ) {
+    // Ensure uniqueness, but keep order
     let mut seen = BTreeSet::<DatumId>::new();
     let order = order_fields
         .iter()
         .filter_map(|field| {
             let datum_id = record_definition
-                .get_latest_variant_datum_definition_by_name(field)
+                .get_current_datum_definition_by_name(field)
                 .expect("datum")
                 .id();
             (!seen.contains(&datum_id)).then(|| {
@@ -330,45 +342,51 @@ pub fn set_facts_order<R: TypeResolver>(
     facts.set_order(order);
 }
 
-pub fn break_facts_order_at<R: TypeResolver>(
+pub fn break_order_fact_at<R: TypeResolver>(
     facts: &mut StreamFacts,
     fields: &[&str],
     record_definition: &RecordDefinitionBuilder<R>,
 ) {
-    let datum_ids = fields
-        .iter()
-        .map(|field| {
+    break_order_fact_at_ids(
+        facts,
+        fields.iter().map(|field| {
             record_definition
-                .get_latest_variant_datum_definition_by_name(field)
+                .get_current_datum_definition_by_name(field)
                 .expect("datum")
                 .id()
-        })
-        .collect::<BTreeSet<DatumId>>();
-    facts.break_order_at(&datum_ids);
+        }),
+    );
 }
 
-pub fn assert_order_starts_with<R: TypeResolver>(
+pub fn break_order_fact_at_ids<I>(facts: &mut StreamFacts, datum_ids: I)
+where
+    I: IntoIterator<Item = DatumId>,
+{
+    let datum_ids = datum_ids.into_iter().collect::<BTreeSet<DatumId>>();
+    facts.break_order_at_ids(&datum_ids);
+}
+
+pub fn assert_order_can_be_grouped_by<R: TypeResolver>(
     expected_order: &[DatumId],
     actual_order: &[DatumId],
     record_definition: &RecordDefinitionBuilder<R>,
     filter_name: &FullyQualifiedName,
+    more_info: &str,
 ) {
+    assert!(expected_order.iter().all_unique());
+
     let is_ok = if actual_order.len() >= expected_order.len() {
-        let truncated = &actual_order[0..expected_order.len()];
-        let mut all_found = true;
-        for actual_d in truncated {
-            if !expected_order
-                .iter()
-                .any(|expected_d| expected_d == actual_d)
-            {
-                all_found = false;
-                break;
-            }
-        }
-        all_found
+        let mut sorted_actual = actual_order[0..expected_order.len()].to_vec();
+        sorted_actual.sort();
+
+        let mut sorted_expected = expected_order.to_vec();
+        sorted_expected.sort();
+
+        sorted_actual == sorted_expected
     } else {
         false
     };
+
     if !is_ok {
         let expected = expected_order
             .iter()
@@ -379,8 +397,107 @@ pub fn assert_order_starts_with<R: TypeResolver>(
             .map(|d| record_definition[*d].name())
             .join(", ");
         panic!(
-            "Fitler {} expected order to start with [{}], but is [{}]",
-            filter_name, expected, actual
+            "Fitler {} ({}) expected order to ensure data can be grouped by [{}], but is [{}]",
+            filter_name, more_info, expected, actual
+        );
+    }
+}
+
+pub fn set_distinct_fact<R: TypeResolver>(
+    facts: &mut StreamFacts,
+    distinct_fields: &[&str],
+    record_definition: &RecordDefinitionBuilder<R>,
+) {
+    set_distinct_fact_ids(
+        facts,
+        distinct_fields.iter().map(|field| {
+            let datum_id = record_definition
+                .get_current_datum_definition_by_name(field)
+                .expect("datum")
+                .id();
+            datum_id
+        }),
+    );
+}
+
+pub fn set_distinct_fact_ids<I>(facts: &mut StreamFacts, distinct_datum_ids: I)
+where
+    I: IntoIterator<Item = DatumId>,
+{
+    // Ensure uniqueness and sort
+    let distinct = distinct_datum_ids
+        .into_iter()
+        .collect::<BTreeSet<DatumId>>();
+    facts.set_distinct(distinct.into_iter().collect());
+}
+
+pub fn set_distinct_fact_all_fields<R: TypeResolver>(
+    facts: &mut StreamFacts,
+    record_definition: &RecordDefinitionBuilder<R>,
+) {
+    let distinct = record_definition.get_current_data();
+    facts.set_distinct(distinct.collect());
+}
+
+pub fn break_distinct_fact_for<R: TypeResolver>(
+    facts: &mut StreamFacts,
+    fields: &[&str],
+    record_definition: &RecordDefinitionBuilder<R>,
+) {
+    break_distinct_fact_for_ids(
+        facts,
+        fields.iter().map(|field| {
+            record_definition
+                .get_current_datum_definition_by_name(field)
+                .expect("datum")
+                .id()
+        }),
+    );
+}
+
+pub fn break_distinct_fact_for_ids<I>(facts: &mut StreamFacts, datum_ids: I)
+where
+    I: IntoIterator<Item = DatumId>,
+{
+    for datum_id in datum_ids {
+        if facts.distinct().iter().any(|d| *d == datum_id) {
+            facts.set_distinct(Vec::new());
+            return;
+        }
+    }
+}
+
+pub fn assert_distinct_eq<R: TypeResolver>(
+    expected_distinct: &[DatumId],
+    actual_distinct: &[DatumId],
+    record_definition: &RecordDefinitionBuilder<R>,
+    filter_name: &FullyQualifiedName,
+    more_info: &str,
+) {
+    assert!(expected_distinct.iter().all_unique());
+
+    let is_ok = {
+        let mut sorted_actual = actual_distinct.to_vec();
+        sorted_actual.sort();
+
+        let mut sorted_expected = expected_distinct.to_vec();
+        sorted_expected.sort();
+
+        sorted_actual == sorted_expected
+    };
+
+    if !is_ok {
+        let expected = expected_distinct
+            .iter()
+            .map(|d| record_definition[*d].name())
+            .join(", ");
+        let actual = actual_distinct
+            .iter()
+            .map(|d| record_definition[*d].name())
+            .join(", ");
+        panic!(
+            "Fitler {} ({}) expected distinct to be [{}], but is [{}]",
+            filter_name, more_info, expected, actual
         );
     }
 }

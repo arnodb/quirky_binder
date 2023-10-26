@@ -1,5 +1,5 @@
 use crate::{
-    graph::builder::assert_order_starts_with,
+    graph::builder::assert_order_can_be_grouped_by,
     prelude::*,
     support::{fields_eq, fields_eq_ab},
 };
@@ -35,12 +35,12 @@ impl Group {
                     let group_stream = output_stream.new_named_sub_stream("group", graph);
                     let variant_id = output_stream.input_variant_id();
 
-                    {
+                    let (group_by_datum_ids, group_datum_ids) = {
                         let mut output_stream_def = output_stream.record_definition().borrow_mut();
                         let mut group_stream_def = group_stream.record_definition().borrow_mut();
 
                         let variant = &output_stream_def[variant_id];
-                        let mut expected_order =
+                        let mut group_by_datum_ids =
                             Vec::with_capacity(variant.data_len() - fields.len());
                         let mut group_data = Vec::with_capacity(fields.len());
                         let mut group_datum_ids = Vec::with_capacity(fields.len());
@@ -50,24 +50,27 @@ impl Group {
                                 group_data.push(datum);
                                 group_datum_ids.push(datum.id());
                             } else {
-                                expected_order.push(datum.id());
+                                group_by_datum_ids.push(datum.id());
                             }
                         }
 
-                        assert_order_starts_with(
-                            &expected_order,
+                        assert_order_can_be_grouped_by(
+                            &group_by_datum_ids,
                             output_stream.facts().order(),
                             &*output_stream_def,
                             &name,
+                            "main stream",
                         );
 
                         for datum in &group_data {
                             group_stream_def.copy_datum(datum);
                         }
-                        for datum_id in group_datum_ids {
-                            output_stream_def.remove_datum(datum_id);
+                        for datum_id in &group_datum_ids {
+                            output_stream_def.remove_datum(*datum_id);
                         }
-                    }
+
+                        (group_by_datum_ids, group_datum_ids)
+                    };
                     let group_stream = group_stream.close_record_variant();
 
                     let module_name = graph
@@ -84,8 +87,13 @@ impl Group {
                         group_stream.clone(),
                     );
 
-                    // XXX That is actually not true, let's see what we can do later.
-                    facts_proof.order_facts_updated().with_output(group_stream)
+                    output_stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
+                    output_stream.set_distinct_fact_ids(group_by_datum_ids);
+
+                    facts_proof
+                        .order_facts_updated()
+                        .distinct_facts_updated()
+                        .with_output(group_stream)
                 });
 
         let outputs = streams.build();
@@ -244,14 +252,14 @@ impl SubGroup {
                                         output_stream.new_named_sub_stream("group", graph);
                                     let variant_id = sub_output_stream.input_variant_id();
 
-                                    {
+                                    let (group_by_datum_ids, group_datum_ids) = {
                                         let mut output_stream_def =
                                             sub_output_stream.record_definition().borrow_mut();
                                         let mut group_stream_def =
                                             group_stream.record_definition().borrow_mut();
 
                                         let variant = &output_stream_def[variant_id];
-                                        let mut expected_order =
+                                        let mut group_by_datum_ids =
                                             Vec::with_capacity(variant.data_len() - fields.len());
                                         let mut group_data = Vec::with_capacity(fields.len());
                                         let mut group_datum_ids = Vec::with_capacity(fields.len());
@@ -261,24 +269,27 @@ impl SubGroup {
                                                 group_data.push(datum);
                                                 group_datum_ids.push(datum.id());
                                             } else {
-                                                expected_order.push(datum.id());
+                                                group_by_datum_ids.push(datum.id());
                                             }
                                         }
 
-                                        assert_order_starts_with(
-                                            &expected_order,
+                                        assert_order_can_be_grouped_by(
+                                            &group_by_datum_ids,
                                             sub_output_stream.facts().order(),
                                             &*output_stream_def,
                                             &name,
+                                            "main sub stream",
                                         );
 
                                         for datum in &group_data {
                                             group_stream_def.copy_datum(datum);
                                         }
-                                        for datum_id in group_datum_ids {
-                                            output_stream_def.remove_datum(datum_id);
+                                        for datum_id in &group_datum_ids {
+                                            output_stream_def.remove_datum(*datum_id);
                                         }
-                                    }
+
+                                        (group_by_datum_ids, group_datum_ids)
+                                    };
 
                                     let group_stream = group_stream.close_record_variant();
 
@@ -297,6 +308,10 @@ impl SubGroup {
                                     );
 
                                     created_group_stream = Some(group_stream);
+
+                                    output_stream
+                                        .break_order_fact_at_ids(group_datum_ids.iter().cloned());
+                                    output_stream.set_distinct_fact_ids(group_by_datum_ids);
                                 },
                             )
                         },
@@ -326,8 +341,11 @@ impl SubGroup {
                         },
                         graph,
                     );
-                    // XXX That is actually not true, let's see what we can do later.
-                    facts_proof.order_facts_updated().with_output(path_streams)
+
+                    facts_proof
+                        .order_facts_updated()
+                        .distinct_facts_updated()
+                        .with_output(path_streams)
                 });
 
         let outputs = streams.build();

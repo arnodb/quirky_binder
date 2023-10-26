@@ -1,4 +1,8 @@
-use super::{break_facts_order_at, set_facts_order};
+use super::{
+    break_distinct_fact_for, break_distinct_fact_for_ids, break_order_fact_at,
+    break_order_fact_at_ids, set_distinct_fact, set_distinct_fact_all_fields,
+    set_distinct_fact_ids, set_order_fact,
+};
 use crate::{
     prelude::*,
     stream::{NodeSubStream, StreamFacts},
@@ -72,7 +76,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
             let datum_id = self
                 .record_definition
                 .borrow()
-                .get_latest_variant_datum_definition_by_name(field)
+                .get_current_datum_definition_by_name(field)
                 .map(DatumDefinition::id);
             if let Some(datum_id) = datum_id {
                 let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
@@ -95,7 +99,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
             |(mut path_data, mut stream, record_definition), field| {
                 let datum_id = record_definition
                     .borrow()
-                    .get_latest_variant_datum_definition_by_name(field)
+                    .get_current_datum_definition_by_name(field)
                     .map(DatumDefinition::id);
                 if let Some(datum_id) = datum_id {
                     let sub_stream = stream
@@ -144,16 +148,53 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
         leaf_sub_output_stream
     }
 
-    pub fn set_facts_order(&mut self, order_fields: &[&str]) {
-        set_facts_order(
+    pub fn set_order_fact(&mut self, order_fields: &[&str]) {
+        set_order_fact(
             &mut self.facts,
             order_fields,
             &*self.record_definition.borrow(),
         );
     }
 
-    pub fn break_facts_order_at(&mut self, fields: &[&str]) {
-        break_facts_order_at(&mut self.facts, fields, &*self.record_definition.borrow());
+    pub fn break_order_fact_at(&mut self, fields: &[&str]) {
+        break_order_fact_at(&mut self.facts, fields, &*self.record_definition.borrow());
+    }
+
+    pub fn break_order_fact_at_ids<I>(&mut self, datum_ids: I)
+    where
+        I: IntoIterator<Item = DatumId>,
+    {
+        break_order_fact_at_ids(&mut self.facts, datum_ids);
+    }
+
+    pub fn set_distinct_fact(&mut self, distinct_fields: &[&str]) {
+        set_distinct_fact(
+            &mut self.facts,
+            distinct_fields,
+            &*self.record_definition.borrow(),
+        );
+    }
+
+    pub fn set_distinct_fact_ids<I>(&mut self, distinct_datum_ids: I)
+    where
+        I: IntoIterator<Item = DatumId>,
+    {
+        set_distinct_fact_ids(&mut self.facts, distinct_datum_ids);
+    }
+
+    pub fn set_distinct_fact_all_fields(&mut self) {
+        set_distinct_fact_all_fields(&mut self.facts, &*self.record_definition.borrow());
+    }
+
+    pub fn break_distinct_fact_for(&mut self, fields: &[&str]) {
+        break_distinct_fact_for(&mut self.facts, fields, &*self.record_definition.borrow());
+    }
+
+    pub fn break_distinct_fact_for_ids<I>(&mut self, datum_ids: I)
+    where
+        I: IntoIterator<Item = DatumId>,
+    {
+        break_distinct_fact_for_ids(&mut self.facts, datum_ids);
     }
 
     pub fn build(self) -> &'g RefCell<RecordDefinitionBuilder<R>> {
@@ -191,8 +232,8 @@ impl<'g, R: TypeResolver> SubStreamBuilderForPassThrough<'g, R> {
         )
     }
 
-    pub fn set_facts_order(&mut self, order_fields: &[&str]) {
-        set_facts_order(
+    pub fn set_order_fact(&mut self, order_fields: &[&str]) {
+        set_order_fact(
             &mut self.facts,
             order_fields,
             &*self.record_definition.borrow(),

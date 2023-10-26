@@ -1,5 +1,6 @@
 pub mod accumulate;
 pub mod anchor;
+pub mod debug;
 pub mod dedup;
 pub mod fork;
 pub mod group;

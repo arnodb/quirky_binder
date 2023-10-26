@@ -19,6 +19,8 @@ impl FunctionSource {
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
         fields: &[(&str, &str)],
+        order_fields: &[&str],
+        distinct_fields: &[&str],
         func: &str,
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
@@ -27,11 +29,15 @@ impl FunctionSource {
         streams
             .new_main_output(graph)
             .update(|output_stream, facts_proof| {
-                let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                for (name, r#type) in fields.iter() {
-                    output_stream_def.add_dynamic_datum(*name, r#type);
+                {
+                    let mut output_stream_def = output_stream.record_definition().borrow_mut();
+                    for (name, r#type) in fields.iter() {
+                        output_stream_def.add_dynamic_datum(*name, r#type);
+                    }
                 }
-                facts_proof.order_facts_updated()
+                output_stream.set_order_fact(order_fields);
+                output_stream.set_distinct_fact(distinct_fields);
+                facts_proof.order_facts_updated().distinct_facts_updated()
             });
 
         let outputs = streams.build();
@@ -108,7 +114,17 @@ pub fn function_source<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 0],
     fields: &[(&str, &str)],
+    order_fields: &[&str],
+    distinct_fields: &[&str],
     func: &str,
 ) -> FunctionSource {
-    FunctionSource::new(graph, name, inputs, fields, func)
+    FunctionSource::new(
+        graph,
+        name,
+        inputs,
+        fields,
+        order_fields,
+        distinct_fields,
+        func,
+    )
 }

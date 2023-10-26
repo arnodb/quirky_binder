@@ -21,7 +21,7 @@ use datapet::{
 {
   (
       function_source#read_token(
-        &[("token", "Box<str>")],
+        &[("token", "Box<str>")], &[], &[],
         r#"{
         use std::io::BufRead;
 

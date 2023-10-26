@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use itertools::Itertools;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::Deref,
@@ -185,14 +186,26 @@ impl<'a> RecordDefinitionFragments<'a> {
     }
 }
 
-#[derive(Clone, Default, Getters, Setters, Debug)]
+#[derive(Clone, Default, Getters, Debug)]
 pub struct StreamFacts {
-    #[getset(get = "pub", set = "pub")]
+    #[getset(get = "pub")]
     order: Vec<DatumId>,
+    #[getset(get = "pub")]
+    distinct: Vec<DatumId>,
 }
 
 impl StreamFacts {
-    pub fn break_order_at(&mut self, datum_ids: &BTreeSet<DatumId>) {
+    pub fn set_order(&mut self, order: Vec<DatumId>) {
+        assert!(order.iter().all_unique());
+        self.order = order;
+    }
+
+    pub fn set_distinct(&mut self, distinct: Vec<DatumId>) {
+        assert!(distinct.iter().all_unique());
+        self.distinct = distinct;
+    }
+
+    pub fn break_order_at_ids(&mut self, datum_ids: &BTreeSet<DatumId>) {
         let position = self.order.iter().position(|d| datum_ids.contains(d));
         if let Some(position) = position {
             self.order.truncate(position);

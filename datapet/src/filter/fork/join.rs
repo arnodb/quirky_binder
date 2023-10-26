@@ -1,4 +1,4 @@
-use crate::{prelude::*, support::fields_cmp_ab};
+use crate::{graph::builder::assert_distinct_eq, prelude::*, support::fields_cmp_ab};
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
@@ -27,6 +27,33 @@ impl Join {
             streams
                 .output_from_input(0, true, graph)
                 .update(|output_stream, facts_proof| {
+                    for (stream_info, input, fields) in [
+                        ("primary stream", &inputs[0], primary_fields),
+                        ("secondary stream", &inputs[1], secondary_fields),
+                    ] {
+                        let input_stream_def = graph
+                            .get_stream(input.record_type())
+                            .expect("input_stream_def")
+                            .borrow();
+
+                        let variant = &input_stream_def[input.variant_id()];
+                        let mut expected_distinct = Vec::with_capacity(fields.len());
+                        for datum_id in variant.data() {
+                            let datum = &input_stream_def[datum_id];
+                            if fields.iter().any(|field| *field == datum.name()) {
+                                expected_distinct.push(datum.id());
+                            }
+                        }
+
+                        assert_distinct_eq(
+                            &expected_distinct,
+                            input.facts().distinct(),
+                            &input_stream_def,
+                            &name,
+                            stream_info,
+                        );
+                    }
+
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
                     let secondary_stream_def = graph
                         .get_stream(inputs[1].record_type())
@@ -46,8 +73,12 @@ impl Join {
                             }
                         })
                         .collect::<Vec<String>>();
+
                     // XXX That is actually not true, let's see what we can do later.
-                    facts_proof.order_facts_updated().with_output(joined_fields)
+                    facts_proof
+                        .order_facts_updated()
+                        .distinct_facts_updated()
+                        .with_output(joined_fields)
                 });
 
         let outputs = streams.build();

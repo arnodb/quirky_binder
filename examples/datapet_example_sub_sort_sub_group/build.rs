@@ -21,7 +21,7 @@ use datapet::{
 {
   (
       function_source(
-        &[("num_1", "u8"), ("num_2", "u8"), ("num_3", "u8"), ("num_4", "u8")],
+        &[("num_1", "u8"), ("num_2", "u8"), ("num_3", "u8"), ("num_4", "u8")], &[], &[],
         r#"{
         use rand_chacha::rand_core::{RngCore, SeedableRng};
 

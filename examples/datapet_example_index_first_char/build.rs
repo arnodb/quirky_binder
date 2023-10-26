@@ -37,7 +37,7 @@ impl Tokenize {
                 output_stream_def.remove_datum(datum_id);
                 output_stream_def.add_datum::<Box<str>, _>("word");
                 output_stream_def.add_datum::<char, _>("first_char");
-                facts_proof.order_facts_updated()
+                facts_proof.order_facts_updated().distinct_facts_updated()
             });
 
         let outputs = streams.build();
@@ -104,7 +104,7 @@ use super::tokenize;
 {
   (
       function_source#read_input(
-        &[("words", "Box<str>")],
+        &[("words", "Box<str>")], &[], &[],
         r#"{
         use std::io::BufRead;
 
