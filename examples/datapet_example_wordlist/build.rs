@@ -42,7 +42,7 @@ use datapet::{
         }
         }"#
       )
-    - sort#sort_token(&["token"])
+    - sort#sort_token(&["token".asc()])
     - dedup#dedup_token()
     - anchor#anchor("anchor")
     - build_word_list#word_list("token", "anchor", "ci_anchor", "ci_refs") [s2, s3, s4]

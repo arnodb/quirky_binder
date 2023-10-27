@@ -1,6 +1,7 @@
 use self::{pass_through::OutputBuilderForPassThrough, update::OutputBuilderForUpdate};
 use crate::prelude::*;
 use itertools::Itertools;
+use std::ops::Deref;
 use std::{
     cell::RefCell,
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
@@ -320,7 +321,7 @@ fn replace_vec_datum_in_record_definition<R: TypeResolver>(
 
 pub fn set_order_fact<R: TypeResolver>(
     facts: &mut StreamFacts,
-    order_fields: &[&str],
+    order_fields: &[Directed<&str>],
     record_definition: &RecordDefinitionBuilder<R>,
 ) {
     // Ensure uniqueness, but keep order
@@ -334,10 +335,10 @@ pub fn set_order_fact<R: TypeResolver>(
                 .id();
             (!seen.contains(&datum_id)).then(|| {
                 seen.insert(datum_id);
-                datum_id
+                field.as_ref().map(|_| datum_id)
             })
         })
-        .collect::<Vec<DatumId>>();
+        .collect::<Vec<Directed<DatumId>>>();
     assert_eq!(seen.len(), order.len());
     facts.set_order(order);
 }
@@ -366,9 +367,9 @@ where
     facts.break_order_at_ids(&datum_ids);
 }
 
-pub fn assert_order_can_be_grouped_by<R: TypeResolver>(
+pub fn assert_undirected_order_starts_with<R: TypeResolver>(
     expected_order: &[DatumId],
-    actual_order: &[DatumId],
+    actual_order: &[Directed<DatumId>],
     record_definition: &RecordDefinitionBuilder<R>,
     filter_name: &FullyQualifiedName,
     more_info: &str,
@@ -376,7 +377,12 @@ pub fn assert_order_can_be_grouped_by<R: TypeResolver>(
     assert!(expected_order.iter().all_unique());
 
     let is_ok = if actual_order.len() >= expected_order.len() {
-        let mut sorted_actual = actual_order[0..expected_order.len()].to_vec();
+        let mut sorted_actual = actual_order[0..expected_order.len()]
+            .iter()
+            // Ignore direction
+            .map(Deref::deref)
+            .copied()
+            .collect::<Vec<DatumId>>();
         sorted_actual.sort();
 
         let mut sorted_expected = expected_order.to_vec();
@@ -394,10 +400,48 @@ pub fn assert_order_can_be_grouped_by<R: TypeResolver>(
             .join(", ");
         let actual = actual_order
             .iter()
-            .map(|d| record_definition[*d].name())
+            .map(|d| d.as_ref().map(|d| record_definition[*d].name()))
             .join(", ");
         panic!(
-            "Fitler {} ({}) expected order to ensure data can be grouped by [{}], but is [{}]",
+            "Filter {} ({}) expected order to ensure data is ordered by [{}], but order is [{}]",
+            filter_name, more_info, expected, actual
+        );
+    }
+}
+
+pub fn assert_directed_order_starts_with<R: TypeResolver>(
+    expected_order: &[DatumId],
+    actual_order: &[Directed<DatumId>],
+    record_definition: &RecordDefinitionBuilder<R>,
+    filter_name: &FullyQualifiedName,
+    more_info: &str,
+) {
+    assert!(expected_order.iter().all_unique());
+
+    let expected_directed_order = expected_order
+        .iter()
+        .map(|d| d.asc())
+        .collect::<Vec<Directed<DatumId>>>();
+
+    let is_ok = if actual_order.len() >= expected_order.len() {
+        let actual_directed_order = &actual_order[0..expected_order.len()];
+
+        actual_directed_order == expected_directed_order
+    } else {
+        false
+    };
+
+    if !is_ok {
+        let expected = expected_directed_order
+            .iter()
+            .map(|d| d.as_ref().map(|d| record_definition[*d].name()))
+            .join(", ");
+        let actual = actual_order
+            .iter()
+            .map(|d| d.as_ref().map(|d| record_definition[*d].name()))
+            .join(", ");
+        panic!(
+            "Filter {} ({}) expected order to ensure data is ordered by [{}], but order is [{}]",
             filter_name, more_info, expected, actual
         );
     }

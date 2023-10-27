@@ -39,13 +39,13 @@ use datapet::{
         Ok(())
         }"#
       )
-    - sort(&["num_1"])
+    - sort(&["num_1".asc()])
     - group(&["num_2", "num_3", "num_4"], "nums_234")
-    - sub_sort(&["nums_234"], &["num_2"])
+    - sub_sort(&["nums_234"], &["num_2".asc()])
     - sub_group(&["nums_234"], &["num_3", "num_4"], "nums_34")
-    - sub_sort(&["nums_234", "nums_34"], &["num_3"])
+    - sub_sort(&["nums_234", "nums_34"], &["num_3".asc()])
     - sub_group(&["nums_234", "nums_34"], &["num_4"], "nums_4")
-    - sub_sort(&["nums_234", "nums_34", "nums_4"], &["num_4"])
+    - sub_sort(&["nums_234", "nums_34", "nums_4"], &["num_4".asc()])
     - sub_group(&["nums_234", "nums_34", "nums_4"], &[], "nums_4")
     - sink(
         Some(quote! {

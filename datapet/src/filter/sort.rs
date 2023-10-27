@@ -1,4 +1,4 @@
-use crate::{prelude::*, support::fields_cmp};
+use crate::{prelude::*, support::cmp::fields_cmp};
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
@@ -8,7 +8,7 @@ pub struct Sort {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    fields: Vec<String>,
+    fields: Vec<Directed<String>>,
 }
 
 impl Sort {
@@ -16,7 +16,7 @@ impl Sort {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        fields: &[&str],
+        fields: &[Directed<&str>],
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
@@ -30,7 +30,10 @@ impl Sort {
             name,
             inputs,
             outputs,
-            fields: fields.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            fields: fields
+                .iter()
+                .map(|field| field.as_ref().map(ToString::to_string))
+                .collect::<Vec<_>>(),
         }
     }
 }
@@ -53,7 +56,7 @@ impl DynNode for Sort {
             .stream_definition_fragments(self.outputs.single())
             .record();
 
-        let cmp = fields_cmp(&record, &self.fields);
+        let cmp = fields_cmp(&record, self.fields.iter().map(Directed::as_ref));
 
         let inline_body = quote! {
             datapet_support::iterator::sort::Sort::new(input, #cmp)
@@ -76,7 +79,7 @@ pub fn sort<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
-    fields: &[&str],
+    fields: &[Directed<&str>],
 ) -> Sort {
     Sort::new(graph, name, inputs, fields)
 }
@@ -90,7 +93,7 @@ pub struct SubSort {
     outputs: [NodeStream; 1],
     path_fields: Vec<String>,
     path_sub_stream: NodeSubStream,
-    fields: Vec<String>,
+    fields: Vec<Directed<String>>,
 }
 
 impl SubSort {
@@ -99,7 +102,7 @@ impl SubSort {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         path_fields: &[&str],
-        fields: &[&str],
+        fields: &[Directed<&str>],
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         let path_sub_stream =
@@ -134,7 +137,10 @@ impl SubSort {
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
             path_sub_stream,
-            fields: fields.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            fields: fields
+                .iter()
+                .map(|field| field.as_ref().map(ToString::to_string))
+                .collect::<Vec<_>>(),
         }
     }
 }
@@ -169,7 +175,7 @@ impl DynNode for SubSort {
             })
         });
 
-        let cmp = fields_cmp(&sub_record, &self.fields);
+        let cmp = fields_cmp(&sub_record, self.fields.iter().map(Directed::as_ref));
 
         let inline_body = quote! {
             fn ci_fn(record: &mut #record) -> impl Iterator<Item = &mut Vec<#sub_record>> {
@@ -200,7 +206,7 @@ pub fn sub_sort<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     path_fields: &[&str],
-    fields: &[&str],
+    fields: &[Directed<&str>],
 ) -> SubSort {
     SubSort::new(graph, name, inputs, path_fields, fields)
 }

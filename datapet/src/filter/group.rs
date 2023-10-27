@@ -1,7 +1,7 @@
 use crate::{
-    graph::builder::assert_order_can_be_grouped_by,
+    graph::builder::assert_undirected_order_starts_with,
     prelude::*,
-    support::{fields_eq, fields_eq_ab},
+    support::eq::{fields_eq, fields_eq_ab},
 };
 use truc::record::type_resolver::TypeResolver;
 
@@ -54,7 +54,7 @@ impl Group {
                             }
                         }
 
-                        assert_order_can_be_grouped_by(
+                        assert_undirected_order_starts_with(
                             &group_by_datum_ids,
                             output_stream.facts().order(),
                             &*output_stream_def,
@@ -273,7 +273,7 @@ impl SubGroup {
                                             }
                                         }
 
-                                        assert_order_can_be_grouped_by(
+                                        assert_undirected_order_starts_with(
                                             &group_by_datum_ids,
                                             sub_output_stream.facts().order(),
                                             &*output_stream_def,

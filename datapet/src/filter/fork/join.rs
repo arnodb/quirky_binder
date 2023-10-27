@@ -1,4 +1,8 @@
-use crate::{graph::builder::assert_distinct_eq, prelude::*, support::fields_cmp_ab};
+use crate::{
+    graph::builder::{assert_directed_order_starts_with, assert_distinct_eq},
+    prelude::*,
+    support::cmp::fields_cmp_ab,
+};
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]
@@ -37,16 +41,23 @@ impl Join {
                             .borrow();
 
                         let variant = &input_stream_def[input.variant_id()];
-                        let mut expected_distinct = Vec::with_capacity(fields.len());
+                        let mut expected_fact_fields = Vec::with_capacity(fields.len());
                         for datum_id in variant.data() {
                             let datum = &input_stream_def[datum_id];
                             if fields.iter().any(|field| *field == datum.name()) {
-                                expected_distinct.push(datum.id());
+                                expected_fact_fields.push(datum.id());
                             }
                         }
 
+                        assert_directed_order_starts_with(
+                            &expected_fact_fields,
+                            input.facts().order(),
+                            &input_stream_def,
+                            &name,
+                            stream_info,
+                        );
                         assert_distinct_eq(
-                            &expected_distinct,
+                            &expected_fact_fields,
                             input.facts().distinct(),
                             &input_stream_def,
                             &name,

@@ -189,13 +189,13 @@ impl<'a> RecordDefinitionFragments<'a> {
 #[derive(Clone, Default, Getters, Debug)]
 pub struct StreamFacts {
     #[getset(get = "pub")]
-    order: Vec<DatumId>,
+    order: Vec<Directed<DatumId>>,
     #[getset(get = "pub")]
     distinct: Vec<DatumId>,
 }
 
 impl StreamFacts {
-    pub fn set_order(&mut self, order: Vec<DatumId>) {
+    pub fn set_order(&mut self, order: Vec<Directed<DatumId>>) {
         assert!(order.iter().all_unique());
         self.order = order;
     }

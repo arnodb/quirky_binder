@@ -102,9 +102,7 @@ impl InPlaceFilter {
 
 pub mod string {
     use super::InPlaceFilter;
-    use crate::graph::{builder::GraphBuilder, node::DynNode};
-    use crate::support::FullyQualifiedName;
-    use crate::{chain::Chain, graph::Graph, stream::NodeStream};
+    use crate::prelude::*;
     use std::ops::Deref;
     use truc::record::type_resolver::TypeResolver;
 

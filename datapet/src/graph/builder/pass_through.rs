@@ -148,7 +148,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
         leaf_sub_output_stream
     }
 
-    pub fn set_order_fact(&mut self, order_fields: &[&str]) {
+    pub fn set_order_fact(&mut self, order_fields: &[Directed<&str>]) {
         set_order_fact(
             &mut self.facts,
             order_fields,
@@ -232,7 +232,7 @@ impl<'g, R: TypeResolver> SubStreamBuilderForPassThrough<'g, R> {
         )
     }
 
-    pub fn set_order_fact(&mut self, order_fields: &[&str]) {
+    pub fn set_order_fact(&mut self, order_fields: &[Directed<&str>]) {
         set_order_fact(
             &mut self.facts,
             order_fields,

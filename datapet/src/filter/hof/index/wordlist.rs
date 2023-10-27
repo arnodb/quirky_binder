@@ -21,7 +21,7 @@ use crate::{
 
   ( < extracted
     - reverse_chars#reverse_token(&[token_field])
-    - sort#sort_token(&[token_field])
+    - sort#sort_token(&[token_field.asc()])
     -> reversed
   )
 }
@@ -35,7 +35,7 @@ use crate::{
 
   ( < extracted
     - to_lowercase#lowercase_token(&[token_field])
-    - sort#sort_token(&[token_field, reference_field])
+    - sort#sort_token(&[token_field.asc(), reference_field.asc()])
     - group#group(&[reference_field], refs_field)
     -> case_insensitive
   )

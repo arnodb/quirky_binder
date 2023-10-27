@@ -19,7 +19,7 @@ impl FunctionSource {
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
         fields: &[(&str, &str)],
-        order_fields: &[&str],
+        order_fields: &[Directed<&str>],
         distinct_fields: &[&str],
         func: &str,
     ) -> Self {
@@ -114,7 +114,7 @@ pub fn function_source<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 0],
     fields: &[(&str, &str)],
-    order_fields: &[&str],
+    order_fields: &[Directed<&str>],
     distinct_fields: &[&str],
     func: &str,
 ) -> FunctionSource {

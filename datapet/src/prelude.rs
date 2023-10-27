@@ -10,5 +10,6 @@ pub use crate::{
         NodeStream, NodeStreamSource, NodeSubStream, NoneNodeStream, RecordDefinitionFragments,
         SingleNodeStream, StreamFacts, StreamRecordType,
     },
-    support::FullyQualifiedName,
+    support::cmp::{Directable, Directed},
+    support::name::FullyQualifiedName,
 };

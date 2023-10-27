@@ -1,4 +1,4 @@
-use crate::{prelude::*, support::fields_eq};
+use crate::{prelude::*, support::eq::fields_eq};
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Getters)]

@@ -126,7 +126,7 @@ use super::tokenize;
         }"#
       )
     - tokenize#tokenize()
-    - sort#sort(&["first_char", "word"])
+    - sort#sort(&["first_char".asc(), "word".asc()])
     - group#group(&["word"], "words")
     - sink#sink(
         Some(quote! {

@@ -27,7 +27,7 @@ use datapet::{
 {
   (
       function_source#read_fs(
-        &[("id", "usize"), ("file_name", "String"), ("path", "String"), ("parent_id", "Option<usize>")], &["id"], &["id"],
+        &[("id", "usize"), ("file_name", "String"), ("path", "String"), ("parent_id", "Option<usize>")], &["id".asc()], &["id"],
         r#"{
         use std::collections::BTreeMap;
         use std::collections::btree_map::Entry;
@@ -84,7 +84,7 @@ use datapet::{
 
   ( < extracted
     - unwrap(&["parent_id"], true)
-    - sort(&["parent_id", "id"])
+    - sort(&["parent_id".asc(), "id".asc()])
     - group(&["id"], "children")
     -> children
   )
