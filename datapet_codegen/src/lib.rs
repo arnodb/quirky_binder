@@ -8,6 +8,7 @@ use datapet_lang::ast::StreamLineInput;
 use datapet_lang::ast::StreamLineOutput;
 use datapet_lang::ast::UseDeclaration;
 use datapet_lang::parser::module;
+use itertools::Itertools;
 use proc_macro2::Ident;
 use proc_macro2::TokenStream;
 use quote::format_ident;
@@ -264,6 +265,7 @@ fn dtpt_stream_lines(
     let mut body = Vec::<TokenStream>::new();
     let mut main_stream = None;
     loop {
+        let mut blocked = true;
         let mut go_back_on_unstarted = false;
         let start_bound_of_this_loop = first_incomplete_line;
         for flow_line_index in start_bound_of_this_loop..flow_line_iters.len() {
@@ -284,6 +286,7 @@ fn dtpt_stream_lines(
             }
             let mut new_named_streams = BTreeSet::<String>::new();
             if flow_line_iter.missing_inputs.is_empty() {
+                blocked = false;
                 if flow_line_iter.state == FlowLineState::Unstarted {
                     flow_line_iter.state = FlowLineState::Started;
                 }
@@ -392,6 +395,21 @@ fn dtpt_stream_lines(
         if first_incomplete_line >= flow_line_iters.len() {
             assert_eq!(first_incomplete_line, flow_line_iters.len());
             break;
+        }
+        if blocked {
+            panic!(
+                "blocked at {}",
+                flow_line_iters
+                    .iter_mut()
+                    .filter_map(|iter| iter.filter_iter.peek())
+                    .map(|filter| filter
+                        .1
+                        .filter
+                        .alias
+                        .as_ref()
+                        .unwrap_or(&filter.1.filter.name))
+                    .join(", ")
+            )
         }
     }
     (
