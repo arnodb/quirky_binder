@@ -8,9 +8,11 @@ rust-version = "1.56.1"
 proc-macro = true
 
 [dependencies]
+annotate-snippets = { version = "0.9", features = ["color"] }
 datapet_lang = { path = "../datapet_lang" }
 itertools = "0.10"
 proc-macro2 = "1"
+proc-macro-error = "1"
 quote = "1"
 syn = "1"
 

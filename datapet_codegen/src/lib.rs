@@ -1,27 +1,76 @@
-use datapet_lang::ast::ConnectedFilter;
-use datapet_lang::ast::Graph;
-use datapet_lang::ast::GraphDefinition;
-use datapet_lang::ast::Module;
-use datapet_lang::ast::ModuleItem;
-use datapet_lang::ast::StreamLine;
-use datapet_lang::ast::StreamLineInput;
-use datapet_lang::ast::StreamLineOutput;
-use datapet_lang::ast::UseDeclaration;
-use datapet_lang::parser::module;
+use annotate_snippets::{
+    display_list::{DisplayList, FormatOptions},
+    snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
+};
+use datapet_lang::{
+    ast::{
+        ConnectedFilter, Graph, GraphDefinition, Module, ModuleItem, StreamLine, StreamLineInput,
+        StreamLineOutput, UseDeclaration,
+    },
+    parser::module,
+};
 use itertools::Itertools;
-use proc_macro2::Ident;
-use proc_macro2::TokenStream;
-use quote::format_ident;
-use quote::quote;
-use std::collections::hash_map::Entry;
-use std::collections::BTreeMap;
-use std::collections::BTreeSet;
-use std::collections::HashMap;
-use std::iter::{Enumerate, Peekable};
-use syn::parse::Parse;
-use syn::parse::ParseStream;
-use syn::Error;
-use syn::LitStr;
+use proc_macro2::{Ident, TokenStream};
+use proc_macro_error::{abort_if_dirty, emit_error, proc_macro_error};
+use quote::{format_ident, quote};
+use std::{
+    collections::{hash_map::Entry, BTreeMap, BTreeSet, HashMap},
+    iter::{Enumerate, Peekable},
+};
+use syn::{
+    parse::{Parse, ParseStream},
+    Error, LitStr,
+};
+
+// Copied from https://github.com/botika/yarte
+fn lines_offsets(s: &str) -> Vec<usize> {
+    let mut lines = vec![0];
+    let mut prev = 0;
+    while let Some(len) = s[prev..].find('\n') {
+        prev += len + 1;
+        lines.push(prev);
+    }
+    lines
+}
+
+// Inspired by from https://github.com/botika/yarte
+fn slice_spans_for_error<'a>(
+    input: &'a str,
+    err: &datapet_lang::nom::Err<datapet_lang::nom::error::Error<&'a str>>,
+) -> (usize, (usize, usize), (usize, usize)) {
+    let offset = match err {
+        datapet_lang::nom::Err::Incomplete(_) => input.len(),
+        datapet_lang::nom::Err::Error(err) | datapet_lang::nom::Err::Failure(err) => {
+            input.len() - err.input.len()
+        }
+    };
+    let lo = offset;
+    let hi = offset + 1;
+
+    let lines = lines_offsets(input);
+
+    const CONTEXT: usize = 3;
+
+    let lo_index = match lines.binary_search(&lo) {
+        Ok(index) => index,
+        Err(index) => index - 1,
+    }
+    .saturating_sub(CONTEXT);
+    let lo_line = lines[lo_index];
+    let hi_index = match lines.binary_search(&hi) {
+        Ok(index) => index,
+        Err(index) => index,
+    };
+    let hi_line = lines
+        .get(hi_index + CONTEXT)
+        .copied()
+        .unwrap_or(input.len());
+    (
+        lo_index + 1,
+        (lo_line, hi_line),
+        (lo - lo_line, hi - lo_line),
+    )
+}
 
 struct Fragment {
     datapet_crate: Ident,
@@ -36,6 +85,7 @@ impl Parse for Fragment {
         } else if def_type == "datapet_def" {
             format_ident!("crate")
         } else {
+            // Do not mention datapet_def which is for internal use.
             return Err(Error::new(def_type.span(), "expected 'def'"));
         };
         let input_str: LitStr = input.parse()?;
@@ -44,7 +94,43 @@ impl Parse for Fragment {
         let (i, module) = match res {
             Ok(res) => res,
             Err(err) => {
-                return Err(Error::new(def_type.span(), err));
+                let (line_start, (lo_line, hi_line), (lo, hi)) = slice_spans_for_error(&i, &err);
+                let label = match &err {
+                    datapet_lang::nom::Err::Incomplete(_) => "Incomplete",
+                    datapet_lang::nom::Err::Error(err) | datapet_lang::nom::Err::Failure(err) => {
+                        err.code.description()
+                    }
+                };
+                let slice = Slice {
+                    source: &i[lo_line..hi_line],
+                    line_start,
+                    origin: None,
+                    annotations: vec![SourceAnnotation {
+                        label,
+                        range: (lo, hi),
+                        annotation_type: AnnotationType::Error,
+                    }],
+                    fold: false,
+                };
+
+                let s = Snippet {
+                    title: Some(Annotation {
+                        id: None,
+                        label: None,
+                        annotation_type: AnnotationType::Error,
+                    }),
+                    footer: vec![],
+                    slices: vec![slice],
+                    opt: FormatOptions {
+                        // No color until https://github.com/rust-lang/rust-analyzer/issues/15443
+                        // has a proper fix.
+                        color: false,
+                        ..Default::default()
+                    },
+                };
+
+                emit_error!(def_type, "{}", DisplayList::from(s));
+                return Err(Error::new(def_type.span(), "could not parse dtpt"));
             }
         };
         if !i.is_empty() {
@@ -433,6 +519,7 @@ fn dtpt_stream_lines(
 }
 
 #[proc_macro]
+#[proc_macro_error]
 pub fn dtpt(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let Fragment {
         datapet_crate,
@@ -440,6 +527,7 @@ pub fn dtpt(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     } = match syn::parse(input) {
         Ok(res) => res,
         Err(err) => {
+            abort_if_dirty();
             return err.into_compile_error().into();
         }
     };
