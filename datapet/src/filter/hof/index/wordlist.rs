@@ -1,7 +1,7 @@
-use datapet_codegen::dtpt_mod_crate;
+use datapet_codegen::dtpt;
 
-dtpt_mod_crate! {
-    r#"
+dtpt! {
+    datapet_def r#"
 use crate::{
     filter::{
         anchor::anchor,

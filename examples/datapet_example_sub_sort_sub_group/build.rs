@@ -2,13 +2,13 @@
 extern crate quote;
 
 use datapet::prelude::*;
-use datapet_codegen::dtpt_mod;
+use datapet_codegen::dtpt;
 use std::path::Path;
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
 
 fn main() {
-    dtpt_mod! {
-        r###"
+    dtpt! {
+        def r###"
 use datapet::{
     filter::{
         sink::sink,

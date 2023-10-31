@@ -2,14 +2,14 @@
 extern crate quote;
 
 use datapet::prelude::*;
-use datapet_codegen::dtpt_mod;
+use datapet_codegen::dtpt;
 use datapet_support::AnchorId;
 use std::path::Path;
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
 
 fn main() {
-    dtpt_mod! {
-        r###"
+    dtpt! {
+        def r###"
 use datapet::{
     filter::{
         anchor::anchor, dedup::dedup, hof::index::wordlist::build_word_list, sink::sink,

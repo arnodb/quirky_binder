@@ -24,18 +24,27 @@ use syn::Error;
 use syn::LitStr;
 
 struct Fragment {
+    datapet_crate: Ident,
     module: Module,
 }
 
 impl Parse for Fragment {
     fn parse(input: ParseStream) -> Result<Self, Error> {
+        let def_type: Ident = input.parse()?;
+        let datapet_crate = if def_type == "def" {
+            format_ident!("datapet")
+        } else if def_type == "datapet_def" {
+            format_ident!("crate")
+        } else {
+            return Err(Error::new(def_type.span(), "expected 'def'"));
+        };
         let input_str: LitStr = input.parse()?;
         let i = input_str.value();
         let res = module(&i);
         let (i, module) = match res {
             Ok(res) => res,
             Err(err) => {
-                return Err(Error::new(input_str.span(), err));
+                return Err(Error::new(def_type.span(), err));
             }
         };
         if !i.is_empty() {
@@ -44,7 +53,10 @@ impl Parse for Fragment {
                 format!("did not consume the entire input, {:?}", i),
             ));
         }
-        Ok(Fragment { module })
+        Ok(Fragment {
+            datapet_crate,
+            module,
+        })
     }
 }
 
@@ -420,15 +432,19 @@ fn dtpt_stream_lines(
     )
 }
 
-fn dtpt_mod_internal(input: proc_macro::TokenStream, crate_: Ident) -> proc_macro::TokenStream {
-    let fragment: Fragment = match syn::parse(input) {
+#[proc_macro]
+pub fn dtpt(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let Fragment {
+        datapet_crate,
+        module,
+    } = match syn::parse(input) {
         Ok(res) => res,
         Err(err) => {
             return err.into_compile_error().into();
         }
     };
     let mut graph_id = 0;
-    let module = TokenStream::from_iter(fragment.module.items.iter().map(|item| match item {
+    let content = TokenStream::from_iter(module.items.iter().map(|item| match item {
         ModuleItem::UseDeclaration(use_declaration) => dtpt_use_declaration(use_declaration),
         ModuleItem::GraphDefinition(graph_definition) => dtpt_graph_definition(graph_definition),
         ModuleItem::Graph(graph) => {
@@ -438,8 +454,7 @@ fn dtpt_mod_internal(input: proc_macro::TokenStream, crate_: Ident) -> proc_macr
         }
     }));
     let exports = TokenStream::from_iter(
-        fragment
-            .module
+        module
             .items
             .iter()
             .filter_map(|item| match item {
@@ -474,10 +489,10 @@ fn dtpt_mod_internal(input: proc_macro::TokenStream, crate_: Ident) -> proc_macr
     });
     (quote! {
         mod __dtpt_private {
-            use #crate_::prelude::*;
+            use #datapet_crate::prelude::*;
             use truc::record::type_resolver::TypeResolver;
 
-            #module
+            #content
         }
 
         #exports
@@ -485,14 +500,4 @@ fn dtpt_mod_internal(input: proc_macro::TokenStream, crate_: Ident) -> proc_macr
         #main
     })
     .into()
-}
-
-#[proc_macro]
-pub fn dtpt_mod_crate(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    dtpt_mod_internal(input, format_ident!("crate"))
-}
-
-#[proc_macro]
-pub fn dtpt_mod(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    dtpt_mod_internal(input, format_ident!("datapet"))
 }

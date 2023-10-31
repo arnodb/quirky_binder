@@ -4,7 +4,7 @@ extern crate getset;
 extern crate quote;
 
 use datapet::prelude::*;
-use datapet_codegen::dtpt_mod;
+use datapet_codegen::dtpt;
 use std::path::Path;
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
 
@@ -90,8 +90,8 @@ pub fn tokenize<R: TypeResolver + Copy>(
 }
 
 fn main() {
-    dtpt_mod! {
-        r###"
+    dtpt! {
+        def r###"
 use datapet::{
     filter::{
         group::group, sink::sink, sort::sort,
