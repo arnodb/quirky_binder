@@ -1,6 +1,15 @@
 use crate::prelude::*;
 use proc_macro2::TokenStream;
+use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+#[derive(Deserialize, Debug)]
+pub struct FunctionSourceParams<'a> {
+    fields: TypedFieldsParam<'a>,
+    order_fields: Option<DirectedFieldsParam<'a>>,
+    distinct_fields: Option<FieldsParam<'a>>,
+    function: &'a str,
+}
 
 #[derive(Getters)]
 pub struct FunctionSource {
@@ -10,7 +19,7 @@ pub struct FunctionSource {
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     fields: Vec<(String, String)>,
-    func: String,
+    function: String,
 }
 
 impl FunctionSource {
@@ -18,10 +27,7 @@ impl FunctionSource {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
-        fields: &[(&str, &str)],
-        order_fields: &[Directed<&str>],
-        distinct_fields: &[&str],
-        func: &str,
+        params: FunctionSourceParams,
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_main_stream(graph);
@@ -31,12 +37,16 @@ impl FunctionSource {
             .update(|output_stream, facts_proof| {
                 {
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                    for (name, r#type) in fields.iter() {
+                    for (name, r#type) in params.fields.iter() {
                         output_stream_def.add_dynamic_datum(*name, r#type);
                     }
                 }
-                output_stream.set_order_fact(order_fields);
-                output_stream.set_distinct_fact(distinct_fields);
+                if let Some(order_fields) = params.order_fields.as_ref() {
+                    output_stream.set_order_fact(order_fields);
+                }
+                if let Some(distinct_fields) = params.distinct_fields.as_ref() {
+                    output_stream.set_distinct_fact(distinct_fields);
+                }
                 facts_proof.order_facts_updated().distinct_facts_updated()
             });
 
@@ -46,11 +56,12 @@ impl FunctionSource {
             name,
             inputs,
             outputs,
-            fields: fields
+            fields: params
+                .fields
                 .iter()
                 .map(|(name, r#type)| ((*name).to_owned(), (*r#type).to_owned()))
                 .collect(),
-            func: func.to_owned(),
+            function: params.function.to_owned(),
         }
     }
 }
@@ -89,7 +100,7 @@ impl DynNode for FunctionSource {
             (quote!(#(#names: #types),*), quote!(#(#names),*))
         };
 
-        let func_body: TokenStream = self.func.parse().expect("function body");
+        let func_body: TokenStream = self.function.parse().expect("function body");
 
         let thread_body = quote! {
             move || {
@@ -113,18 +124,7 @@ pub fn function_source<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 0],
-    fields: &[(&str, &str)],
-    order_fields: &[Directed<&str>],
-    distinct_fields: &[&str],
-    func: &str,
+    params: FunctionSourceParams,
 ) -> FunctionSource {
-    FunctionSource::new(
-        graph,
-        name,
-        inputs,
-        fields,
-        order_fields,
-        distinct_fields,
-        func,
-    )
+    FunctionSource::new(graph, name, inputs, params)
 }

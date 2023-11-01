@@ -15,6 +15,7 @@ impl Debug {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
+        _params: (),
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
@@ -71,6 +72,7 @@ pub fn debug<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
+    params: (),
 ) -> Debug {
-    Debug::new(graph, name, inputs)
+    Debug::new(graph, name, inputs, params)
 }

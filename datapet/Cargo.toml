@@ -2,7 +2,7 @@
 name = "datapet"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.56.1"
+rust-version = "1.64.0"
 
 [dependencies]
 codegen = "0.1"
@@ -11,9 +11,12 @@ datapet_support = { path = "../datapet_support" }
 derive_more = "0.99"
 derive-new = "0.5"
 getset = "0.1"
+handlebars = "4"
 itertools = "0.10"
 proc-macro2 = "1"
 quote = "1"
-syn = "1"
+ron = { git = "https://github.com/ron-rs/ron.git" }
+serde = { version = "1", features = ["derive"] }
+syn = { version = "1", features = ["full"] }
 truc = { git = "https://github.com/arnodb/truc.git" }
 which = "4"

@@ -196,10 +196,25 @@ fn dtpt_graph_definition(
         .outputs
         .as_ref()
         .map_or(0, |outputs| outputs.len() + 1);
-    let params = graph_definition.signature.params.iter().map(|param| {
-        let name = format_ident!("{}", param);
-        quote! { #name: &str }
+    let params = graph_definition
+        .signature
+        .params
+        .iter()
+        .map(|param| format_ident!("{}", param));
+    let param_types = (0..graph_definition.signature.params.len()).map(|_| {
+        quote! { &str }
     });
+    let setup_handlebars = {
+        let hb_params = graph_definition.signature.params.iter().map(|param| {
+            let name = format_ident!("{}", param);
+            quote! { handlebars_data.insert(#param, #name); }
+        });
+        quote! {
+            let handlebars = Handlebars::new();
+            let mut handlebars_data = BTreeMap::<&str, &str>::new();
+            #(#hb_params)*
+        }
+    };
     let (body, ordered_var_names, main_stream, mut named_streams) =
         dtpt_stream_lines(&graph_definition.stream_lines, error_emitter);
     let (main_stream, main_stream_anchor) = match main_stream {
@@ -251,8 +266,10 @@ fn dtpt_graph_definition(
             graph: &mut GraphBuilder<R>,
             name: FullyQualifiedName,
             inputs: [NodeStream; #input_count],
-            #(#params,)*
+            (#(#params,)*): (#(#param_types,)*)
         ) -> NodeCluster<#input_count, #output_count> {
+
+            #setup_handlebars
 
             #body
 
@@ -281,6 +298,9 @@ fn dtpt_graph(graph: &Graph, id: usize, error_emitter: &ErrorEmitter) -> TokenSt
             graph: &mut GraphBuilder<R>,
             name: FullyQualifiedName,
         ) -> NodeCluster<0, 0> {
+            let handlebars = Handlebars::new();
+            let handlebars_data = BTreeMap::<&str, &str>::new();
+
             #body
 
             NodeCluster::new(
@@ -497,15 +517,10 @@ fn dtpt_stream_lines<'a>(
                         break;
                     }
                     assert_eq!(inputs.len(), filter.inputs.len());
-                    let params = filter
-                        .filter
-                        .params
-                        .iter()
-                        .map(|param| {
-                            let expr: syn::Expr = syn::parse_str(param).expect("param expr");
-                            quote! { #expr }
-                        })
-                        .collect::<Vec<TokenStream>>();
+                    let params = &filter.filter.params;
+                    let ron_params = quote! {
+                        let ron_params_str = handlebars.render_template(#params, &handlebars_data).expect("handlebars");
+                    };
                     for (extra_output_index, extra_output) in
                         filter.filter.extra_outputs.iter().enumerate()
                     {
@@ -515,12 +530,15 @@ fn dtpt_stream_lines<'a>(
                         new_named_streams.insert(extra_output.clone().into_owned());
                     }
                     body.push(quote! {
-                        let #var_name = #name(
-                            graph,
-                            name.sub(stringify!(#var_name)),
-                            [#(#inputs,)*],
-                            #(#params,)*
-                        );
+                        let #var_name = {
+                            #ron_params
+                            #name(
+                                graph,
+                                name.sub(stringify!(#var_name)),
+                                [#(#inputs,)*],
+                                graph.params().from_ron_str(&ron_params_str).expect("params"),
+                            )
+                        };
                     });
                     ordered_var_names.push(var_name.clone());
                     go_back_on_unstarted = true;
@@ -654,6 +672,9 @@ pub fn dtpt(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             fn dtpt_main<R: TypeResolver + Copy>(
                 mut graph: GraphBuilder<R>,
             ) -> Graph {
+                let handlebars = Handlebars::new();
+                let handlebars_data = BTreeMap::<&str, &str>::new();
+
                 let root = FullyQualifiedName::default();
 
                 let entry_nodes: Vec<Box<dyn DynNode>> = vec![
@@ -664,8 +685,13 @@ pub fn dtpt(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         }
     });
     (quote! {
+        use handlebars::Handlebars;
+        use std::collections::BTreeMap;
+
         mod __dtpt_private {
             use #datapet_crate::prelude::*;
+            use handlebars::Handlebars;
+            use std::collections::BTreeMap;
             use truc::record::type_resolver::TypeResolver;
 
             #content

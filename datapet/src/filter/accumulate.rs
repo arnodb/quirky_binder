@@ -15,6 +15,7 @@ impl Accumulate {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
+        _params: (),
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
@@ -67,6 +68,7 @@ pub fn accumulate<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
+    params: (),
 ) -> Accumulate {
-    Accumulate::new(graph, name, inputs)
+    Accumulate::new(graph, name, inputs, params)
 }

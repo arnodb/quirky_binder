@@ -1,5 +1,12 @@
 use crate::{prelude::*, support::cmp::fields_cmp};
+use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+#[derive(Deserialize, Debug)]
+pub struct SortParams<'a> {
+    #[serde(borrow)]
+    fields: DirectedFieldsParam<'a>,
+}
 
 #[derive(Getters)]
 pub struct Sort {
@@ -16,13 +23,13 @@ impl Sort {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        fields: &[Directed<&str>],
+        params: SortParams,
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
             .pass_through(|builder, facts_proof| {
-                builder.set_order_fact(fields);
+                builder.set_order_fact(&params.fields);
                 facts_proof.order_facts_updated().distinct_facts_updated()
             });
         let outputs = streams.build();
@@ -30,7 +37,8 @@ impl Sort {
             name,
             inputs,
             outputs,
-            fields: fields
+            fields: params
+                .fields
                 .iter()
                 .map(|field| field.as_ref().map(ToString::to_string))
                 .collect::<Vec<_>>(),
@@ -79,9 +87,16 @@ pub fn sort<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
-    fields: &[Directed<&str>],
+    params: SortParams,
 ) -> Sort {
-    Sort::new(graph, name, inputs, fields)
+    Sort::new(graph, name, inputs, params)
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SubSortParams<'a> {
+    #[serde(borrow)]
+    path_fields: FieldsParam<'a>,
+    fields: DirectedFieldsParam<'a>,
 }
 
 #[derive(Getters)]
@@ -101,8 +116,7 @@ impl SubSort {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        path_fields: &[&str],
-        fields: &[Directed<&str>],
+        params: SubSortParams,
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         let path_sub_stream =
@@ -110,12 +124,14 @@ impl SubSort {
                 .output_from_input(0, true, graph)
                 .pass_through(|output_stream, facts_proof| {
                     let path_sub_stream = output_stream.pass_through_path(
-                        path_fields,
+                        &params.path_fields,
                         |sub_input_stream, output_stream| {
                             output_stream.pass_through_sub_stream(
                                 sub_input_stream,
                                 graph,
-                                |sub_output_stream| sub_output_stream.set_order_fact(fields),
+                                |sub_output_stream| {
+                                    sub_output_stream.set_order_fact(&params.fields)
+                                },
                             )
                         },
                         graph,
@@ -132,12 +148,14 @@ impl SubSort {
             name,
             inputs,
             outputs,
-            path_fields: path_fields
+            path_fields: params
+                .path_fields
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
             path_sub_stream,
-            fields: fields
+            fields: params
+                .fields
                 .iter()
                 .map(|field| field.as_ref().map(ToString::to_string))
                 .collect::<Vec<_>>(),
@@ -205,8 +223,7 @@ pub fn sub_sort<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
-    path_fields: &[&str],
-    fields: &[Directed<&str>],
+    params: SubSortParams,
 ) -> SubSort {
-    SubSort::new(graph, name, inputs, path_fields, fields)
+    SubSort::new(graph, name, inputs, params)
 }

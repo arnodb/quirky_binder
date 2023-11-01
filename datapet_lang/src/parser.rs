@@ -177,7 +177,7 @@ fn filter(input: &str) -> IResult<&str, Filter> {
     .map(|(name, alias, params, extra_streams)| Filter {
         name: name.into(),
         alias: alias.map(Into::into),
-        params: params.into_iter().map(Into::into).collect(),
+        params: params.into(),
         extra_outputs: extra_streams.map_or_else(Vec::new, |extra_outputs| {
             extra_outputs.into_iter().map(Into::into).collect()
         }),
@@ -185,16 +185,14 @@ fn filter(input: &str) -> IResult<&str, Filter> {
     .parse(input)
 }
 
-fn filter_params(input: &str) -> IResult<&str, Vec<&str>> {
-    delimited(
-        tag("("),
-        ps(separated_list0(tag(","), ds(filter_param))),
-        tag(")"),
-    )(input)
-}
-
-fn filter_param(input: &str) -> IResult<&str, &str> {
-    code(input)
+fn filter_params(input: &str) -> IResult<&str, &str> {
+    recognize(preceded(
+        char('('),
+        cut(terminated(
+            many0(alt((code, recognize(is_not("\"'()[]{}"))))),
+            char(')'),
+        )),
+    ))(input)
 }
 
 fn code(input: &str) -> IResult<&str, &str> {

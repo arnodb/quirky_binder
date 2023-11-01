@@ -5,9 +5,9 @@ pub mod streams {
 include!(concat!(env!("OUT_DIR"), "/chain.rs"));
 
 pub mod tokenize {
-    use crate::chain::streams::read_input::Record0 as RecordIn;
-    use crate::chain::streams::read_input::Record1 as RecordOut;
-    use crate::chain::streams::read_input::UnpackedRecord1 as UnpackedRecordOut;
+    use crate::chain::streams::read_input::{
+        Record0 as RecordIn, Record1 as RecordOut, UnpackedRecord1 as UnpackedRecordOut,
+    };
     use fallible_iterator::FallibleIterator;
     use std::collections::VecDeque;
 

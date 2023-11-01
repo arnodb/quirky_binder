@@ -103,8 +103,15 @@ impl InPlaceFilter {
 pub mod string {
     use super::InPlaceFilter;
     use crate::prelude::*;
+    use serde::Deserialize;
     use std::ops::Deref;
     use truc::record::type_resolver::TypeResolver;
+
+    #[derive(Deserialize, Debug)]
+    pub struct InplaceStringParams<'a> {
+        #[serde(borrow)]
+        fields: FieldsParam<'a>,
+    }
 
     pub struct ToLowercase {
         in_place: InPlaceFilter,
@@ -153,11 +160,12 @@ pub mod string {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        fields: &[&str],
+        params: InplaceStringParams,
     ) -> ToLowercase {
         ToLowercase {
-            in_place: InPlaceFilter::new(graph, name, inputs, fields, Some(fields)),
-            fields: fields
+            in_place: InPlaceFilter::new(graph, name, inputs, &params.fields, Some(&params.fields)),
+            fields: params
+                .fields
                 .iter()
                 .map(Deref::deref)
                 .map(Into::into)
@@ -213,14 +221,18 @@ pub mod string {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        fields: &[&str],
+        params: InplaceStringParams,
     ) -> ReverseChars {
         ReverseChars {
             in_place: InPlaceFilter::new(
-                graph, name, inputs, /* TODO nice to have: change order direction */ fields,
+                graph,
+                name,
+                inputs,
+                /* TODO nice to have: change order direction */ &params.fields,
                 None,
             ),
-            fields: fields
+            fields: params
+                .fields
                 .iter()
                 .map(Deref::deref)
                 .map(Into::into)

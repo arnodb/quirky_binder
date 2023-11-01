@@ -11,6 +11,7 @@ pub mod chain;
 pub mod drawing;
 pub mod filter;
 pub mod graph;
+pub mod params;
 pub mod prelude;
 pub mod stream;
 pub mod support;

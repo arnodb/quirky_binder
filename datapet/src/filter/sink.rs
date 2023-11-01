@@ -1,6 +1,12 @@
 use crate::prelude::*;
 use proc_macro2::TokenStream;
+use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+#[derive(Deserialize, Debug)]
+pub struct SinkParams<'a> {
+    debug: Option<&'a str>,
+}
 
 #[derive(Getters)]
 pub struct Sink {
@@ -9,7 +15,7 @@ pub struct Sink {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 0],
-    debug: Option<TokenStream>,
+    debug: Option<String>,
 }
 
 impl Sink {
@@ -17,13 +23,13 @@ impl Sink {
         _graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        debug: Option<TokenStream>,
+        params: SinkParams,
     ) -> Self {
         Self {
             name,
             inputs,
             outputs: [],
-            debug,
+            debug: params.debug.map(ToString::to_string),
         }
     }
 }
@@ -50,7 +56,11 @@ impl DynNode for Sink {
 
         let input = thread.format_input(self.inputs.single().source(), graph.chain_customizer());
 
-        let debug = &self.debug;
+        let debug: Option<TokenStream> = self
+            .debug
+            .as_ref()
+            .map(|debug| debug.parse().expect("function body"));
+
         let full_name = &self.name.to_string();
 
         let thread_body = quote! {
@@ -82,7 +92,7 @@ pub fn sink<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
-    debug: Option<TokenStream>,
+    params: SinkParams,
 ) -> Sink {
-    Sink::new(graph, name, inputs, debug)
+    Sink::new(graph, name, inputs, params)
 }

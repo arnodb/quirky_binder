@@ -1,25 +1,32 @@
-use self::{pass_through::OutputBuilderForPassThrough, update::OutputBuilderForUpdate};
+use self::{
+    params::ParamsBuilder, pass_through::OutputBuilderForPassThrough,
+    update::OutputBuilderForUpdate,
+};
 use crate::prelude::*;
 use itertools::Itertools;
-use std::ops::Deref;
 use std::{
     cell::RefCell,
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    ops::Deref,
 };
 use truc::record::{
     definition::{DatumDefinitionOverride, DatumId, RecordDefinitionBuilder, RecordVariantId},
     type_resolver::TypeResolver,
 };
 
+pub mod params;
 pub mod pass_through;
 pub mod update;
 
-#[derive(new)]
+#[derive(new, Getters)]
 pub struct GraphBuilder<R: TypeResolver + Copy> {
     type_resolver: R,
     chain_customizer: ChainCustomizer,
     #[new(default)]
     record_definitions: BTreeMap<StreamRecordType, RefCell<RecordDefinitionBuilder<R>>>,
+    #[new(default)]
+    #[getset(get = "pub")]
+    params: ParamsBuilder,
     #[new(default)]
     anchor_table_count: usize,
 }
@@ -420,7 +427,7 @@ pub fn assert_directed_order_starts_with<R: TypeResolver>(
 
     let expected_directed_order = expected_order
         .iter()
-        .map(|d| d.asc())
+        .map(|d| Directed::Ascending(*d))
         .collect::<Vec<Directed<DatumId>>>();
 
     let is_ok = if actual_order.len() >= expected_order.len() {

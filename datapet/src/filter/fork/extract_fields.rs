@@ -1,5 +1,12 @@
 use crate::prelude::*;
+use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+#[derive(Deserialize, Debug)]
+pub struct ExtractFieldsParams<'a> {
+    #[serde(borrow)]
+    fields: FieldsParam<'a>,
+}
 
 #[derive(Getters)]
 pub struct ExtractFields {
@@ -15,7 +22,7 @@ impl ExtractFields {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        fields: &[&str],
+        params: ExtractFieldsParams,
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("extracted", graph);
@@ -35,7 +42,7 @@ impl ExtractFields {
             |output_extracted_stream, facts_proof| {
                 let mut output_extracted_stream_def =
                     output_extracted_stream.record_definition().borrow_mut();
-                for field in fields.iter() {
+                for field in params.fields.iter() {
                     output_extracted_stream_def.copy_datum(
                         output_stream_def
                             .borrow()
@@ -131,7 +138,7 @@ pub fn extract_fields<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
-    fields: &[&str],
+    params: ExtractFieldsParams,
 ) -> ExtractFields {
-    ExtractFields::new(graph, name, inputs, fields)
+    ExtractFields::new(graph, name, inputs, params)
 }

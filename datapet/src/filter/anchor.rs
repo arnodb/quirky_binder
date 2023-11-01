@@ -1,6 +1,12 @@
 use crate::prelude::*;
 use datapet_support::AnchorId;
+use serde::Deserialize;
 use truc::record::{definition::DatumDefinitionOverride, type_resolver::TypeResolver};
+
+#[derive(Deserialize, Debug)]
+pub struct AnchorParams<'a> {
+    anchor_field: &'a str,
+}
 
 #[derive(Getters)]
 pub struct Anchor {
@@ -17,7 +23,7 @@ impl Anchor {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        anchor_field: &str,
+        params: AnchorParams,
     ) -> Self {
         let anchor_table_id = graph.new_anchor_table();
 
@@ -28,7 +34,7 @@ impl Anchor {
             .update(|output_stream, facts_proof| {
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
                 output_stream_def.add_datum_override::<AnchorId<0>, _>(
-                    anchor_field,
+                    params.anchor_field,
                     DatumDefinitionOverride {
                         type_name: Some(format!("datapet_support::AnchorId<{}>", anchor_table_id)),
                         size: None,
@@ -45,7 +51,7 @@ impl Anchor {
             name,
             inputs,
             outputs,
-            anchor_field: anchor_field.to_string(),
+            anchor_field: params.anchor_field.to_string(),
         }
     }
 }
@@ -100,7 +106,7 @@ pub fn anchor<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
-    anchor_field: &str,
+    params: AnchorParams,
 ) -> Anchor {
-    Anchor::new(graph, name, inputs, anchor_field)
+    Anchor::new(graph, name, inputs, params)
 }

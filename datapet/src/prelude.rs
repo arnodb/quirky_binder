@@ -1,15 +1,14 @@
 pub use crate::{
     chain::{Chain, ChainCustomizer, ImportScope},
     graph::{
-        builder::StreamsBuilder,
-        builder::{update::PathUpdateElement, GraphBuilder},
+        builder::{update::PathUpdateElement, GraphBuilder, StreamsBuilder},
         node::{DynNode, NodeCluster},
         Graph,
     },
+    params::{DirectedFieldsParam, FieldsParam, TypedFieldsParam},
     stream::{
         NodeStream, NodeStreamSource, NodeSubStream, NoneNodeStream, RecordDefinitionFragments,
         SingleNodeStream, StreamFacts, StreamRecordType,
     },
-    support::cmp::{Directable, Directed},
-    support::name::FullyQualifiedName,
+    support::{cmp::Directed, name::FullyQualifiedName},
 };

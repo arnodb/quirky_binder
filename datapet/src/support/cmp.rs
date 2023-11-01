@@ -1,14 +1,39 @@
 use itertools::zip_eq;
+use serde::Deserialize;
 use std::{
     fmt::{Debug, Display, Formatter},
     ops::Deref,
 };
-use truc::record::definition::DatumId;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash, Debug)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash, Deserialize, Debug)]
+#[serde(from = "MaybeTaggedDirected<T>")]
 pub enum Directed<T> {
     Ascending(T),
     Descending(T),
+}
+
+// This requires ron 0.9 (https://github.com/ron-rs/ron/issues/492)
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+enum MaybeTaggedDirected<T> {
+    Tagged(TaggedDirected<T>),
+    Untagged(T),
+}
+
+#[derive(Deserialize, Debug)]
+enum TaggedDirected<T> {
+    Ascending(T),
+    Descending(T),
+}
+
+impl<T> From<MaybeTaggedDirected<T>> for Directed<T> {
+    fn from(value: MaybeTaggedDirected<T>) -> Self {
+        match value {
+            MaybeTaggedDirected::Tagged(TaggedDirected::Ascending(t))
+            | MaybeTaggedDirected::Untagged(t) => Directed::Ascending(t),
+            MaybeTaggedDirected::Tagged(TaggedDirected::Descending(t)) => Directed::Descending(t),
+        }
+    }
 }
 
 impl<T: Display> Display for Directed<T> {
@@ -56,19 +81,6 @@ impl<T> Deref for Directed<T> {
         }
     }
 }
-
-pub trait Directable: Sized {
-    fn asc(self) -> Directed<Self> {
-        Directed::Ascending(self)
-    }
-
-    fn desc(self) -> Directed<Self> {
-        Directed::Descending(self)
-    }
-}
-
-impl Directable for &str {}
-impl Directable for DatumId {}
 
 pub fn fields_cmp<F, FStr>(record_type: &syn::Type, fields: F) -> syn::Expr
 where

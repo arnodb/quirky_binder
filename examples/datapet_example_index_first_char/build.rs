@@ -22,6 +22,7 @@ impl Tokenize {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
+        _params: (),
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
@@ -85,8 +86,9 @@ pub fn tokenize<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
+    params: (),
 ) -> Tokenize {
-    Tokenize::new(graph, name, inputs)
+    Tokenize::new(graph, name, inputs, params)
 }
 
 fn main() {
@@ -104,32 +106,32 @@ use super::tokenize;
 {
   (
       function_source#read_input(
-        &[("words", "Box<str>")], &[], &[],
-        r#"{
-        use std::io::BufRead;
+        fields: [("words", "Box<str>")],
+        function: r#"{
+            use std::io::BufRead;
 
-        let stdin = std::io::stdin();
-        let mut input = stdin.lock();
-        let mut buffer = String::new();
-        loop {
-            let read = input.read_line(&mut buffer).map_err(|err| DatapetError::Custom(err.to_string()))?;
-            if read > 0 {
-                let value = std::mem::take(&mut buffer);
-                let value = value.trim_end_matches('\n');
-                let record = new_record(value.to_string().into_boxed_str());
-                out.send(Some(record))?;
-            } else {
-                out.send(None)?;
-                return Ok(());
+            let stdin = std::io::stdin();
+            let mut input = stdin.lock();
+            let mut buffer = String::new();
+            loop {
+                let read = input.read_line(&mut buffer).map_err(|err| DatapetError::Custom(err.to_string()))?;
+                if read > 0 {
+                    let value = std::mem::take(&mut buffer);
+                    let value = value.trim_end_matches('\n');
+                    let record = new_record(value.to_string().into_boxed_str());
+                    out.send(Some(record))?;
+                } else {
+                    out.send(None)?;
+                    return Ok(());
+                }
             }
-        }
-        }"#
+        }"#,
       )
     - tokenize#tokenize()
-    - sort#sort(&["first_char".asc(), "word".asc()])
-    - group#group(&["word"], "words")
+    - sort#sort(fields: ["first_char", "word"])
+    - group#group(fields: ["word"], group_field: "words")
     - sink#sink(
-        Some(quote! {
+        debug: Some(r#"
             use itertools::Itertools;
 
             println!(
@@ -140,7 +142,7 @@ use super::tokenize;
                     .map(|word|word.word())
                     .join(", ")
             );
-        })
+        "#)
       )
   )
 }

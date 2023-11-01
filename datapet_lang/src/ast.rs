@@ -66,7 +66,7 @@ pub struct ConnectedFilter<'a> {
 pub struct Filter<'a> {
     pub name: Cow<'a, str>,
     pub alias: Option<Cow<'a, str>>,
-    pub params: Vec<Cow<'a, str>>,
+    pub params: Cow<'a, str>,
     pub extra_outputs: Vec<Cow<'a, str>>,
 }
 

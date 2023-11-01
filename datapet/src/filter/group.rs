@@ -3,7 +3,14 @@ use crate::{
     prelude::*,
     support::eq::{fields_eq, fields_eq_ab},
 };
+use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+#[derive(Deserialize, Debug)]
+pub struct GroupParams<'a> {
+    fields: FieldsParam<'a>,
+    group_field: &'a str,
+}
 
 #[derive(Getters)]
 pub struct Group {
@@ -22,8 +29,7 @@ impl Group {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        fields: &[&str],
-        group_field: &str,
+        params: GroupParams,
     ) -> Group {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("group", graph);
@@ -41,12 +47,12 @@ impl Group {
 
                         let variant = &output_stream_def[variant_id];
                         let mut group_by_datum_ids =
-                            Vec::with_capacity(variant.data_len() - fields.len());
-                        let mut group_data = Vec::with_capacity(fields.len());
-                        let mut group_datum_ids = Vec::with_capacity(fields.len());
+                            Vec::with_capacity(variant.data_len() - params.fields.len());
+                        let mut group_data = Vec::with_capacity(params.fields.len());
+                        let mut group_datum_ids = Vec::with_capacity(params.fields.len());
                         for datum_id in variant.data() {
                             let datum = &output_stream_def[datum_id];
-                            if fields.iter().any(|field| *field == datum.name()) {
+                            if params.fields.iter().any(|field| *field == datum.name()) {
                                 group_data.push(datum);
                                 group_datum_ids.push(datum.id());
                             } else {
@@ -78,7 +84,7 @@ impl Group {
                         .streams_module_name
                         .sub_n(&***group_stream.record_type());
                     output_stream.add_vec_datum(
-                        group_field,
+                        params.group_field,
                         &format!(
                             "{module_name}::Record{group_variant_id}",
                             module_name = module_name,
@@ -102,9 +108,13 @@ impl Group {
             name: name.clone(),
             inputs,
             outputs,
-            group_field: group_field.to_string(),
+            group_field: params.group_field.to_string(),
             group_stream,
-            fields: fields.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            fields: params
+                .fields
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
         }
     }
 }
@@ -204,10 +214,16 @@ pub fn group<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
-    fields: &[&str],
-    group_field: &str,
+    params: GroupParams,
 ) -> Group {
-    Group::new(graph, name, inputs, fields, group_field)
+    Group::new(graph, name, inputs, params)
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SubGroupParams<'a> {
+    path_fields: FieldsParam<'a>,
+    fields: FieldsParam<'a>,
+    group_field: &'a str,
 }
 
 #[derive(Getters)]
@@ -228,9 +244,7 @@ impl SubGroup {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        path_fields: &[&str],
-        fields: &[&str],
-        group_field: &str,
+        params: SubGroupParams,
     ) -> SubGroup {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("group", graph);
@@ -242,7 +256,7 @@ impl SubGroup {
                 .output_from_input(0, true, graph)
                 .update(|output_stream, facts_proof| {
                     let path_streams = output_stream.update_path(
-                        path_fields,
+                        &params.path_fields,
                         |sub_input_stream, output_stream| {
                             output_stream.update_sub_stream(
                                 sub_input_stream,
@@ -259,13 +273,20 @@ impl SubGroup {
                                             group_stream.record_definition().borrow_mut();
 
                                         let variant = &output_stream_def[variant_id];
-                                        let mut group_by_datum_ids =
-                                            Vec::with_capacity(variant.data_len() - fields.len());
-                                        let mut group_data = Vec::with_capacity(fields.len());
-                                        let mut group_datum_ids = Vec::with_capacity(fields.len());
+                                        let mut group_by_datum_ids = Vec::with_capacity(
+                                            variant.data_len() - params.fields.len(),
+                                        );
+                                        let mut group_data =
+                                            Vec::with_capacity(params.fields.len());
+                                        let mut group_datum_ids =
+                                            Vec::with_capacity(params.fields.len());
                                         for datum_id in variant.data() {
                                             let datum = &output_stream_def[datum_id];
-                                            if fields.iter().any(|field| *field == datum.name()) {
+                                            if params
+                                                .fields
+                                                .iter()
+                                                .any(|field| *field == datum.name())
+                                            {
                                                 group_data.push(datum);
                                                 group_datum_ids.push(datum.id());
                                             } else {
@@ -276,7 +297,7 @@ impl SubGroup {
                                         assert_undirected_order_starts_with(
                                             &group_by_datum_ids,
                                             sub_output_stream.facts().order(),
-                                            &*output_stream_def,
+                                            &output_stream_def,
                                             &name,
                                             "main sub stream",
                                         );
@@ -298,7 +319,7 @@ impl SubGroup {
                                         .streams_module_name
                                         .sub_n(&***group_stream.record_type());
                                     sub_output_stream.add_vec_datum(
-                                        group_field,
+                                        params.group_field,
                                         &format!(
                                             "{module_name}::Record{group_variant_id}",
                                             module_name = module_name,
@@ -355,9 +376,13 @@ impl SubGroup {
             inputs,
             outputs,
             path_streams,
-            group_field: group_field.to_string(),
+            group_field: params.group_field.to_string(),
             group_stream: created_group_stream.expect("group stream"),
-            fields: fields.iter().map(ToString::to_string).collect::<Vec<_>>(),
+            fields: params
+                .fields
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
         }
     }
 }
@@ -533,9 +558,7 @@ pub fn sub_group<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
-    path_fields: &[&str],
-    fields: &[&str],
-    group_field: &str,
+    params: SubGroupParams,
 ) -> SubGroup {
-    SubGroup::new(graph, name, inputs, path_fields, fields, group_field)
+    SubGroup::new(graph, name, inputs, params)
 }

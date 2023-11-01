@@ -2,7 +2,7 @@
 name = "datapet_example_sub_sort_sub_group"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.56.1"
+rust-version = "1.64.0"
 
 [dependencies]
 datapet_support = { path = "../../datapet_support" }
@@ -15,5 +15,5 @@ truc_runtime = { git = "https://github.com/arnodb/truc.git" }
 [build-dependencies]
 datapet = { path = "../../datapet" }
 datapet_codegen = { path = "../../datapet_codegen" }
-quote = "1"
+handlebars = "4"
 truc = { git = "https://github.com/arnodb/truc.git" }

@@ -3,7 +3,15 @@ use crate::{
     prelude::*,
     support::cmp::fields_cmp_ab,
 };
+use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+#[derive(Deserialize, Debug)]
+pub struct JoinParams<'a> {
+    #[serde(borrow)]
+    primary_fields: FieldsParam<'a>,
+    secondary_fields: FieldsParam<'a>,
+}
 
 #[derive(Getters)]
 pub struct Join {
@@ -22,8 +30,7 @@ impl Join {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 2],
-        primary_fields: &[&str],
-        secondary_fields: &[&str],
+        params: JoinParams,
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
@@ -32,8 +39,8 @@ impl Join {
                 .output_from_input(0, true, graph)
                 .update(|output_stream, facts_proof| {
                     for (stream_info, input, fields) in [
-                        ("primary stream", &inputs[0], primary_fields),
-                        ("secondary stream", &inputs[1], secondary_fields),
+                        ("primary stream", &inputs[0], &params.primary_fields),
+                        ("secondary stream", &inputs[1], &params.secondary_fields),
                     ] {
                         let input_stream_def = graph
                             .get_stream(input.record_type())
@@ -76,7 +83,11 @@ impl Join {
                         .data()
                         .filter_map(|d| {
                             let datum = &secondary_stream_def[d];
-                            if !secondary_fields.iter().any(|field| *field == datum.name()) {
+                            if !params
+                                .secondary_fields
+                                .iter()
+                                .any(|field| *field == datum.name())
+                            {
                                 output_stream_def.copy_datum(datum);
                                 Some(datum.name().to_owned())
                             } else {
@@ -98,11 +109,13 @@ impl Join {
             name,
             inputs,
             outputs,
-            primary_fields: primary_fields
+            primary_fields: params
+                .primary_fields
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
-            secondary_fields: secondary_fields
+            secondary_fields: params
+                .secondary_fields
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
@@ -225,8 +238,7 @@ pub fn join<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 2],
-    primary_fields: &[&str],
-    secondary_fields: &[&str],
+    params: JoinParams,
 ) -> Join {
-    Join::new(graph, name, inputs, primary_fields, secondary_fields)
+    Join::new(graph, name, inputs, params)
 }

@@ -1,5 +1,13 @@
 use crate::prelude::*;
+use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+#[derive(Deserialize, Debug)]
+pub struct UnwrapParams<'a> {
+    #[serde(borrow)]
+    fields: FieldsParam<'a>,
+    skip_nones: bool,
+}
 
 #[derive(Getters)]
 pub struct Unwrap {
@@ -17,8 +25,7 @@ impl Unwrap {
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        fields: &[&str],
-        skip_nones: bool,
+        params: UnwrapParams,
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
@@ -27,7 +34,7 @@ impl Unwrap {
             .update(|output_stream, facts_proof| {
                 let input_variant_id = output_stream.input_variant_id();
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                for &field in fields {
+                for &field in &**params.fields {
                     let datum = output_stream_def
                         .get_variant_datum_definition_by_name(input_variant_id, field)
                         .unwrap_or_else(|| panic!(r#"datum "{}""#, field));
@@ -68,8 +75,12 @@ impl Unwrap {
             name,
             inputs,
             outputs,
-            fields: fields.iter().map(ToString::to_string).collect::<Vec<_>>(),
-            skip_nones,
+            fields: params
+                .fields
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            skip_nones: params.skip_nones,
         }
     }
 }
@@ -159,8 +170,7 @@ pub fn unwrap<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
-    fields: &[&str],
-    skip_nones: bool,
+    params: UnwrapParams,
 ) -> Unwrap {
-    Unwrap::new(graph, name, inputs, fields, skip_nones)
+    Unwrap::new(graph, name, inputs, params)
 }
