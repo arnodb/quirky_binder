@@ -7,6 +7,7 @@ use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct GroupParams<'a> {
     fields: FieldsParam<'a>,
     group_field: &'a str,
@@ -220,6 +221,7 @@ pub fn group<R: TypeResolver + Copy>(
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct SubGroupParams<'a> {
     path_fields: FieldsParam<'a>,
     fields: FieldsParam<'a>,

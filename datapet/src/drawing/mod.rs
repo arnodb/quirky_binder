@@ -357,6 +357,7 @@ where
                     head.cx + arc_radius
                 }
             )?;
+            #[allow(clippy::bool_to_int_with_if)]
             write!(
                 w,
                 "A{},{} 0 0,{} {},{}",

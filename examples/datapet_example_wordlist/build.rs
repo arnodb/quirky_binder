@@ -42,7 +42,12 @@ use datapet::{
     - sort#sort_token(fields: ["token"])
     - dedup#dedup_token()
     - anchor#anchor(anchor_field: "anchor")
-    - build_word_list#word_list("token", "anchor", "ci_anchor", "ci_refs") [s2, s3, s4]
+    - build_word_list#word_list(
+        token_field: "token",
+        anchor_field: "anchor",
+        ci_anchor_field: "ci_anchor",
+        ci_refs_field: "ci_refs",
+      ) [s2, s3, s4]
     - sink#sink_1(
         debug: Some(r#"println!("sink_1 {} (id = {:?})", record.token(), record.anchor());"#)
       )

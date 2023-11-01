@@ -9,6 +9,7 @@ use datapet_lang::{
     },
     parser::module,
 };
+use inflector::Inflector;
 use itertools::Itertools;
 use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::{abort_if_dirty, emit_error, proc_macro_error};
@@ -200,10 +201,10 @@ fn dtpt_graph_definition(
         .signature
         .params
         .iter()
-        .map(|param| format_ident!("{}", param));
-    let param_types = (0..graph_definition.signature.params.len()).map(|_| {
-        quote! { &str }
-    });
+        .map(|param| format_ident!("{}", param))
+        .collect::<Vec<Ident>>();
+    let params_type_name =
+        format_ident!("{}Params", graph_definition.signature.name.to_pascal_case());
     let setup_handlebars = {
         let hb_params = graph_definition.signature.params.iter().map(|param| {
             let name = format_ident!("{}", param);
@@ -262,11 +263,17 @@ fn dtpt_graph_definition(
     named_streams.check_all_streams_connected(error_emitter);
 
     quote! {
+        #[derive(Deserialize, Debug)]
+        #[serde(deny_unknown_fields)]
+        pub struct #params_type_name<'a> {
+            #(#params: &'a str,)*
+        }
+
         pub fn #name<R: TypeResolver + Copy>(
             graph: &mut GraphBuilder<R>,
             name: FullyQualifiedName,
             inputs: [NodeStream; #input_count],
-            (#(#params,)*): (#(#param_types,)*)
+            #params_type_name { #(#params,)* }: #params_type_name,
         ) -> NodeCluster<#input_count, #output_count> {
 
             #setup_handlebars
@@ -691,6 +698,7 @@ pub fn dtpt(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         mod __dtpt_private {
             use #datapet_crate::prelude::*;
             use handlebars::Handlebars;
+            use serde::Deserialize;
             use std::collections::BTreeMap;
             use truc::record::type_resolver::TypeResolver;
 

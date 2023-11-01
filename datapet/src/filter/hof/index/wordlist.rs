@@ -44,14 +44,24 @@ use crate::{
 pub [] build_word_list(token_field, anchor_field, ci_anchor_field, ci_refs_field) [rev_token, ci_token, rev_ci_token]
 {
   (
-    - build_ci_table#case_insensitive("{{token_field}}", "{{anchor_field}}", "{{ci_refs_field}}") [case_insensitive]
-    - build_rev_table#rev("{{token_field}}", "{{anchor_field}}") [rev_token]
+    - build_ci_table#case_insensitive(
+        token_field: "{{token_field}}",
+        reference_field: "{{anchor_field}}",
+        refs_field: "{{ci_refs_field}}",
+      ) [case_insensitive]
+    - build_rev_table#rev(
+        token_field: "{{token_field}}",
+        reference_field: "{{anchor_field}}",
+      ) [rev_token]
     -
   )
 
   ( < case_insensitive
     - anchor#anchor(anchor_field: "{{ci_anchor_field}}")
-    - build_rev_table#ci_rev("{{token_field}}", "{{ci_anchor_field}}") [rev_ci_token]
+    - build_rev_table#ci_rev(
+        token_field: "{{token_field}}",
+        reference_field: "{{ci_anchor_field}}",
+      ) [rev_ci_token]
     -> ci_token
   )
 }

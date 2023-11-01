@@ -4,6 +4,7 @@ use serde::Deserialize;
 use truc::record::{definition::DatumDefinitionOverride, type_resolver::TypeResolver};
 
 #[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct AnchorParams<'a> {
     anchor_field: &'a str,
 }

@@ -2,7 +2,7 @@
 name = "datapet_example_wordlist"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.64.0"
+rust-version = "1.65.0"
 
 [dependencies]
 datapet_support = { path = "../../datapet_support" }
@@ -15,4 +15,5 @@ datapet = { path = "../../datapet" }
 datapet_codegen = { path = "../../datapet_codegen" }
 datapet_support = { path = "../../datapet_support" }
 handlebars = "4"
+serde = { version = "1", features = ["derive"] }
 truc = { git = "https://github.com/arnodb/truc.git" }

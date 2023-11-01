@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rust: [1.64.0, stable]
+        rust: [1.65.0, stable]
 
     steps:
 
@@ -42,7 +42,7 @@ jobs:
 
       - id: clippy
         name: Clippy
-        if: ${{ matrix.rust == '1.64.0' }}
+        if: ${{ matrix.rust == '1.65.0' }}
         run: |
           cargo clippy --all --all-features --all-targets -- -D warnings
           echo "passed_clippy=${{ matrix.rust }}" >> "$GITHUB_OUTPUT"
@@ -69,4 +69,4 @@ jobs:
       - name: Clippy
         run: |
           echo "Clippy run on ${{ needs.test.outputs.passed_clippy }}" >> "$GITHUB_STEP_SUMMARY"
-          test "${{ needs.test.outputs.passed_clippy }}" = "1.64.0"
+          test "${{ needs.test.outputs.passed_clippy }}" = "1.65.0"

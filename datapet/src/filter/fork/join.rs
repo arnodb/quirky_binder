@@ -7,6 +7,7 @@ use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct JoinParams<'a> {
     #[serde(borrow)]
     primary_fields: FieldsParam<'a>,

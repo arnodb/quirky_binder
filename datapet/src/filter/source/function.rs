@@ -4,6 +4,7 @@ use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct FunctionSourceParams<'a> {
     fields: TypedFieldsParam<'a>,
     order_fields: Option<DirectedFieldsParam<'a>>,

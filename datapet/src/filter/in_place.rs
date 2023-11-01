@@ -108,6 +108,7 @@ pub mod string {
     use truc::record::type_resolver::TypeResolver;
 
     #[derive(Deserialize, Debug)]
+    #[serde(deny_unknown_fields)]
     pub struct InplaceStringParams<'a> {
         #[serde(borrow)]
         fields: FieldsParam<'a>,

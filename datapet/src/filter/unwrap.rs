@@ -3,6 +3,7 @@ use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct UnwrapParams<'a> {
     #[serde(borrow)]
     fields: FieldsParam<'a>,

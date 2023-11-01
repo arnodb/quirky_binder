@@ -2,7 +2,7 @@
 name = "datapet_codegen"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.64.0"
+rust-version = "1.65.0"
 
 [lib]
 proc-macro = true
@@ -10,6 +10,7 @@ proc-macro = true
 [dependencies]
 annotate-snippets = { version = "0.9", features = ["color"] }
 datapet_lang = { path = "../datapet_lang" }
+Inflector = "0.11"
 itertools = "0.10"
 proc-macro2 = "1"
 proc-macro-error = "1"

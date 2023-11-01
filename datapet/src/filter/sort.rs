@@ -3,6 +3,7 @@ use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
 #[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct SortParams<'a> {
     #[serde(borrow)]
     fields: DirectedFieldsParam<'a>,
@@ -93,6 +94,7 @@ pub fn sort<R: TypeResolver + Copy>(
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct SubSortParams<'a> {
     #[serde(borrow)]
     path_fields: FieldsParam<'a>,
