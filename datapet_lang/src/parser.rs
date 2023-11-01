@@ -34,7 +34,7 @@ fn use_declaration(input: &str) -> IResult<&str, UseDeclaration> {
         cut(ps(tag(";"))),
     )
     .map(|use_tree| UseDeclaration {
-        use_tree: use_tree.to_string(),
+        use_tree: use_tree.into(),
     })
     .parse(input)
 }
@@ -56,10 +56,10 @@ fn graph_definition(input: &str) -> IResult<&str, GraphDefinition> {
 fn graph_definition_signature(input: &str) -> IResult<&str, GraphDefinitionSignature> {
     tuple((opt_streams0, ps(identifier), ps(params), ps(opt_streams0)))
         .map(|(inputs, name, params, outputs)| GraphDefinitionSignature {
-            inputs: inputs.map(|inputs| inputs.into_iter().map(ToString::to_string).collect()),
-            name: name.to_string(),
-            params: params.into_iter().map(ToString::to_string).collect(),
-            outputs: outputs.map(|outputs| outputs.into_iter().map(ToString::to_string).collect()),
+            inputs: inputs.map(|inputs| inputs.into_iter().map(Into::into).collect()),
+            name: name.into(),
+            params: params.into_iter().map(Into::into).collect(),
+            outputs: outputs.map(|outputs| outputs.into_iter().map(|s| (*s).into()).collect()),
         })
         .parse(input)
 }
@@ -95,17 +95,19 @@ fn opened_stream_line(input: &str) -> IResult<&str, StreamLine> {
         ps(many_till(
             ts(stream_line_filter),
             alt((
-                delimited(
-                    tag("-"),
-                    ps(opt(preceded(
-                        tag(">"),
-                        cut(ps(identifier)
-                            .map(ToString::to_string)
-                            .map(StreamLineOutput::Named)),
-                    ))),
+                terminated(
+                    pair(
+                        tag("-"),
+                        ps(opt(preceded(
+                            tag(">"),
+                            cut(ps(identifier).map(Into::into).map(StreamLineOutput::Named)),
+                        ))),
+                    ),
                     ps(tag(")")),
                 )
-                .map(|output| Some(output.unwrap_or(StreamLineOutput::Main))),
+                .map(|(main_output, output)| {
+                    Some(output.unwrap_or_else(|| StreamLineOutput::Main(main_output.into())))
+                }),
                 tag(")").map(|_| None),
             )),
         )),
@@ -122,11 +124,11 @@ fn stream_line_inputs(input: &str) -> IResult<&str, Vec<StreamLineInput>> {
         opt(preceded(tag("<"), cut(ds(identifier)))),
         filter_input_streams,
     )
-    .map(|(main_input, extra_streams)| {
+    .map(|(main_input, (main_stream, extra_streams))| {
         assemble_inputs(
             main_input.map_or_else(
-                || StreamLineInput::Main,
-                |main_input| StreamLineInput::Named(main_input.to_string()),
+                || StreamLineInput::Main(main_stream.into()),
+                |main_input| StreamLineInput::Named(main_input.into()),
             ),
             extra_streams,
         )
@@ -137,28 +139,31 @@ fn stream_line_inputs(input: &str) -> IResult<&str, Vec<StreamLineInput>> {
 
 fn stream_line_filter(input: &str) -> IResult<&str, ConnectedFilter> {
     pair(filter_input_streams, ps(filter))
-        .map(|(extra_streams, filter)| ConnectedFilter {
-            inputs: assemble_inputs(StreamLineInput::Main, extra_streams),
+        .map(|((main_stream, extra_streams), filter)| ConnectedFilter {
+            inputs: assemble_inputs(StreamLineInput::Main(main_stream.into()), extra_streams),
             filter,
         })
         .parse(input)
 }
 
-fn assemble_inputs(first: StreamLineInput, extra_streams: Vec<&str>) -> Vec<StreamLineInput> {
+fn assemble_inputs<'a>(
+    first: StreamLineInput<'a>,
+    extra_streams: Vec<&'a str>,
+) -> Vec<StreamLineInput<'a>> {
     Some(first)
         .into_iter()
         .chain(
             extra_streams
                 .into_iter()
-                .map(ToString::to_string)
+                .map(Into::into)
                 .map(StreamLineInput::Named),
         )
         .collect()
 }
 
-fn filter_input_streams(input: &str) -> IResult<&str, Vec<&str>> {
-    preceded(tag("-"), ps(opt_streams1))
-        .map(|streams| streams.unwrap_or_default())
+fn filter_input_streams(input: &str) -> IResult<&str, (&str, Vec<&str>)> {
+    pair(tag("-"), ps(opt_streams1))
+        .map(|(main, streams)| (main, streams.unwrap_or_default()))
         .parse(input)
 }
 
@@ -170,11 +175,11 @@ fn filter(input: &str) -> IResult<&str, Filter> {
         ps(opt_streams1),
     ))
     .map(|(name, alias, params, extra_streams)| Filter {
-        name: name.to_string(),
-        alias: alias.map(ToString::to_string),
-        params: params.into_iter().map(ToString::to_string).collect(),
+        name: name.into(),
+        alias: alias.map(Into::into),
+        params: params.into_iter().map(Into::into).collect(),
         extra_outputs: extra_streams.map_or_else(Vec::new, |extra_outputs| {
-            extra_outputs.into_iter().map(ToString::to_string).collect()
+            extra_outputs.into_iter().map(Into::into).collect()
         }),
     })
     .parse(input)

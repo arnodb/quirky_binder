@@ -1,86 +1,88 @@
+use std::borrow::Cow;
+
 #[derive(Debug)]
-pub struct Module {
-    pub items: Vec<ModuleItem>,
+pub struct Module<'a> {
+    pub items: Vec<ModuleItem<'a>>,
 }
 
 #[derive(Debug)]
-pub enum ModuleItem {
-    UseDeclaration(UseDeclaration),
-    GraphDefinition(GraphDefinition),
-    Graph(Graph),
+pub enum ModuleItem<'a> {
+    UseDeclaration(UseDeclaration<'a>),
+    GraphDefinition(GraphDefinition<'a>),
+    Graph(Graph<'a>),
 }
 
-impl From<UseDeclaration> for ModuleItem {
-    fn from(value: UseDeclaration) -> Self {
+impl<'a> From<UseDeclaration<'a>> for ModuleItem<'a> {
+    fn from(value: UseDeclaration<'a>) -> Self {
         ModuleItem::UseDeclaration(value)
     }
 }
 
-impl From<GraphDefinition> for ModuleItem {
-    fn from(value: GraphDefinition) -> Self {
+impl<'a> From<GraphDefinition<'a>> for ModuleItem<'a> {
+    fn from(value: GraphDefinition<'a>) -> Self {
         ModuleItem::GraphDefinition(value)
     }
 }
 
-impl From<Graph> for ModuleItem {
-    fn from(value: Graph) -> Self {
+impl<'a> From<Graph<'a>> for ModuleItem<'a> {
+    fn from(value: Graph<'a>) -> Self {
         ModuleItem::Graph(value)
     }
 }
 
 #[derive(Debug)]
-pub struct UseDeclaration {
-    pub use_tree: String,
+pub struct UseDeclaration<'a> {
+    pub use_tree: Cow<'a, str>,
 }
 
 #[derive(Debug)]
-pub struct GraphDefinition {
-    pub signature: GraphDefinitionSignature,
-    pub stream_lines: Vec<StreamLine>,
+pub struct GraphDefinition<'a> {
+    pub signature: GraphDefinitionSignature<'a>,
+    pub stream_lines: Vec<StreamLine<'a>>,
     pub visible: bool,
 }
 
 #[derive(Debug)]
-pub struct GraphDefinitionSignature {
-    pub inputs: Option<Vec<String>>,
-    pub name: String,
-    pub params: Vec<String>,
-    pub outputs: Option<Vec<String>>,
+pub struct GraphDefinitionSignature<'a> {
+    pub inputs: Option<Vec<Cow<'a, str>>>,
+    pub name: Cow<'a, str>,
+    pub params: Vec<Cow<'a, str>>,
+    pub outputs: Option<Vec<Cow<'a, str>>>,
 }
 
 #[derive(Debug)]
-pub struct StreamLine {
-    pub filters: Vec<ConnectedFilter>,
-    pub output: Option<StreamLineOutput>,
+pub struct StreamLine<'a> {
+    pub filters: Vec<ConnectedFilter<'a>>,
+    pub output: Option<StreamLineOutput<'a>>,
 }
 
 #[derive(Debug)]
-pub struct ConnectedFilter {
-    pub inputs: Vec<StreamLineInput>,
-    pub filter: Filter,
+pub struct ConnectedFilter<'a> {
+    pub inputs: Vec<StreamLineInput<'a>>,
+    pub filter: Filter<'a>,
 }
 
 #[derive(Debug)]
-pub struct Filter {
-    pub name: String,
-    pub alias: Option<String>,
-    pub params: Vec<String>,
-    pub extra_outputs: Vec<String>,
+pub struct Filter<'a> {
+    pub name: Cow<'a, str>,
+    pub alias: Option<Cow<'a, str>>,
+    pub params: Vec<Cow<'a, str>>,
+    pub extra_outputs: Vec<Cow<'a, str>>,
 }
 
 #[derive(Debug)]
-pub enum StreamLineInput {
-    Main,
-    Named(String),
+pub enum StreamLineInput<'a> {
+    Main(Cow<'a, str>),
+    Named(Cow<'a, str>),
 }
 
 #[derive(Debug)]
-pub enum StreamLineOutput {
-    Main,
-    Named(String),
+pub enum StreamLineOutput<'a> {
+    Main(Cow<'a, str>),
+    Named(Cow<'a, str>),
 }
 
 #[derive(Debug)]
-pub struct Graph {
-    pub stream_lines: Vec<StreamLine>,
+pub struct Graph<'a> {
+    pub stream_lines: Vec<StreamLine<'a>>,
 }
