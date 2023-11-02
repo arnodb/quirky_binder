@@ -1,5 +1,5 @@
+use datapet::dtpt;
 use datapet::prelude::*;
-use datapet_codegen::dtpt;
 use datapet_support::AnchorId;
 use std::path::Path;
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};

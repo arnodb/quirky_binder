@@ -13,7 +13,6 @@ walkdir = "2"
 
 [build-dependencies]
 datapet = { path = "../../datapet" }
-datapet_codegen = { path = "../../datapet_codegen" }
 handlebars = "4"
 serde = { version = "1", features = ["derive"] }
 truc = { git = "https://github.com/arnodb/truc.git" }

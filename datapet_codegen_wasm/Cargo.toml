@@ -1,0 +1,23 @@
+[package]
+name = "datapet_codegen_wasm"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.65.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["console_error_panic_hook"]
+
+[dependencies]
+datapet_codegen = { path = "../datapet_codegen" }
+quote = "1"
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+wasm-bindgen = "0.2.88"
+
+console_error_panic_hook = { version = "0.1.7", optional = true }
+
+[profile.release]
+opt-level = "s"

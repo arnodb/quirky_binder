@@ -1,4 +1,4 @@
-use datapet_codegen::dtpt;
+use crate::dtpt;
 
 dtpt! {
     datapet_def r#"

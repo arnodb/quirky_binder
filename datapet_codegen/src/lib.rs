@@ -1,7 +1,3 @@
-use annotate_snippets::{
-    display_list::{DisplayList, FormatOptions},
-    snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
-};
 use datapet_lang::{
     ast::{
         ConnectedFilter, Graph, GraphDefinition, Module, ModuleItem, StreamLine, StreamLineInput,
@@ -12,132 +8,22 @@ use datapet_lang::{
 use inflector::Inflector;
 use itertools::Itertools;
 use proc_macro2::{Ident, TokenStream};
-use proc_macro_error::{abort_if_dirty, emit_error, proc_macro_error};
 use quote::{format_ident, quote};
 use std::{
+    borrow::Cow,
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
     iter::{Enumerate, Peekable},
 };
-use syn::{
-    parse::{ParseStream, Parser},
-    Error, LitStr,
-};
 
-struct ErrorEmitter<'a> {
-    def_type: &'a Ident,
+pub trait ErrorEmitter {
+    fn emit_error(&mut self, part: &str, error: Cow<str>);
+}
+
+#[allow(clippy::result_unit_err)]
+pub fn parse_module<'a>(
     input: &'a str,
-}
-
-impl<'a> ErrorEmitter<'a> {
-    fn emit_error(&self, part: &str, error: &str) {
-        emit_error!(
-            self.def_type,
-            "{}",
-            DisplayList::from(snippet_for_input_and_part(self.input, part, error))
-        );
-    }
-}
-
-// Copied from https://github.com/botika/yarte
-fn lines_offsets(s: &str) -> Vec<usize> {
-    let mut lines = vec![0];
-    let mut prev = 0;
-    while let Some(len) = s[prev..].find('\n') {
-        prev += len + 1;
-        lines.push(prev);
-    }
-    lines
-}
-
-// Inspired by from https://github.com/botika/yarte
-fn slice_spans<'a>(input: &'a str, part: &'a str) -> (usize, (usize, usize), (usize, usize)) {
-    let (lo, hi) = {
-        let a = input.as_ptr();
-        let b = part.as_ptr();
-        if a < b {
-            (
-                b as usize - a as usize,
-                (b as usize - a as usize + part.len()).min(input.len()),
-            )
-        } else {
-            panic!("not a part of input");
-        }
-    };
-
-    let lines = lines_offsets(input);
-
-    const CONTEXT: usize = 3;
-
-    let lo_index = match lines.binary_search(&lo) {
-        Ok(index) => index,
-        Err(index) => index - 1,
-    }
-    .saturating_sub(CONTEXT);
-    let lo_line = lines[lo_index];
-    let hi_index = match lines.binary_search(&hi) {
-        Ok(index) => index,
-        Err(index) => index,
-    };
-    let hi_line = lines
-        .get(hi_index + CONTEXT)
-        .copied()
-        .unwrap_or(input.len());
-    (
-        lo_index + 1,
-        (lo_line, hi_line),
-        (lo - lo_line, hi - lo_line),
-    )
-}
-
-fn parse_def(input: ParseStream) -> Result<(Ident, LitStr, Ident), Error> {
-    let def_type: Ident = input.parse()?;
-    let datapet_crate = if def_type == "def" {
-        format_ident!("datapet")
-    } else if def_type == "datapet_def" {
-        format_ident!("crate")
-    } else {
-        // Do not mention datapet_def which is for internal use.
-        return Err(Error::new(def_type.span(), "expected 'def'"));
-    };
-    Ok((def_type, input.parse()?, datapet_crate))
-}
-
-fn snippet_for_input_and_part<'a>(input: &'a str, part: &'a str, label: &'a str) -> Snippet<'a> {
-    let (line_start, (lo_line, hi_line), (lo, hi)) = slice_spans(input, part);
-    let slice = Slice {
-        source: &input[lo_line..hi_line],
-        line_start,
-        origin: None,
-        annotations: vec![SourceAnnotation {
-            label,
-            range: (lo, hi),
-            annotation_type: AnnotationType::Error,
-        }],
-        fold: false,
-    };
-
-    Snippet {
-        title: Some(Annotation {
-            id: None,
-            label: None,
-            annotation_type: AnnotationType::Error,
-        }),
-        footer: vec![],
-        slices: vec![slice],
-        opt: FormatOptions {
-            // No color until https://github.com/rust-lang/rust-analyzer/issues/15443
-            // has a proper fix.
-            color: false,
-            ..Default::default()
-        },
-    }
-}
-
-fn parse_module<'a>(
-    def_type: &Ident,
-    input_lit: &LitStr,
-    input: &'a str,
-) -> Result<Module<'a>, Error> {
+    error_emitter: &mut dyn ErrorEmitter,
+) -> Result<Module<'a>, ()> {
     let res = module(input);
     let (i, module) = match res {
         Ok(res) => res,
@@ -148,29 +34,25 @@ fn parse_module<'a>(
                     err.input
                 }
             };
-            emit_error!(
-                def_type,
-                "{}",
-                DisplayList::from(snippet_for_input_and_part(
-                    input,
-                    part,
-                    match &err {
-                        datapet_lang::nom::Err::Incomplete(_) => "Incomplete",
-                        datapet_lang::nom::Err::Error(err)
-                        | datapet_lang::nom::Err::Failure(err) => {
-                            err.code.description()
-                        }
+            error_emitter.emit_error(
+                part,
+                match &err {
+                    datapet_lang::nom::Err::Incomplete(_) => "Incomplete",
+                    datapet_lang::nom::Err::Error(err) | datapet_lang::nom::Err::Failure(err) => {
+                        err.code.description()
                     }
-                ))
+                }
+                .into(),
             );
-            return Err(Error::new(def_type.span(), "could not parse dtpt"));
+            return Err(());
         }
     };
     if !i.is_empty() {
-        return Err(Error::new(
-            input_lit.span(),
-            format!("did not consume the entire input, {:?}", i),
-        ));
+        error_emitter.emit_error(
+            i,
+            format!("did not consume the entire input, {:?}", i).into(),
+        );
+        return Err(());
     }
     Ok(module)
 }
@@ -184,7 +66,7 @@ fn dtpt_use_declaration(use_declaration: &UseDeclaration) -> TokenStream {
 
 fn dtpt_graph_definition(
     graph_definition: &GraphDefinition,
-    error_emitter: &ErrorEmitter,
+    error_emitter: &mut dyn ErrorEmitter,
 ) -> TokenStream {
     let name = format_ident!("{}", graph_definition.signature.name);
     let input_count = graph_definition
@@ -218,34 +100,35 @@ fn dtpt_graph_definition(
     };
     let (body, ordered_var_names, main_stream, mut named_streams) =
         dtpt_stream_lines(&graph_definition.stream_lines, error_emitter);
-    let (main_stream, main_stream_anchor) = match main_stream {
-        Some((a, b)) => (Some(a), Some(b)),
-        None => (None, None),
-    };
-    let outputs = graph_definition.signature.outputs.as_ref().map_or_else(
-        || {
-            if let Some(anchor) = main_stream_anchor {
-                error_emitter.emit_error(anchor, "main stream is not connected");
+    let outputs = match graph_definition.signature.outputs.as_ref() {
+        None => {
+            if let Some(anchor) = main_stream.as_ref().map(|(_, anchor)| anchor) {
+                error_emitter.emit_error(anchor, "main stream is not connected".into());
             }
             Vec::new()
-        },
-        |outputs| {
+        }
+        Some(outputs) => {
             if main_stream.is_none() {
-                error_emitter.emit_error(&graph_definition.signature.name, "main stream not found");
+                error_emitter.emit_error(
+                    &graph_definition.signature.name,
+                    "main stream not found".into(),
+                );
             }
             let res = main_stream
                 .into_iter()
+                .map(|(main_stream, _)| main_stream)
                 .chain(outputs.iter().filter_map(|name| {
                     match named_streams.try_connect_stream(name, error_emitter) {
                         Ok(Some(tokens)) => Some(tokens),
                         Ok(None) => {
-                            error_emitter.emit_error(name, &format!("stream `{}` not found", name));
+                            error_emitter
+                                .emit_error(name, format!("stream `{}` not found", name).into());
                             None
                         }
                         Err(()) => {
                             error_emitter.emit_error(
                                 name,
-                                &format!("stream `{}` is already connected", name),
+                                format!("stream `{}` is already connected", name).into(),
                             );
                             None
                         }
@@ -258,8 +141,8 @@ fn dtpt_graph_definition(
             } else {
                 res
             }
-        },
-    );
+        }
+    };
     named_streams.check_all_streams_connected(error_emitter);
 
     quote! {
@@ -292,13 +175,13 @@ fn dtpt_graph_definition(
     }
 }
 
-fn dtpt_graph(graph: &Graph, id: usize, error_emitter: &ErrorEmitter) -> TokenStream {
+fn dtpt_graph(graph: &Graph, id: usize, error_emitter: &mut dyn ErrorEmitter) -> TokenStream {
     let name = format_ident!("dtpt_main_{}", id);
     let (body, ordered_var_names, main_stream, named_streams) =
         dtpt_stream_lines(&graph.stream_lines, error_emitter);
     named_streams.check_all_streams_connected(error_emitter);
     if let Some((_, anchor)) = main_stream {
-        error_emitter.emit_error(anchor, "main stream cannot be connected");
+        error_emitter.emit_error(anchor, "main stream cannot be connected".into());
     }
     quote! {
         pub fn #name<R: TypeResolver + Copy>(
@@ -331,7 +214,12 @@ impl<'a> NamedStreams<'a> {
         }
     }
 
-    fn new_stream(&mut self, name: &'a str, tokens: TokenStream, error_emitter: &ErrorEmitter) {
+    fn new_stream(
+        &mut self,
+        name: &'a str,
+        tokens: TokenStream,
+        error_emitter: &mut dyn ErrorEmitter,
+    ) {
         match self.streams.entry(name.to_owned()) {
             Entry::Vacant(vacant) => {
                 vacant.insert(NamedStreamState::Dangling {
@@ -340,7 +228,7 @@ impl<'a> NamedStreams<'a> {
                 });
             }
             Entry::Occupied(_) => {
-                error_emitter.emit_error(name, &format!("stream `{}` already exists", name));
+                error_emitter.emit_error(name, format!("stream `{}` already exists", name).into());
             }
         }
     }
@@ -348,7 +236,7 @@ impl<'a> NamedStreams<'a> {
     fn try_connect_stream(
         &mut self,
         name: &str,
-        error_emitter: &ErrorEmitter,
+        error_emitter: &mut dyn ErrorEmitter,
     ) -> Result<Option<TokenStream>, ()> {
         if let Some(occupied) = self.streams.get_mut(name) {
             match occupied {
@@ -357,8 +245,10 @@ impl<'a> NamedStreams<'a> {
                     Ok(Some(quote! { #tokens }))
                 }
                 NamedStreamState::Connected => {
-                    error_emitter
-                        .emit_error(name, &format!("stream `{}` is already connected", name));
+                    error_emitter.emit_error(
+                        name,
+                        format!("stream `{}` is already connected", name).into(),
+                    );
                     Err(())
                 }
             }
@@ -367,12 +257,12 @@ impl<'a> NamedStreams<'a> {
         }
     }
 
-    fn check_all_streams_connected(self, error_emitter: &ErrorEmitter) {
+    fn check_all_streams_connected(self, error_emitter: &mut dyn ErrorEmitter) {
         for (name, state) in self.streams {
             match state {
                 NamedStreamState::Dangling { anchor, .. } => {
                     error_emitter
-                        .emit_error(anchor, &format!("stream `{}` is not connected", name));
+                        .emit_error(anchor, format!("stream `{}` is not connected", name).into());
                 }
                 NamedStreamState::Connected => {}
             }
@@ -403,7 +293,7 @@ impl<'a> NamedStreamState<'a> {
 
 fn dtpt_stream_lines<'a>(
     stream_lines: &'a [StreamLine<'a>],
-    error_emitter: &ErrorEmitter,
+    error_emitter: &mut dyn ErrorEmitter,
 ) -> (
     TokenStream,
     Vec<Ident>,
@@ -511,7 +401,8 @@ fn dtpt_stream_lines<'a>(
                                     Err(()) => {
                                         error_emitter.emit_error(
                                             name,
-                                            &format!("stream `{}` is already connected", name),
+                                            format!("stream `{}` is already connected", name)
+                                                .into(),
                                         );
                                         None
                                     }
@@ -560,8 +451,10 @@ fn dtpt_stream_lines<'a>(
                                         *main_stream = Some((tokens, anchor));
                                     }
                                     Some(_) => {
-                                        error_emitter
-                                            .emit_error(anchor, "main stream already exists");
+                                        error_emitter.emit_error(
+                                            anchor,
+                                            "main stream already exists".into(),
+                                        );
                                     }
                                 },
                                 StreamLineOutput::Named(output) => {
@@ -620,28 +513,11 @@ fn dtpt_stream_lines<'a>(
     )
 }
 
-#[proc_macro]
-#[proc_macro_error]
-pub fn dtpt(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let (def_type, input_lit, datapet_crate) = match Parser::parse(parse_def, input) {
-        Ok(res) => res,
-        Err(err) => {
-            abort_if_dirty();
-            return err.into_compile_error().into();
-        }
-    };
-    let input = input_lit.value();
-    let module = match parse_module(&def_type, &input_lit, &input) {
-        Ok(res) => res,
-        Err(err) => {
-            abort_if_dirty();
-            return err.into_compile_error().into();
-        }
-    };
-    let error_emitter = &ErrorEmitter {
-        def_type: &def_type,
-        input: &input,
-    };
+pub fn generate_module(
+    module: &Module,
+    datapet_crate: &Ident,
+    error_emitter: &mut dyn ErrorEmitter,
+) -> TokenStream {
     let mut graph_id = 0;
     let content = TokenStream::from_iter(module.items.iter().map(|item| match item {
         ModuleItem::UseDeclaration(use_declaration) => dtpt_use_declaration(use_declaration),
@@ -691,7 +567,7 @@ pub fn dtpt(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             }
         }
     });
-    (quote! {
+    quote! {
         use handlebars::Handlebars;
         use std::collections::BTreeMap;
 
@@ -708,6 +584,5 @@ pub fn dtpt(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         #exports
 
         #main
-    })
-    .into()
+    }
 }

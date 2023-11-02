@@ -15,3 +15,5 @@ pub mod params;
 pub mod prelude;
 pub mod stream;
 pub mod support;
+
+pub use datapet_codegen_macro::dtpt;
