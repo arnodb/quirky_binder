@@ -2,6 +2,7 @@ use annotate_snippets::{
     display_list::{DisplayList, FormatOptions},
     snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
 };
+use datapet_codegen::ParseError;
 use proc_macro2::Ident;
 use proc_macro_error::{abort_if_dirty, emit_error, proc_macro_error};
 use quote::format_ident;
@@ -139,7 +140,7 @@ pub fn dtpt(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     };
     let module = match datapet_codegen::parse_module(&input, &mut error_emitter) {
         Ok(res) => res,
-        Err(()) => {
+        Err(ParseError) => {
             abort_if_dirty();
             unreachable!("should be aborted");
         }

@@ -18,11 +18,10 @@ pub trait ErrorEmitter {
     fn emit_error(&mut self, part: &str, error: Cow<str>);
 }
 
-#[allow(clippy::result_unit_err)]
 pub fn parse_module<'a>(
     input: &'a str,
     error_emitter: &mut dyn ErrorEmitter,
-) -> Result<Module<'a>, ()> {
+) -> Result<Module<'a>, ParseError> {
     let res = module(input);
     let (i, module) = match res {
         Ok(res) => res,
@@ -43,7 +42,7 @@ pub fn parse_module<'a>(
                 }
                 .into(),
             );
-            return Err(());
+            return Err(ParseError);
         }
     };
     if !i.is_empty() {
@@ -51,10 +50,13 @@ pub fn parse_module<'a>(
             i,
             format!("did not consume the entire input, {:?}", i).into(),
         );
-        return Err(());
+        return Err(ParseError);
     }
     Ok(module)
 }
+
+#[derive(PartialEq, Eq, Debug)]
+pub struct ParseError;
 
 fn dtpt_use_declaration(use_declaration: &UseDeclaration) -> TokenStream {
     let use_tree: syn::UseTree = syn::parse_str(&use_declaration.use_tree).expect("use expr");
@@ -118,13 +120,13 @@ fn dtpt_graph_definition(
                 .map(|(main_stream, _)| main_stream)
                 .chain(outputs.iter().filter_map(|name| {
                     match named_streams.try_connect_stream(name, error_emitter) {
-                        Ok(Some(tokens)) => Some(tokens),
-                        Ok(None) => {
+                        Ok(tokens) => Some(tokens),
+                        Err(ConnectError::NotFound) => {
                             error_emitter
                                 .emit_error(name, format!("stream `{}` not found", name).into());
                             None
                         }
-                        Err(()) => {
+                        Err(ConnectError::AlreadyConnected) => {
                             error_emitter.emit_error(
                                 name,
                                 format!("stream `{}` is already connected", name).into(),
@@ -236,23 +238,18 @@ impl<'a> NamedStreams<'a> {
         &mut self,
         name: &str,
         error_emitter: &mut dyn ErrorEmitter,
-    ) -> Result<Option<TokenStream>, ()> {
+    ) -> Result<TokenStream, ConnectError> {
         if let Some(occupied) = self.streams.get_mut(name) {
-            match occupied {
-                NamedStreamState::Dangling { .. } => {
-                    let tokens = occupied.connect();
-                    Ok(Some(quote! { #tokens }))
-                }
-                NamedStreamState::Connected => {
-                    error_emitter.emit_error(
-                        name,
-                        format!("stream `{}` is already connected", name).into(),
-                    );
-                    Err(())
-                }
-            }
+            occupied.connect().map_err(|err| {
+                assert_eq!(ConnectError::AlreadyConnected, err);
+                error_emitter.emit_error(
+                    name,
+                    format!("stream `{}` is already connected", name).into(),
+                );
+                err
+            })
         } else {
-            Ok(None)
+            Err(ConnectError::NotFound)
         }
     }
 
@@ -269,6 +266,12 @@ impl<'a> NamedStreams<'a> {
     }
 }
 
+#[derive(PartialEq, Eq, Debug)]
+enum ConnectError {
+    NotFound,
+    AlreadyConnected,
+}
+
 #[derive(Debug)]
 enum NamedStreamState<'a> {
     Dangling {
@@ -279,13 +282,13 @@ enum NamedStreamState<'a> {
 }
 
 impl<'a> NamedStreamState<'a> {
-    fn connect(&mut self) -> TokenStream {
+    fn connect(&mut self) -> Result<TokenStream, ConnectError> {
         let mut swapped = NamedStreamState::Connected;
         std::mem::swap(self, &mut swapped);
         if let NamedStreamState::Dangling { tokens, .. } = swapped {
-            tokens
+            Ok(tokens)
         } else {
-            unreachable!("Cannot connect a stream multiple times ");
+            Err(ConnectError::AlreadyConnected)
         }
     }
 }
@@ -390,14 +393,14 @@ fn dtpt_stream_lines<'a>(
                             }
                             StreamLineInput::Named(name) => {
                                 match named_streams.try_connect_stream(name, error_emitter) {
-                                    Ok(Some(tokens)) => Some(tokens),
-                                    Ok(None) => {
+                                    Ok(tokens) => Some(tokens),
+                                    Err(ConnectError::NotFound) => {
                                         flow_line_iter
                                             .missing_inputs
                                             .insert(name.clone().into_owned());
                                         None
                                     }
-                                    Err(()) => {
+                                    Err(ConnectError::AlreadyConnected) => {
                                         error_emitter.emit_error(
                                             name,
                                             format!("stream `{}` is already connected", name)

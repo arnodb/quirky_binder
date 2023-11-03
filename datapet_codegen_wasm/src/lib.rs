@@ -1,5 +1,6 @@
 mod utils;
 
+use datapet_codegen::ParseError;
 use quote::format_ident;
 use serde::Serialize;
 use std::borrow::Cow;
@@ -78,7 +79,7 @@ pub fn dtpt(input: &str) -> Result<String, WasmError> {
     };
     let module = match datapet_codegen::parse_module(input, &mut error_emitter) {
         Ok(res) => res,
-        Err(()) => {
+        Err(ParseError) => {
             return Err(WasmError {
                 errors: error_emitter.errors,
             });
