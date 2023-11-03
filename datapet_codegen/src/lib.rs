@@ -118,8 +118,8 @@ fn dtpt_graph_definition(
             let res = main_stream
                 .into_iter()
                 .map(|(main_stream, _)| main_stream)
-                .chain(outputs.iter().filter_map(|name| {
-                    match named_streams.try_connect_stream(name, error_emitter) {
+                .chain(outputs.iter().filter_map(
+                    |name| match named_streams.try_connect_stream(name) {
                         Ok(tokens) => Some(tokens),
                         Err(ConnectError::NotFound) => {
                             error_emitter
@@ -133,8 +133,8 @@ fn dtpt_graph_definition(
                             );
                             None
                         }
-                    }
-                }))
+                    },
+                ))
                 .collect::<Vec<TokenStream>>();
             if res.len() != outputs.len() + 1 {
                 // Some were not found
@@ -234,18 +234,11 @@ impl<'a> NamedStreams<'a> {
         }
     }
 
-    fn try_connect_stream(
-        &mut self,
-        name: &str,
-        error_emitter: &mut dyn ErrorEmitter,
-    ) -> Result<TokenStream, ConnectError> {
+    fn try_connect_stream(&mut self, name: &str) -> Result<TokenStream, ConnectError> {
         if let Some(occupied) = self.streams.get_mut(name) {
             occupied.connect().map_err(|err| {
                 assert_eq!(ConnectError::AlreadyConnected, err);
-                error_emitter.emit_error(
-                    name,
-                    format!("stream `{}` is already connected", name).into(),
-                );
+                // Let the caller handle all errors because one treats NotFound in a special way.
                 err
             })
         } else {
@@ -392,7 +385,7 @@ fn dtpt_stream_lines<'a>(
                                 }
                             }
                             StreamLineInput::Named(name) => {
-                                match named_streams.try_connect_stream(name, error_emitter) {
+                                match named_streams.try_connect_stream(name) {
                                     Ok(tokens) => Some(tokens),
                                     Err(ConnectError::NotFound) => {
                                         flow_line_iter
