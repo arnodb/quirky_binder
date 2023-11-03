@@ -6,7 +6,6 @@ use datapet_lang::{
     parser::module,
 };
 use inflector::Inflector;
-use itertools::Itertools;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use std::{
@@ -490,19 +489,12 @@ fn dtpt_stream_lines<'a>(
             break;
         }
         if blocked {
-            panic!(
-                "blocked at {}",
-                flow_line_iters
-                    .iter_mut()
-                    .filter_map(|iter| iter.filter_iter.peek())
-                    .map(|filter| filter
-                        .1
-                        .filter
-                        .alias
-                        .as_ref()
-                        .unwrap_or(&filter.1.filter.name))
-                    .join(", ")
-            )
+            for iter in &mut flow_line_iters {
+                if let Some(filter) = iter.filter_iter.peek() {
+                    error_emitter.emit_error(&filter.1.filter.name, "Unresolved inputs".into());
+                }
+            }
+            break;
         }
     }
     (
