@@ -2,7 +2,7 @@ use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag},
     character::complete::{alpha1, alphanumeric1, anychar, char, multispace0, multispace1},
-    combinator::{cut, eof, opt, recognize},
+    combinator::{cut, eof, opt, peek, recognize},
     error::ParseError,
     multi::{many0, many0_count, many1, many_till, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
@@ -28,10 +28,9 @@ pub fn module(input: &str) -> IResult<&str, Module> {
 }
 
 fn use_declaration(input: &str) -> IResult<&str, UseDeclaration> {
-    delimited(
+    preceded(
         terminated(tag("use"), multispace1),
-        cut(code),
-        cut(ps(tag(";"))),
+        cut(terminated(code, ps(tag(";")))),
     )
     .map(|use_tree| UseDeclaration {
         use_tree: use_tree.into(),
@@ -43,7 +42,7 @@ fn graph_definition(input: &str) -> IResult<&str, GraphDefinition> {
     tuple((
         opt(tag("pub")),
         ps(graph_definition_signature),
-        ps(stream_lines),
+        cut(ps(stream_lines)),
     ))
     .map(|(visibility, signature, stream_lines)| GraphDefinition {
         signature,
@@ -54,14 +53,20 @@ fn graph_definition(input: &str) -> IResult<&str, GraphDefinition> {
 }
 
 fn graph_definition_signature(input: &str) -> IResult<&str, GraphDefinitionSignature> {
-    tuple((opt_streams0, ps(identifier), ps(params), ps(opt_streams0)))
-        .map(|(inputs, name, params, outputs)| GraphDefinitionSignature {
+    tuple((
+        opt_streams0,
+        ps(identifier),
+        cut(pair(ps(params), ps(opt_streams0))),
+    ))
+    .map(
+        |(inputs, name, (params, outputs))| GraphDefinitionSignature {
             inputs: inputs.map(|inputs| inputs.into_iter().map(Into::into).collect()),
             name: name.into(),
             params: params.into_iter().map(Into::into).collect(),
             outputs: outputs.map(|outputs| outputs.into_iter().map(|s| (*s).into()).collect()),
-        })
-        .parse(input)
+        },
+    )
+    .parse(input)
 }
 
 fn params(input: &str) -> IResult<&str, Vec<&str>> {
@@ -92,25 +97,24 @@ fn opened_stream_line(input: &str) -> IResult<&str, StreamLine> {
     pair(
         ps(pair(stream_line_inputs, ps(filter))
             .map(|(inputs, filter)| ConnectedFilter { inputs, filter })),
-        ps(many_till(
-            ts(stream_line_filter),
-            alt((
-                terminated(
-                    pair(
+        terminated(
+            ps(many_till(
+                ts(stream_line_filter),
+                alt((
+                    terminated(tag("-"), ps(peek(tag(")"))))
+                        .map(|main_output: &str| Some(StreamLineOutput::Main(main_output.into()))),
+                    preceded(
                         tag("-"),
-                        ps(opt(preceded(
-                            tag(">"),
-                            cut(ps(identifier).map(Into::into).map(StreamLineOutput::Named)),
-                        ))),
+                        ps(preceded(tag(">"), cut(ds(identifier))))
+                            .map(Into::into)
+                            .map(StreamLineOutput::Named)
+                            .map(Some),
                     ),
-                    ps(tag(")")),
-                )
-                .map(|(main_output, output)| {
-                    Some(output.unwrap_or_else(|| StreamLineOutput::Main(main_output.into())))
-                }),
-                tag(")").map(|_| None),
+                    peek(tag(")")).map(|_| None),
+                )),
             )),
-        )),
+            tag(")"),
+        ),
     )
     .map(|(first_filter, (mut filters, output))| {
         filters.insert(0, first_filter);
@@ -120,10 +124,11 @@ fn opened_stream_line(input: &str) -> IResult<&str, StreamLine> {
 }
 
 fn stream_line_inputs(input: &str) -> IResult<&str, Vec<StreamLineInput>> {
-    opt(pair(
-        opt(preceded(tag("<"), cut(ds(identifier)))),
-        filter_input_streams,
-    )
+    opt(alt((
+        preceded(tag("<"), cut(pair(ds(identifier), filter_input_streams)))
+            .map(|(main_input, extra_streams)| (Some(main_input), extra_streams)),
+        filter_input_streams.map(|extra_streams| (None, extra_streams)),
+    ))
     .map(|(main_input, (main_stream, extra_streams))| {
         assemble_inputs(
             main_input.map_or_else(
