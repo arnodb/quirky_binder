@@ -32,6 +32,12 @@ struct Span {
     end: usize,
 }
 
+#[derive(Serialize, Debug)]
+struct Error {
+    error: String,
+    span: Span,
+}
+
 fn span_for_input_and_part<'a>(input: &'a str, part: &'a str) -> Span {
     let (lo, hi) = slice_spans(input, part);
     Span { start: lo, end: hi }
@@ -39,12 +45,12 @@ fn span_for_input_and_part<'a>(input: &'a str, part: &'a str) -> Span {
 
 struct WasmErrorEmitter<'a> {
     input: &'a str,
-    errors: Errors,
+    errors: Vec<Error>,
 }
 
 impl<'a> datapet_codegen::ErrorEmitter for WasmErrorEmitter<'a> {
     fn emit_error(&mut self, part: &str, error: Cow<str>) {
-        self.errors.0.push(Error {
+        self.errors.push(Error {
             error: error.into_owned(),
             span: span_for_input_and_part(self.input, part),
         });
@@ -52,39 +58,39 @@ impl<'a> datapet_codegen::ErrorEmitter for WasmErrorEmitter<'a> {
 }
 
 #[derive(Serialize, Debug)]
-pub struct Errors(Vec<Error>);
-
-#[derive(Serialize, Debug)]
-struct Error {
-    error: String,
-    span: Span,
+pub struct WasmError {
+    errors: Vec<Error>,
 }
 
 #[allow(clippy::from_over_into)]
-impl Into<JsValue> for Errors {
+impl Into<JsValue> for WasmError {
     fn into(self) -> JsValue {
         serde_wasm_bindgen::to_value(&self).expect("js value")
     }
 }
 
 #[wasm_bindgen]
-pub fn dtpt(input: &str) -> Result<String, Errors> {
+pub fn dtpt(input: &str) -> Result<String, WasmError> {
     utils::set_panic_hook();
     let mut error_emitter = WasmErrorEmitter {
         input,
-        errors: Errors(Vec::new()),
+        errors: Vec::new(),
     };
     let module = match datapet_codegen::parse_module(input, &mut error_emitter) {
         Ok(res) => res,
         Err(()) => {
-            return Err(error_emitter.errors);
+            return Err(WasmError {
+                errors: error_emitter.errors,
+            });
         }
     };
     let tokens =
         datapet_codegen::generate_module(&module, &format_ident!("datapet"), &mut error_emitter);
 
-    if !error_emitter.errors.0.is_empty() {
-        return Err(error_emitter.errors);
+    if !error_emitter.errors.is_empty() {
+        return Err(WasmError {
+            errors: error_emitter.errors,
+        });
     }
 
     Ok(tokens.to_string())
