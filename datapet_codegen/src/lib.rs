@@ -416,7 +416,6 @@ fn dtpt_stream_lines<'a>(
                         assert_ne!(inputs.len(), filter.inputs.len());
                         break;
                     }
-                    assert_eq!(inputs.len(), filter.inputs.len());
                     let params = &filter.filter.params;
                     let ron_params = quote! {
                         let ron_params_str = handlebars.render_template(#params, &handlebars_data).expect("handlebars");
