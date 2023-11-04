@@ -4,11 +4,13 @@ members = [
     "datapet",
     "datapet_codegen",
     "datapet_codegen_macro",
-    "datapet_codegen_wasm",
     "datapet_lang",
     "datapet_support",
     "examples/datapet_example_index_first_char",
     "examples/datapet_example_sub_sort_sub_group",
     "examples/datapet_example_tree",
     "examples/datapet_example_wordlist",
+]
+exclude = [
+    "datapet_codegen_wasm",
 ]
