@@ -1,7 +1,9 @@
 use nom::{
     branch::alt,
     bytes::complete::{escaped, is_not, tag, take_while1},
-    character::complete::{alpha1, alphanumeric1, anychar, char, multispace0, multispace1},
+    character::complete::{
+        alpha1, alphanumeric1, anychar, char, multispace0, multispace1, satisfy,
+    },
     combinator::{cut, eof, opt, peek, recognize},
     error::{ErrorKind, ParseError},
     multi::{many0, many0_count, many1, many_till, separated_list0, separated_list1},
@@ -307,10 +309,16 @@ fn simple_path(input: &str) -> SpannedResult<&str, &str> {
 }
 
 fn identifier(input: &str) -> SpannedResult<&str, &str> {
-    recognize(pair(
+    recognize(tuple((
         alt((alpha1, tag("_"))),
         many0_count(alt((alphanumeric1, tag("_")))),
-    ))
+        peek(alt((
+            recognize(satisfy(|c| {
+                !c.is_alphabetic() && !c.is_numeric() && c != '_'
+            })),
+            recognize(eof),
+        ))),
+    )))
     .parse(input)
     .map_err(|err| {
         err.map(|_: SpannedError<&str>| SpannedError {
@@ -449,12 +457,12 @@ mod tests {
     #[test]
     fn test_identifier_extra_alphabetic_char() {
         let input = "café";
-        let (tail, ident) = assert_matches!(
+        let (kind, span) = assert_matches!(
             identifier(input),
-            Ok((tail, ident)) => (tail, ident)
+            Err(nom::Err::Error(SpannedError { kind, span })) => (kind, span)
         );
-        assert_span_at_distance!(input, tail, "é", 3, "tail");
-        assert_eq!(ident, "caf");
+        assert_eq!(kind, SpannedErrorKind::Identifier);
+        assert_span_at_distance!(input, span, "café", 0);
     }
 
     #[test]
