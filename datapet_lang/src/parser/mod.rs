@@ -16,6 +16,9 @@ use crate::ast::{
     StreamLineInput, StreamLineOutput, UseDeclaration,
 };
 
+#[cfg(test)]
+pub mod fuzzer;
+
 #[derive(Debug)]
 pub struct SpannedError<I> {
     pub kind: SpannedErrorKind,
@@ -70,12 +73,52 @@ pub fn module(input: &str) -> SpannedResult<&str, Module> {
 
 fn use_declaration(input: &str) -> SpannedResult<&str, UseDeclaration> {
     preceded(
-        terminated(tag("use"), multispace1),
-        cut(terminated(code, ps(tag(";")))),
+        terminated(token("use"), multispace1),
+        cut(terminated(use_tree, ps(token(";")))),
     )
     .map(|use_tree| UseDeclaration {
         use_tree: use_tree.into(),
     })
+    .parse(input)
+}
+
+fn use_tree(input: &str) -> SpannedResult<&str, &str> {
+    recognize(alt((
+        recognize(pair(
+            simple_path,
+            cut(alt((
+                recognize(pair(ds(token("::")), ts(use_sub_tree))),
+                recognize(opt(tuple((
+                    multispace1,
+                    token("as"),
+                    cut(tuple((
+                        multispace1,
+                        alt((identifier, tag("_"))),
+                        multispace0,
+                    ))),
+                )))),
+            ))),
+        )),
+        recognize(pair(opt(ts(token("::"))), ts(use_sub_tree))),
+    )))
+    .parse(input)
+}
+
+fn use_sub_tree(input: &str) -> SpannedResult<&str, &str> {
+    recognize(alt((
+        recognize(token("*")),
+        recognize(tuple((
+            ts(token("{")),
+            cut(pair(
+                opt(tuple((
+                    ts(use_tree),
+                    many0(pair(ts(token(",")), ts(use_tree))),
+                    opt(ts(token(","))),
+                ))),
+                token("}"),
+            )),
+        ))),
+    )))
     .parse(input)
 }
 
@@ -476,3 +519,6 @@ mod tests {
         assert_eq!(ident, "caf");
     }
 }
+
+#[cfg(test)]
+mod fuzz_tests;

@@ -10,6 +10,7 @@ proc-macro = true
 [dependencies]
 annotate-snippets = { version = "0.9", features = ["color"] }
 datapet_codegen = { path = "../datapet_codegen" }
+datapet_lang = { path = "../datapet_lang" }
 proc-macro2 = "1"
 proc-macro-error = "1"
 quote = "1"

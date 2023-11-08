@@ -6,3 +6,4 @@ pub use nom;
 
 pub mod ast;
 pub mod parser;
+pub mod snippet;

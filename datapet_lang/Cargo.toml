@@ -5,7 +5,11 @@ edition = "2021"
 rust-version = "1.65.0"
 
 [dependencies]
+annotate-snippets = { version = "0.9", features = ["color"] }
 nom = "7"
 
 [dev-dependencies]
+antinom = { git = "https://github.com/arnodb/antinom.git" }
 assert_matches = "1"
+rand_chacha = { version = "0.3" }
+rstest = "0.18.2"
