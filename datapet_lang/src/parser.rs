@@ -1,9 +1,9 @@
 use nom::{
     branch::alt,
-    bytes::complete::{escaped, is_not, tag},
+    bytes::complete::{escaped, is_not, tag, take_while1},
     character::complete::{alpha1, alphanumeric1, anychar, char, multispace0, multispace1},
     combinator::{cut, eof, opt, peek, recognize},
-    error::ParseError,
+    error::{ErrorKind, ParseError},
     multi::{many0, many0_count, many1, many_till, separated_list0, separated_list1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     AsChar, IResult, InputTakeAtPosition, Parser,
@@ -14,7 +14,46 @@ use crate::ast::{
     StreamLineInput, StreamLineOutput, UseDeclaration,
 };
 
-pub fn module(input: &str) -> IResult<&str, Module> {
+#[derive(Debug)]
+pub struct SpannedError<I> {
+    pub kind: SpannedErrorKind,
+    pub span: I,
+}
+
+impl<I> nom::error::ParseError<I> for SpannedError<I> {
+    fn from_error_kind(input: I, kind: nom::error::ErrorKind) -> Self {
+        SpannedError {
+            span: input,
+            kind: SpannedErrorKind::Nom(kind),
+        }
+    }
+
+    fn append(_input: I, _kind: nom::error::ErrorKind, other: Self) -> Self {
+        other
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SpannedErrorKind {
+    Identifier,
+    Token(&'static str),
+    // Nom errors that have not been mapped but should probably be
+    Nom(ErrorKind),
+}
+
+impl SpannedErrorKind {
+    pub fn description(&self) -> &str {
+        match self {
+            Self::Identifier => "identifier",
+            Self::Token(token) => token,
+            Self::Nom(nom) => nom.description(),
+        }
+    }
+}
+
+type SpannedResult<I, O> = IResult<I, O, SpannedError<I>>;
+
+pub fn module(input: &str) -> SpannedResult<&str, Module> {
     ps(many_till(
         ts(alt((
             use_declaration.map(Into::into),
@@ -27,7 +66,7 @@ pub fn module(input: &str) -> IResult<&str, Module> {
     .parse(input)
 }
 
-fn use_declaration(input: &str) -> IResult<&str, UseDeclaration> {
+fn use_declaration(input: &str) -> SpannedResult<&str, UseDeclaration> {
     preceded(
         terminated(tag("use"), multispace1),
         cut(terminated(code, ps(tag(";")))),
@@ -38,7 +77,7 @@ fn use_declaration(input: &str) -> IResult<&str, UseDeclaration> {
     .parse(input)
 }
 
-fn graph_definition(input: &str) -> IResult<&str, GraphDefinition> {
+fn graph_definition(input: &str) -> SpannedResult<&str, GraphDefinition> {
     tuple((
         opt(tag("pub")),
         ps(graph_definition_signature),
@@ -52,7 +91,7 @@ fn graph_definition(input: &str) -> IResult<&str, GraphDefinition> {
     .parse(input)
 }
 
-fn graph_definition_signature(input: &str) -> IResult<&str, GraphDefinitionSignature> {
+fn graph_definition_signature(input: &str) -> SpannedResult<&str, GraphDefinitionSignature> {
     tuple((
         opt_streams0,
         ps(identifier),
@@ -69,31 +108,32 @@ fn graph_definition_signature(input: &str) -> IResult<&str, GraphDefinitionSigna
     .parse(input)
 }
 
-fn params(input: &str) -> IResult<&str, Vec<&str>> {
+fn params(input: &str) -> SpannedResult<&str, Vec<&str>> {
     delimited(
-        tag("("),
-        ps(separated_list0(tag(","), ds(identifier))),
-        tag(")"),
-    )(input)
+        token("("),
+        ps(separated_list0(token(","), ds(identifier))),
+        token(")"),
+    )
+    .parse(input)
 }
 
-fn graph(input: &str) -> IResult<&str, Graph> {
+fn graph(input: &str) -> SpannedResult<&str, Graph> {
     stream_lines
         .map(|stream_lines| Graph { stream_lines })
         .parse(input)
 }
 
-fn stream_lines(input: &str) -> IResult<&str, Vec<StreamLine>> {
+fn stream_lines(input: &str) -> SpannedResult<&str, Vec<StreamLine>> {
     preceded(tag("{"), ps(many_till(ts(stream_line), tag("}"))))
         .map(|(stream_lines, _)| stream_lines)
         .parse(input)
 }
 
-fn stream_line(input: &str) -> IResult<&str, StreamLine> {
+fn stream_line(input: &str) -> SpannedResult<&str, StreamLine> {
     preceded(tag("("), opened_stream_line)(input)
 }
 
-fn opened_stream_line(input: &str) -> IResult<&str, StreamLine> {
+fn opened_stream_line(input: &str) -> SpannedResult<&str, StreamLine> {
     pair(
         ps(pair(stream_line_inputs, ps(filter))
             .map(|(inputs, filter)| ConnectedFilter { inputs, filter })),
@@ -123,7 +163,7 @@ fn opened_stream_line(input: &str) -> IResult<&str, StreamLine> {
     .parse(input)
 }
 
-fn stream_line_inputs(input: &str) -> IResult<&str, Vec<StreamLineInput>> {
+fn stream_line_inputs(input: &str) -> SpannedResult<&str, Vec<StreamLineInput>> {
     opt(alt((
         preceded(tag("<"), cut(pair(ds(identifier), filter_input_streams)))
             .map(|(main_input, extra_streams)| (Some(main_input), extra_streams)),
@@ -142,7 +182,7 @@ fn stream_line_inputs(input: &str) -> IResult<&str, Vec<StreamLineInput>> {
     .parse(input)
 }
 
-fn stream_line_filter(input: &str) -> IResult<&str, ConnectedFilter> {
+fn stream_line_filter(input: &str) -> SpannedResult<&str, ConnectedFilter> {
     pair(filter_input_streams, ps(filter))
         .map(|((main_stream, extra_streams), filter)| ConnectedFilter {
             inputs: assemble_inputs(StreamLineInput::Main(main_stream.into()), extra_streams),
@@ -166,16 +206,16 @@ fn assemble_inputs<'a>(
         .collect()
 }
 
-fn filter_input_streams(input: &str) -> IResult<&str, (&str, Vec<&str>)> {
+fn filter_input_streams(input: &str) -> SpannedResult<&str, (&str, Vec<&str>)> {
     pair(tag("-"), ps(opt_streams1))
         .map(|(main, streams)| (main, streams.unwrap_or_default()))
         .parse(input)
 }
 
-fn filter(input: &str) -> IResult<&str, Filter> {
+fn filter(input: &str) -> SpannedResult<&str, Filter> {
     tuple((
         simple_path,
-        ps(opt(preceded(tag("#"), cut(ps(identifier))))),
+        ps(opt(preceded(token("#"), cut(ps(identifier))))),
         ps(filter_params),
         ps(opt_streams1),
     ))
@@ -190,7 +230,7 @@ fn filter(input: &str) -> IResult<&str, Filter> {
     .parse(input)
 }
 
-fn filter_params(input: &str) -> IResult<&str, &str> {
+fn filter_params(input: &str) -> SpannedResult<&str, &str> {
     recognize(preceded(
         char('('),
         cut(terminated(
@@ -200,11 +240,11 @@ fn filter_params(input: &str) -> IResult<&str, &str> {
     ))(input)
 }
 
-fn code(input: &str) -> IResult<&str, &str> {
+fn code(input: &str) -> SpannedResult<&str, &str> {
     recognize(many1(alt((special_code, is_not("\"'()[]{},;")))))(input)
 }
 
-fn special_code(input: &str) -> IResult<&str, &str> {
+fn special_code(input: &str) -> SpannedResult<&str, &str> {
     recognize(alt((
         recognize(preceded(
             char('"'),
@@ -238,23 +278,27 @@ fn special_code(input: &str) -> IResult<&str, &str> {
     )))(input)
 }
 
-fn opt_streams0(input: &str) -> IResult<&str, Option<Vec<&str>>> {
-    opt(preceded(tag("["), cut(opened_streams0)))(input)
+fn opt_streams0(input: &str) -> SpannedResult<&str, Option<Vec<&str>>> {
+    opt(preceded(token("["), cut(opened_streams0))).parse(input)
 }
 
-fn opened_streams0(input: &str) -> IResult<&str, Vec<&str>> {
-    terminated(ps(separated_list0(tag(","), ds(identifier))), tag("]"))(input)
+fn opened_streams0(input: &str) -> SpannedResult<&str, Vec<&str>> {
+    terminated(ps(separated_list0(token(","), ds(identifier))), token("]")).parse(input)
 }
 
-fn opt_streams1(input: &str) -> IResult<&str, Option<Vec<&str>>> {
-    opt(preceded(tag("["), cut(opened_streams1)))(input)
+fn opt_streams1(input: &str) -> SpannedResult<&str, Option<Vec<&str>>> {
+    opt(preceded(token("["), cut(opened_streams1))).parse(input)
 }
 
-fn opened_streams1(input: &str) -> IResult<&str, Vec<&str>> {
-    terminated(ps(separated_list1(tag(","), ds(identifier))), tag("]"))(input)
+fn opened_streams1(input: &str) -> SpannedResult<&str, Vec<&str>> {
+    terminated(
+        ps(separated_list1(token(","), ds(cut(identifier)))),
+        token("]"),
+    )
+    .parse(input)
 }
 
-fn simple_path(input: &str) -> IResult<&str, &str> {
+fn simple_path(input: &str) -> SpannedResult<&str, &str> {
     recognize(tuple((
         opt(tag("::")),
         ps(identifier),
@@ -262,11 +306,40 @@ fn simple_path(input: &str) -> IResult<&str, &str> {
     )))(input)
 }
 
-fn identifier(input: &str) -> IResult<&str, &str> {
+fn identifier(input: &str) -> SpannedResult<&str, &str> {
     recognize(pair(
         alt((alpha1, tag("_"))),
         many0_count(alt((alphanumeric1, tag("_")))),
-    ))(input)
+    ))
+    .parse(input)
+    .map_err(|err| {
+        err.map(|_: SpannedError<&str>| SpannedError {
+            kind: SpannedErrorKind::Identifier,
+            span: fake_lex(input),
+        })
+    })
+}
+
+fn token<'a>(token: &'static str) -> impl Parser<&'a str, &'a str, SpannedError<&'a str>> {
+    let mut parser = tag(token);
+    move |input| {
+        parser.parse(input).map_err(|err| {
+            err.map(|_: SpannedError<&str>| SpannedError {
+                kind: SpannedErrorKind::Token(token),
+                span: fake_lex(input),
+            })
+        })
+    }
+}
+
+fn fake_lex(input: &str) -> &str {
+    take_while1::<_, _, nom::error::Error<&str>>(|c: char| {
+        c.is_alphabetic() || c.is_numeric() || c == '_'
+    })(input)
+    .map_or_else(
+        |_| &input[0..{ input.chars().next().map_or(0, |c| c.len_utf8()) }],
+        |(_, a)| a,
+    )
 }
 
 fn ds<I, O, E: ParseError<I>, F>(parser: F) -> impl FnMut(I) -> IResult<I, O, E>
@@ -296,19 +369,102 @@ where
     terminated(parser, multispace0)
 }
 
-#[test]
-fn test_graph_definition_signature() {
-    let (input, code) = assert_matches!(
-        graph_definition_signature(", "),
-        Err(nom::Err::Error(nom::error::Error { input, code })) => (input, code)
-    );
-    assert_eq!(input, ", ");
-    assert_eq!(code, nom::error::ErrorKind::Tag);
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let (input, code) = assert_matches!(
-        graph_definition_signature("[ , "),
-        Err(nom::Err::Failure(nom::error::Error { input, code })) => (input, code)
-    );
-    assert_eq!(input, ", ");
-    assert_eq!(code, nom::error::ErrorKind::Tag);
+    macro_rules! assert_span_at_distance {
+        ($input:ident, $span:ident, $expected:expr, $expected_distance:expr) => {
+            assert_span_at_distance!($input, $span, $expected, $expected_distance, "span")
+        };
+        ($input:ident, $span:ident, $expected:expr, $expected_distance:expr, $what:literal) => {
+            assert_eq!(
+                $span, $expected,
+                r#"{} expected to be "{}" but was "{}""#,
+                $what, $expected, $span
+            );
+            assert_eq!(
+                $span.as_ptr() as usize - $input.as_ptr() as usize,
+                $expected_distance,
+                "{} expected to be at distance {}, but was at {}",
+                $what,
+                $expected_distance,
+                $span.as_ptr() as usize - $input.as_ptr() as usize
+            );
+        };
+    }
+
+    #[test]
+    fn test_valid_graph_definition_signature() {
+        let input = "[a, b] foo_123(foo, bar) [c]";
+        let (tail, signature) = assert_matches!(
+            graph_definition_signature(input),
+            Ok((tail, signature)) => (tail, signature)
+        );
+        assert_span_at_distance!(input, tail, "", input.len(), "tail");
+        assert_eq!(
+            signature,
+            GraphDefinitionSignature {
+                inputs: Some(vec!["a".into(), "b".into()]),
+                name: "foo_123".into(),
+                params: vec!["foo".into(), "bar".into()],
+                outputs: Some(vec!["c".into()]),
+            }
+        );
+    }
+
+    #[test]
+    fn test_graph_definition_signature_name_missing() {
+        let input = ", ";
+        let (kind, span) = assert_matches!(
+            graph_definition_signature(input),
+            Err(nom::Err::Error(SpannedError { kind, span })) => (kind, span)
+        );
+        assert_eq!(kind, SpannedErrorKind::Identifier);
+        assert_span_at_distance!(input, span, ",", 0);
+    }
+
+    #[test]
+    fn test_graph_definition_signature_input_identifier_missing() {
+        let input = "[, ";
+        let (kind, span) = assert_matches!(
+            graph_definition_signature(input),
+            Err(nom::Err::Failure(SpannedError { kind, span })) => (kind, span)
+        );
+        assert_eq!(kind, SpannedErrorKind::Token("]"));
+        assert_span_at_distance!(input, span, ",", 1);
+    }
+
+    #[test]
+    fn test_valid_identifier() {
+        let input = "foo_123";
+        let (tail, ident) = assert_matches!(
+            identifier(input),
+            Ok((tail, ident)) => (tail, ident)
+        );
+        assert_span_at_distance!(input, tail, "", input.len(), "tail");
+        assert_eq!(ident, "foo_123");
+    }
+
+    #[test]
+    fn test_identifier_extra_alphabetic_char() {
+        let input = "café";
+        let (tail, ident) = assert_matches!(
+            identifier(input),
+            Ok((tail, ident)) => (tail, ident)
+        );
+        assert_span_at_distance!(input, tail, "é", 3, "tail");
+        assert_eq!(ident, "caf");
+    }
+
+    #[test]
+    fn test_identifier_extra_non_alphabetic_char() {
+        let input = "caf(";
+        let (tail, ident) = assert_matches!(
+            identifier(input),
+            Ok((tail, ident)) => (tail, ident)
+        );
+        assert_span_at_distance!(input, tail, "(", 3, "tail");
+        assert_eq!(ident, "caf");
+    }
 }

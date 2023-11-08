@@ -29,19 +29,16 @@ pub fn parse_module<'a>(
             let part = match &err {
                 datapet_lang::nom::Err::Incomplete(_) => input,
                 datapet_lang::nom::Err::Error(err) | datapet_lang::nom::Err::Failure(err) => {
-                    err.input
+                    err.span
                 }
             };
-            error_emitter.emit_error(
-                part,
-                match &err {
-                    datapet_lang::nom::Err::Incomplete(_) => "Incomplete",
-                    datapet_lang::nom::Err::Error(err) | datapet_lang::nom::Err::Failure(err) => {
-                        err.code.description()
-                    }
+            let error = match &err {
+                datapet_lang::nom::Err::Incomplete(_) => "incomplete",
+                datapet_lang::nom::Err::Error(err) | datapet_lang::nom::Err::Failure(err) => {
+                    err.kind.description()
                 }
-                .into(),
-            );
+            };
+            error_emitter.emit_error(part, error.into());
             return Err(ParseError);
         }
     };

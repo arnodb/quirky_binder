@@ -42,7 +42,7 @@ pub struct GraphDefinition<'a> {
     pub visible: bool,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct GraphDefinitionSignature<'a> {
     pub inputs: Option<Vec<Cow<'a, str>>>,
     pub name: Cow<'a, str>,
