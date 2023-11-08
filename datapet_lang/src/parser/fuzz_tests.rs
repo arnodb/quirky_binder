@@ -1,5 +1,10 @@
+//! These tests do NOT guarantee that the parser implemented with `nom` is correct.
+//!
+//! They check that any data produced with the `nom` parsing model can be parsed with the defined
+//! parser. It brings good confidence in our ability to transform some non LR grammars to LR
+//! grammars. Which is already a good thing.
 use annotate_snippets::display_list::DisplayList;
-use antinom::rng::AntiNomRandRng;
+use antinom::rng::{AnarchyLevel, AntiNomRandRng};
 use rand_chacha::rand_core::SeedableRng;
 use rstest::rstest;
 
@@ -10,14 +15,21 @@ use super::{fuzzer, SpannedResult};
 const FUZZ_ITERATIONS: usize = 1000;
 
 macro_rules! fuzz_test {
-    ($seed: expr, $fuzzer:path, $parser:path) => {
-        for _ in 0..FUZZ_ITERATIONS {
+    ($seed: expr, $fuzzer:path, $parser:path, $anarchy_level:path) => {
+        for _ in 0..({
+            if $seed.is_none() {
+                FUZZ_ITERATIONS
+            } else {
+                1
+            }
+        }) {
             let mut rng = AntiNomRandRng {
                 rng: if let Some(seed) = $seed {
                     rand_chacha::ChaCha8Rng::from_seed(seed)
                 } else {
                     rand_chacha::ChaCha8Rng::from_entropy()
                 },
+                anarchy_level: $anarchy_level,
             };
             println!("Seed: {:#04x?}", rng.rng.get_seed());
             let mut dtpt = String::new();
@@ -47,7 +59,12 @@ fn fuzz_graph_definition_signature<F>(#[case] parser: F, #[case] seed: Option<[u
 where
     F: Fn(&str) -> SpannedResult<&str, GraphDefinitionSignature>,
 {
-    fuzz_test!(seed, fuzzer::graph_definition_signature, parser);
+    fuzz_test!(
+        seed,
+        fuzzer::graph_definition_signature,
+        parser,
+        AnarchyLevel::LawAndOrder
+    );
 }
 
 #[rstest]
@@ -56,5 +73,5 @@ fn fuzz_identifier<F>(#[case] parser: F, #[case] seed: Option<[u8; 32]>)
 where
     F: Fn(&str) -> SpannedResult<&str, &str>,
 {
-    fuzz_test!(seed, fuzzer::identifier, parser);
+    fuzz_test!(seed, fuzzer::identifier, parser, AnarchyLevel::LawAndOrder);
 }
