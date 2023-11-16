@@ -49,15 +49,26 @@ fn use_tree(input: &str) -> SpannedResult<&str, &str> {
         recognize(pair(
             simple_path,
             cut(alt((
-                recognize(pair(ds(token("::")), use_sub_tree)),
+                recognize(pair(ds(token("::")), cut(use_sub_tree))),
                 recognize(opt(tuple((
                     multispace1,
                     token("as"),
-                    cut(pair(multispace1, alt((identifier, tag("_"))))),
+                    cut(pair(
+                        |input| {
+                            multispace1(input).map_err(|err| {
+                                err.map(|_: SpannedError<&str>| SpannedError {
+                                    kind: SpannedErrorKind::Identifier,
+                                    span: fake_lex(input),
+                                })
+                            })
+                        },
+                        identifier,
+                    )),
                 )))),
             ))),
         )),
-        recognize(pair(opt(ts(token("::"))), use_sub_tree)),
+        recognize(pair(ts(token("::")), cut(use_sub_tree))),
+        recognize(use_sub_tree),
     )))
     .parse(input)
 }
@@ -424,6 +435,25 @@ mod tests {
         );
         assert_span_at_distance!(input, tail, "", input.len(), "tail");
         assert_eq!(ud.use_tree, expected_use_tree);
+    }
+
+    #[rstest]
+    #[case("use foo::{bar::,mar};", SpannedErrorKind::Token("{"), ",", "use foo::{bar::".as_bytes().len())]
+    #[case("use foo as;", SpannedErrorKind::Identifier, ";", "use foo as".as_bytes().len())]
+    #[case("use foo as\u{20};", SpannedErrorKind::Identifier, ";", "use foo as\u{20}".as_bytes().len())]
+    #[case("use foo::{::,};", SpannedErrorKind::Token("{"), ",", "use foo::{::".as_bytes().len())]
+    fn test_invalid_use_declaration(
+        #[case] input: &str,
+        #[case] expected_kind: SpannedErrorKind,
+        #[case] expected_span: &str,
+        #[case] expected_distance: usize,
+    ) {
+        let (kind, span) = assert_matches!(
+            use_declaration(input),
+            Err(nom::Err::Failure(SpannedError { kind, span })) => (kind, span)
+        );
+        assert_eq!(kind, expected_kind);
+        assert_span_at_distance!(input, span, expected_span, expected_distance);
     }
 
     #[test]

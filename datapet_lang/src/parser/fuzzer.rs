@@ -43,20 +43,22 @@ where
         recognize(pair(
             simple_path,
             cut(alt((
-                recognize(pair(ds(token("::")), |rng: &mut R, buffer: &mut String| {
-                    use_sub_tree(rng, buffer, depth)
-                })),
+                recognize(pair(
+                    ds(token("::")),
+                    cut(|rng: &mut R, buffer: &mut String| use_sub_tree(rng, buffer, depth)),
+                )),
                 recognize(opt(tuple((
                     multispace1(MAX_SPACES),
                     token("as"),
-                    cut(pair(multispace1(MAX_SPACES), alt((identifier, tag("_"))))),
+                    cut(pair(multispace1(MAX_SPACES), identifier)),
                 )))),
             ))),
         )),
         recognize(pair(
-            opt(ts(token("::"))),
-            |rng: &mut R, buffer: &mut String| use_sub_tree(rng, buffer, depth),
+            ts(token("::")),
+            cut(|rng: &mut R, buffer: &mut String| use_sub_tree(rng, buffer, depth)),
         )),
+        recognize(|rng: &mut R, buffer: &mut String| use_sub_tree(rng, buffer, depth)),
     )))
     .gen(rng, buffer)
 }

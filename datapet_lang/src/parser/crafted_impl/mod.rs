@@ -265,6 +265,26 @@ mod tests {
         assert_eq!(ud.use_tree, expected_use_tree);
     }
 
+    #[rstest]
+    #[case("use foo::{bar::,mar};", SpannedErrorKind::Token("{"), ",", "use foo::{bar::".as_bytes().len())]
+    #[case("use foo as;", SpannedErrorKind::Identifier, ";", "use foo as".as_bytes().len())]
+    #[case("use foo as\u{20};", SpannedErrorKind::Identifier, ";", "use foo as\u{20}".as_bytes().len())]
+    #[case("use foo::{::,};", SpannedErrorKind::Token("{"), ",", "use foo::{::".as_bytes().len())]
+    fn test_invalid_use_declaration(
+        #[case] input: &str,
+        #[case] expected_kind: SpannedErrorKind,
+        #[case] expected_span: &str,
+        #[case] expected_distance: usize,
+    ) {
+        let mut lexer = lexer(input);
+        let (kind, span) = assert_matches!(
+            use_declaration(&mut lexer),
+            Err(SpannedError { kind, span }) => (kind, span)
+        );
+        assert_eq!(kind, expected_kind);
+        assert_span_at_distance!(input, span, expected_span, expected_distance);
+    }
+
     #[test]
     fn test_valid_identifier() {
         let input = "foo_123";
