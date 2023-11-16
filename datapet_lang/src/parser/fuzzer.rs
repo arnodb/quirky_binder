@@ -141,8 +141,8 @@ where
     R: AntiNomRng,
 {
     recognize(tuple((
-        opt(tag("::")),
-        ps(identifier),
+        opt(ts(tag("::"))),
+        identifier,
         many0(pair(ps(tag("::")), ps(identifier)), MAX_SIMPLE_PATH_ITEMS),
     )))
     .gen(rng, buffer)

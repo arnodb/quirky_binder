@@ -314,8 +314,8 @@ fn opened_streams1(input: &str) -> SpannedResult<&str, Vec<&str>> {
 
 pub fn simple_path(input: &str) -> SpannedResult<&str, &str> {
     recognize(tuple((
-        opt(tag("::")),
-        ps(identifier),
+        opt(ts(tag("::"))),
+        identifier,
         many0(pair(ps(tag("::")), ps(identifier))),
     )))
     .parse(input)
