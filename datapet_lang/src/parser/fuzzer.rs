@@ -43,24 +43,19 @@ where
         recognize(pair(
             simple_path,
             cut(alt((
-                recognize(pair(
-                    ds(token("::")),
-                    ts(|rng: &mut R, buffer: &mut String| use_sub_tree(rng, buffer, depth)),
-                )),
+                recognize(pair(ds(token("::")), |rng: &mut R, buffer: &mut String| {
+                    use_sub_tree(rng, buffer, depth)
+                })),
                 recognize(opt(tuple((
                     multispace1(MAX_SPACES),
                     token("as"),
-                    cut(tuple((
-                        multispace1(MAX_SPACES),
-                        alt((identifier, tag("_"))),
-                        multispace0(MAX_SPACES),
-                    ))),
+                    cut(pair(multispace1(MAX_SPACES), alt((identifier, tag("_"))))),
                 )))),
             ))),
         )),
         recognize(pair(
             opt(ts(token("::"))),
-            ts(|rng: &mut R, buffer: &mut String| use_sub_tree(rng, buffer, depth)),
+            |rng: &mut R, buffer: &mut String| use_sub_tree(rng, buffer, depth),
         )),
     )))
     .gen(rng, buffer)

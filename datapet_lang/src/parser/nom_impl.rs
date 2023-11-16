@@ -49,19 +49,15 @@ fn use_tree(input: &str) -> SpannedResult<&str, &str> {
         recognize(pair(
             simple_path,
             cut(alt((
-                recognize(pair(ds(token("::")), ts(use_sub_tree))),
+                recognize(pair(ds(token("::")), use_sub_tree)),
                 recognize(opt(tuple((
                     multispace1,
                     token("as"),
-                    cut(tuple((
-                        multispace1,
-                        alt((identifier, tag("_"))),
-                        multispace0,
-                    ))),
+                    cut(pair(multispace1, alt((identifier, tag("_"))))),
                 )))),
             ))),
         )),
-        recognize(pair(opt(ts(token("::"))), ts(use_sub_tree))),
+        recognize(pair(opt(ts(token("::"))), use_sub_tree)),
     )))
     .parse(input)
 }
@@ -385,6 +381,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     macro_rules! assert_span_at_distance {
@@ -406,6 +404,26 @@ mod tests {
                 $span.as_ptr() as usize - $input.as_ptr() as usize
             );
         };
+    }
+
+    #[rstest]
+    #[case("use foo;", "foo")]
+    #[case("use foo\u{20};", "foo")]
+    #[case("use ::foo;", "::foo")]
+    #[case("use ::foo\u{20};", "::foo")]
+    #[case("use foo::*;", "foo::*")]
+    #[case("use foo::*\u{20};", "foo::*")]
+    #[case("use foo as bar;", "foo as bar")]
+    #[case("use foo as bar\u{20};", "foo as bar")]
+    #[case("use ::{foo};", "::{foo}")]
+    #[case("use ::{foo}\u{20};", "::{foo}")]
+    fn test_valid_use_declaration(#[case] input: &str, #[case] expected_use_tree: &str) {
+        let (tail, ud) = assert_matches!(
+            use_declaration(input),
+            Ok((tail, signature)) => (tail, signature)
+        );
+        assert_span_at_distance!(input, tail, "", input.len(), "tail");
+        assert_eq!(ud.use_tree, expected_use_tree);
     }
 
     #[test]

@@ -221,6 +221,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use crate::parser::{crafted_impl::lexer::lexer, SpannedErrorKind};
 
     use super::*;
@@ -244,6 +246,23 @@ mod tests {
                 $span.as_ptr() as usize - $input.as_ptr() as usize
             );
         };
+    }
+
+    #[rstest]
+    #[case("use foo;", "foo")]
+    #[case("use foo\u{20};", "foo")]
+    #[case("use ::foo;", "::foo")]
+    #[case("use ::foo\u{20};", "::foo")]
+    #[case("use foo::*;", "foo::*")]
+    #[case("use foo::*\u{20};", "foo::*")]
+    #[case("use foo as bar;", "foo as bar")]
+    #[case("use foo as bar\u{20};", "foo as bar")]
+    #[case("use ::{foo};", "::{foo}")]
+    #[case("use ::{foo}\u{20};", "::{foo}")]
+    fn test_valid_use_declaration(#[case] input: &str, #[case] expected_use_tree: &str) {
+        let mut lexer = lexer(input);
+        let (ud, _) = assert_matches!(use_declaration(&mut lexer), Ok(ud) => ud);
+        assert_eq!(ud.use_tree, expected_use_tree);
     }
 
     #[test]
