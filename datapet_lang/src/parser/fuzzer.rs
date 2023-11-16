@@ -1,7 +1,7 @@
 use antinom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{alpha1, alphanumeric1, multispace0},
+    character::complete::{alpha1, alphanumeric1, multispace0, multispace1},
     combinator::{cut, opt, recognize},
     multi::{many0, separated_list0},
     rng::AntiNomRng,
@@ -13,7 +13,85 @@ const MAX_FILTER_STREAMS: u8 = 5;
 const MAX_IDENTIFIER_FRAGMENT_LENGTH: u8 = 3;
 const MAX_IDENTIFIER_FRAGMENTS: u8 = 3;
 const MAX_PARAMS: u8 = 5;
+const MAX_SCOPE_USE_TREES: u8 = 7;
+const MAX_SIMPLE_PATH_ITEMS: u8 = 3;
 const MAX_SPACES: u8 = 3;
+
+pub fn use_declaration<R>(rng: &mut R, buffer: &mut String)
+where
+    R: AntiNomRng,
+{
+    preceded(
+        terminated(token("use"), multispace1(MAX_SPACES)),
+        cut(terminated(
+            |rng: &mut R, buffer: &mut String| use_tree(rng, buffer, 0),
+            ps(token(";")),
+        )),
+    )
+    .gen(rng, buffer)
+}
+
+pub fn use_tree<R>(rng: &mut R, buffer: &mut String, depth: usize)
+where
+    R: AntiNomRng,
+{
+    if depth >= 42 {
+        buffer.push_slice("very_deep");
+        return;
+    }
+    recognize(alt((
+        recognize(pair(
+            simple_path,
+            cut(alt((
+                recognize(pair(
+                    ds(token("::")),
+                    ts(|rng: &mut R, buffer: &mut String| use_sub_tree(rng, buffer, depth)),
+                )),
+                recognize(opt(tuple((
+                    multispace1(MAX_SPACES),
+                    token("as"),
+                    cut(tuple((
+                        multispace1(MAX_SPACES),
+                        alt((identifier, tag("_"))),
+                        multispace0(MAX_SPACES),
+                    ))),
+                )))),
+            ))),
+        )),
+        recognize(pair(
+            opt(ts(token("::"))),
+            ts(|rng: &mut R, buffer: &mut String| use_sub_tree(rng, buffer, depth)),
+        )),
+    )))
+    .gen(rng, buffer)
+}
+
+pub fn use_sub_tree<R>(rng: &mut R, buffer: &mut String, depth: usize)
+where
+    R: AntiNomRng,
+{
+    recognize(alt((
+        recognize(token("*")),
+        recognize(tuple((
+            ts(token("{")),
+            cut(pair(
+                opt(tuple((
+                    ts(|rng: &mut R, buffer: &mut String| use_tree(rng, buffer, depth + 1)),
+                    many0(
+                        pair(
+                            ts(token(",")),
+                            ts(|rng: &mut R, buffer: &mut String| use_tree(rng, buffer, depth + 1)),
+                        ),
+                        MAX_SCOPE_USE_TREES - 1,
+                    ),
+                    opt(ts(token(","))),
+                ))),
+                token("}"),
+            )),
+        ))),
+    )))
+    .gen(rng, buffer)
+}
 
 pub fn graph_definition_signature<R>(rng: &mut R, buffer: &mut String)
 where
@@ -61,6 +139,18 @@ where
     .gen(rng, buffer)
 }
 
+pub fn simple_path<R>(rng: &mut R, buffer: &mut String)
+where
+    R: AntiNomRng,
+{
+    recognize(tuple((
+        opt(tag("::")),
+        ps(identifier),
+        many0(pair(ps(tag("::")), ps(identifier)), MAX_SIMPLE_PATH_ITEMS),
+    )))
+    .gen(rng, buffer)
+}
+
 pub fn identifier<R>(rng: &mut R, buffer: &mut String)
 where
     R: AntiNomRng,
@@ -72,7 +162,7 @@ where
             MAX_IDENTIFIER_FRAGMENTS - 1,
         ),
     )))
-    .gen(rng, buffer)
+    .gen(rng, buffer);
 }
 
 fn token<R, B, T>(token: T) -> impl Generator<R, B>
@@ -102,4 +192,14 @@ where
     F: Generator<R, B>,
 {
     preceded(multispace0(MAX_SPACES), f)
+}
+
+fn ts<R, B, F>(f: F) -> impl Generator<R, B>
+where
+    R: AntiNomRng,
+    B: Buffer,
+    B::Char: From<u8>,
+    F: Generator<R, B>,
+{
+    terminated(f, multispace0(MAX_SPACES))
 }

@@ -30,7 +30,7 @@ impl<'a> From<Graph<'a>> for ModuleItem<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct UseDeclaration<'a> {
     pub use_tree: Cow<'a, str>,
 }
