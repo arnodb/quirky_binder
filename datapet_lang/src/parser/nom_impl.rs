@@ -354,9 +354,13 @@ fn token<'a>(token: &'static str) -> impl Parser<&'a str, &'a str, SpannedError<
 }
 
 fn fake_lex(input: &str) -> &str {
-    take_while1::<_, _, nom::error::Error<&str>>(|c: char| {
-        c.is_alphabetic() || c.is_numeric() || c == '_'
-    })(input)
+    alt((
+        take_while1::<_, _, nom::error::Error<&str>>(|c: char| {
+            c.is_alphabetic() || c.is_numeric() || c == '_'
+        }),
+        tag("::"),
+    ))
+    .parse(input)
     .map_or_else(
         |_| &input[0..{ input.chars().next().map_or(0, |c| c.len_utf8()) }],
         |(_, a)| a,
