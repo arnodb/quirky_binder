@@ -152,6 +152,7 @@ pub fn identifier<R>(rng: &mut R, buffer: &mut String)
 where
     R: AntiNomRng,
 {
+    let mut id = String::new();
     recognize(tuple((
         alt((alpha1(MAX_IDENTIFIER_FRAGMENT_LENGTH), tag("_"))),
         many0(
@@ -159,7 +160,18 @@ where
             MAX_IDENTIFIER_FRAGMENTS - 1,
         ),
     )))
-    .gen(rng, buffer);
+    .gen(rng, &mut id);
+    buffer.push_slice(&id);
+    // Make sure we didn't push a keyword
+    match id.as_str() {
+        "as" | "use" => {
+            let anarchy = rng.anarchy();
+            if !anarchy {
+                buffer.push('_');
+            }
+        }
+        _ => {}
+    }
 }
 
 fn token<R, B, T>(token: T) -> impl Generator<R, B>
