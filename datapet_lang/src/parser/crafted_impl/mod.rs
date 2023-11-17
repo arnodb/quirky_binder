@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use crate::ast::UseDeclaration;
 
 use self::lexer::{Lexer, Token};
@@ -18,37 +16,37 @@ macro_rules! identifier_lookahead {
 macro_rules! simple_path_lookahead {
     () => {
         // TODO catch NotAnIdent as a strong error, here and in nom_impl
-        [Some((Token::Colon2(_), _)), Some((Token::Ident(_), _))] | [Some((Token::Ident(_), _)), _]
+        [Some(Token::Colon2(_)), Some(Token::Ident(_))] | [Some(Token::Ident(_)), _]
     };
 }
 
 macro_rules! use_sub_tree_lookahead {
     () => {
-        Some((Token::Star(_), _)) | Some((Token::OpenCurly(_), _))
+        Some(Token::Star(_)) | Some(Token::OpenCurly(_))
     };
 }
 
 macro_rules! use_tree_lookahead {
     () => {
-        simple_path_lookahead!() | [Some((Token::Colon2(_), _)), _] | [use_sub_tree_lookahead!(), _]
+        simple_path_lookahead!() | [Some(Token::Colon2(_)), _] | [use_sub_tree_lookahead!(), _]
     };
 }
 
 #[allow(unused)]
 macro_rules! use_declaration_lookahead {
     () => {
-        Some((Token::Use(_), _))
+        Some(Token::Use(_))
     };
 }
 
 macro_rules! match_token {
-    ($lexer:expr, $type:path, $res:expr, $err:expr) => {
+    ($lexer:expr, $type:path, $err:expr) => {
         match $lexer.tokens().peek() {
-            Some(($type(_), _)) => {
-                let (token, range) = $lexer.tokens().next().unwrap();
-                Ok(($res(&token), range))
+            Some($type(_)) => {
+                let token = $lexer.tokens().next().unwrap();
+                Ok(token.as_str())
             }
-            Some((token, _)) => Err(SpannedError {
+            Some(token) => Err(SpannedError {
                 kind: $err,
                 span: token.as_str(),
             }),
@@ -62,161 +60,116 @@ macro_rules! match_token {
 
 pub fn use_declaration<'a, I>(
     lexer: &mut Lexer<'a, I>,
-) -> Result<(UseDeclaration<'a>, Range<usize>), SpannedError<&'a str>>
+) -> Result<UseDeclaration<'a>, SpannedError<&'a str>>
 where
-    I: Iterator<Item = (Token<'a>, Range<usize>)>,
+    I: Iterator<Item = Token<'a>>,
 {
-    let start = match_token!(
-        lexer,
-        Token::Use,
-        |_| (),
-        super::SpannedErrorKind::Token("use")
-    )?
-    .1
-    .start;
-    let (use_tree, _) = use_tree(lexer)?;
-    let end = match_token!(
-        lexer,
-        Token::SemiColon,
-        |_| (),
-        super::SpannedErrorKind::Token(";")
-    )?
-    .1
-    .end;
-    Ok((
-        UseDeclaration {
-            use_tree: use_tree.into(),
-        },
-        start..end,
-    ))
+    match_token!(lexer, Token::Use, super::SpannedErrorKind::Token("use"))?;
+    let use_tree = use_tree(lexer)?;
+    match_token!(lexer, Token::SemiColon, super::SpannedErrorKind::Token(";"))?;
+    Ok(UseDeclaration {
+        use_tree: use_tree.into(),
+    })
 }
 
-pub fn use_tree<'a, I>(
-    lexer: &mut Lexer<'a, I>,
-) -> Result<(&'a str, Range<usize>), SpannedError<&'a str>>
+pub fn use_tree<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<&'a str, SpannedError<&'a str>>
 where
-    I: Iterator<Item = (Token<'a>, Range<usize>)>,
+    I: Iterator<Item = Token<'a>>,
 {
-    let start = lexer.tokens().peek().map(|(_, range)| range.start);
-    let end = match lexer.tokens().peek_amount(2) {
+    let (start, end) = match lexer.tokens().peek_amount(2) {
         simple_path_lookahead!() => {
-            let (_, range) = simple_path(lexer)?;
+            let sp = simple_path(lexer)?;
             match lexer.tokens().peek() {
-                Some((Token::Colon2(_), _)) => {
-                    lexer.tokens().next();
-                    let (_, range) = use_sub_tree(lexer)?;
-                    range.end
+                Some(Token::Colon2(_)) => {
+                    lexer.tokens().next().unwrap();
+                    let ust = use_sub_tree(lexer)?;
+                    (sp, ust)
                 }
-                Some((Token::As(_), _)) => {
-                    lexer.tokens().next();
-                    let (_, range) = identifier(lexer)?;
-                    range.end
+                Some(Token::As(_)) => {
+                    lexer.tokens().next().unwrap();
+                    let ident = identifier(lexer)?;
+                    (sp, ident)
                 }
                 use_sub_tree_lookahead!() => {
-                    let (_, range) = use_sub_tree(lexer)?;
-                    range.end
+                    let ust = use_sub_tree(lexer)?;
+                    (sp, ust)
                 }
-                _ => range.end,
+                _ => (sp, sp),
             }
         }
         _ => match lexer.tokens().peek() {
-            Some((Token::Colon2(_), _)) => {
-                lexer.tokens().next();
-                let (_, range) = use_sub_tree(lexer)?;
-                range.end
+            Some(Token::Colon2(_)) => {
+                let colon2 = lexer.tokens().next().unwrap();
+                let ust = use_sub_tree(lexer)?;
+                (colon2.as_str(), ust)
             }
             _ => {
-                let (_, range) = use_sub_tree(lexer)?;
-                range.end
+                let ust = use_sub_tree(lexer)?;
+                (ust, ust)
             }
         },
     };
-    let start = start.unwrap();
-    Ok((&lexer.input()[start..end], start..end))
+    Ok(lexer.input_slice(start, end))
 }
 
-pub fn use_sub_tree<'a, I>(
-    lexer: &mut Lexer<'a, I>,
-) -> Result<(&'a str, Range<usize>), SpannedError<&'a str>>
+pub fn use_sub_tree<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<&'a str, SpannedError<&'a str>>
 where
-    I: Iterator<Item = (Token<'a>, Range<usize>)>,
+    I: Iterator<Item = Token<'a>>,
 {
-    let start = lexer.tokens().peek().map(|(_, range)| range.start);
-    let end = match lexer.tokens().peek() {
-        Some((Token::Star(_), _)) => {
-            let (_, range) = lexer.tokens().next().unwrap();
-            range.end
+    let (start, end) = match lexer.tokens().peek() {
+        Some(Token::Star(_)) => {
+            let star = lexer.tokens().next().unwrap();
+            (star.as_str(), star.as_str())
         }
         _ => {
-            match_token!(
-                lexer,
-                Token::OpenCurly,
-                |_| (),
-                super::SpannedErrorKind::Token("{")
-            )?;
+            let open = match_token!(lexer, Token::OpenCurly, super::SpannedErrorKind::Token("{"))?;
             while let use_tree_lookahead!() = lexer.tokens().peek_amount(2) {
                 use_tree(lexer)?;
                 match lexer.tokens().peek() {
-                    Some((Token::CloseCurly(_), _)) => break,
+                    Some(Token::CloseCurly(_)) => break,
                     _ => {
-                        match_token!(
-                            lexer,
-                            Token::Comma,
-                            |_| (),
-                            super::SpannedErrorKind::Token(",")
-                        )?;
+                        match_token!(lexer, Token::Comma, super::SpannedErrorKind::Token(","))?;
                     }
                 }
             }
-            let (_, range) = match_token!(
+            let close = match_token!(
                 lexer,
                 Token::CloseCurly,
-                |_| (),
                 super::SpannedErrorKind::Token("}")
             )?;
-            range.end
+            (open, close)
         }
     };
-    let start = start.unwrap();
-    Ok((&lexer.input()[start..end], start..end))
+    Ok(lexer.input_slice(start, end))
 }
 
-pub fn simple_path<'a, I>(
-    lexer: &mut Lexer<'a, I>,
-) -> Result<(&'a str, Range<usize>), SpannedError<&'a str>>
+pub fn simple_path<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<&'a str, SpannedError<&'a str>>
 where
-    I: Iterator<Item = (Token<'a>, Range<usize>)>,
+    I: Iterator<Item = Token<'a>>,
 {
-    let start = lexer.tokens().peek().map(|(_, range)| range.start);
-    if let Some((Token::Colon2(_), _)) = lexer.tokens().peek() {
-        lexer.tokens().next();
-    }
-    let (_, range) = identifier(lexer)?;
-    let mut end = range.end;
+    let start = if let Some(Token::Colon2(_)) = lexer.tokens().peek() {
+        let colon2 = lexer.tokens().next().unwrap();
+        Some(colon2.as_str())
+    } else {
+        None
+    };
+    let ident = identifier(lexer)?;
+    let start = start.unwrap_or(ident);
+    let mut end = ident;
     // TODO catch NotAnIdent as a strong error, here and in nom_impl
-    while let [Some((Token::Colon2(_), _)), Some((Token::Ident(_), _))] =
-        lexer.tokens().peek_amount(2)
-    {
-        lexer.tokens().next();
-        let (_, range) = identifier(lexer)?;
-        end = range.end;
+    while let [Some(Token::Colon2(_)), Some(Token::Ident(_))] = lexer.tokens().peek_amount(2) {
+        lexer.tokens().next().unwrap();
+        let ident = identifier(lexer)?;
+        end = ident;
     }
-    let start = start.unwrap();
-    Ok((&lexer.input()[start..end], start..end))
+    Ok(lexer.input_slice(start, end))
 }
 
-pub fn identifier<'a, I>(
-    lexer: &mut Lexer<'a, I>,
-) -> Result<(&'a str, Range<usize>), SpannedError<&'a str>>
+pub fn identifier<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<&'a str, SpannedError<&'a str>>
 where
-    I: Iterator<Item = (Token<'a>, Range<usize>)>,
+    I: Iterator<Item = Token<'a>>,
 {
-    match_token!(
-        lexer,
-        Token::Ident,
-        Token::as_str,
-        super::SpannedErrorKind::Identifier
-    )
+    match_token!(lexer, Token::Ident, super::SpannedErrorKind::Identifier)
 }
 
 #[cfg(test)]
@@ -261,7 +214,7 @@ mod tests {
     #[case("use ::{foo}\u{20};", "::{foo}")]
     fn test_valid_use_declaration(#[case] input: &str, #[case] expected_use_tree: &str) {
         let mut lexer = lexer(input);
-        let (ud, _) = assert_matches!(use_declaration(&mut lexer), Ok(ud) => ud);
+        let ud = assert_matches!(use_declaration(&mut lexer), Ok(ud) => ud);
         assert_eq!(ud.use_tree, expected_use_tree);
     }
 
@@ -289,7 +242,7 @@ mod tests {
     fn test_valid_identifier() {
         let input = "foo_123";
         let mut lexer = lexer(input);
-        let (ident, _) = assert_matches!(identifier(&mut lexer), Ok(ident) => ident);
+        let ident = assert_matches!(identifier(&mut lexer), Ok(ident) => ident);
         assert_eq!(lexer.tokens().next(), None);
         assert_eq!(ident, "foo_123");
     }
@@ -298,7 +251,7 @@ mod tests {
     fn test_valid_identifier_underscore() {
         let input = "_";
         let mut lexer = lexer(input);
-        let (ident, _) = assert_matches!(identifier(&mut lexer), Ok(ident) => ident);
+        let ident = assert_matches!(identifier(&mut lexer), Ok(ident) => ident);
         assert_eq!(lexer.tokens().next(), None);
         assert_eq!(ident, "_");
     }
@@ -319,9 +272,8 @@ mod tests {
     fn test_identifier_extra_non_alphabetic_char() {
         let input = "caf(";
         let mut lexer = lexer(input);
-        let (ident, _) = assert_matches!(identifier(&mut lexer), Ok(ident) => ident);
-        let tail =
-            assert_matches!(lexer.tokens().next(), Some((Token::OpenBracket(tail), _)) => tail);
+        let ident = assert_matches!(identifier(&mut lexer), Ok(ident) => ident);
+        let tail = assert_matches!(lexer.tokens().next(), Some(Token::OpenBracket(tail)) => tail);
         assert_span_at_distance!(input, tail, "(", 3, "tail");
         assert_eq!(ident, "caf");
     }

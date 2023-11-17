@@ -136,13 +136,9 @@ fn fuzz_use_declaration() {
 
     #[cfg(feature = "crafted_parser")]
     {
-        use std::ops::Range;
-
         use crate::{ast::UseDeclaration, parser::crafted_impl::lexer::lexer};
 
-        fn crafted_parser(
-            input: &str,
-        ) -> Result<(UseDeclaration, Range<usize>), SpannedError<&str>> {
+        fn crafted_parser(input: &str) -> Result<UseDeclaration, SpannedError<&str>> {
             let mut lexer = lexer(input);
             crate::parser::crafted_impl::use_declaration(&mut lexer)
         }
@@ -153,7 +149,7 @@ fn fuzz_use_declaration() {
             seed,
             fuzzer,
             |input| nom_parser(input).map(|res| res.1),
-            |input| crafted_parser(input).map(|res| res.0),
+            crafted_parser,
             AnarchyLevel::ALittleAnarchy
         );
     }
@@ -178,11 +174,9 @@ fn fuzz_simple_path() {
 
     #[cfg(feature = "crafted_parser")]
     {
-        use std::ops::Range;
-
         use crate::parser::crafted_impl::lexer::lexer;
 
-        fn crafted_parser(input: &str) -> Result<(&str, Range<usize>), SpannedError<&str>> {
+        fn crafted_parser(input: &str) -> Result<&str, SpannedError<&str>> {
             let mut lexer = lexer(input);
             crate::parser::crafted_impl::simple_path(&mut lexer)
         }
@@ -193,7 +187,7 @@ fn fuzz_simple_path() {
             seed,
             fuzzer,
             |input| nom_parser(input).map(|res| res.1),
-            |input| crafted_parser(input).map(|res| res.0),
+            crafted_parser,
             AnarchyLevel::ALittleAnarchy
         );
     }
@@ -209,11 +203,9 @@ fn fuzz_identifier() {
 
     #[cfg(feature = "crafted_parser")]
     {
-        use std::ops::Range;
-
         use crate::parser::crafted_impl::lexer::lexer;
 
-        fn crafted_parser(input: &str) -> Result<(&str, Range<usize>), SpannedError<&str>> {
+        fn crafted_parser(input: &str) -> Result<&str, SpannedError<&str>> {
             let mut lexer = lexer(input);
             crate::parser::crafted_impl::identifier(&mut lexer)
         }
@@ -224,7 +216,7 @@ fn fuzz_identifier() {
             seed,
             fuzzer,
             |input| nom_parser(input).map(|res| res.1),
-            |input| crafted_parser(input).map(|res| res.0),
+            crafted_parser,
             AnarchyLevel::ALittleAnarchy
         );
     }

@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use logos::Logos;
 use peekmore::{PeekMore, PeekMoreIterator};
 
@@ -58,7 +56,7 @@ impl<'a> Token<'a> {
 
 pub struct Lexer<'a, I>
 where
-    I: Iterator<Item = (Token<'a>, Range<usize>)>,
+    I: Iterator<Item = Token<'a>>,
 {
     input: &'a str,
     tokens: PeekMoreIterator<I>,
@@ -66,10 +64,21 @@ where
 
 impl<'a, I> Lexer<'a, I>
 where
-    I: Iterator<Item = (Token<'a>, Range<usize>)>,
+    I: Iterator<Item = Token<'a>>,
 {
     pub fn input(&self) -> &'a str {
         self.input
+    }
+
+    pub fn input_slice(&self, start: &'a str, end: &'a str) -> &'a str {
+        let start = start.as_ptr() as usize;
+        let end = end.as_ptr() as usize + end.len();
+        let input = self.input.as_ptr() as usize;
+        if start >= input && end <= input + self.input.len() {
+            &self.input[(start - input)..(end - input)]
+        } else {
+            panic!("slices out of range");
+        }
     }
 
     pub fn tokens(&mut self) -> &mut PeekMoreIterator<I> {
@@ -77,13 +86,10 @@ where
     }
 }
 
-pub fn lexer(input: &str) -> Lexer<impl Iterator<Item = (Token, Range<usize>)>> {
-    let tokens = Token::lexer(input).spanned().map(|(res, range)| {
-        (
-            res.unwrap_or_else(|()| Token::UnrecognizedToken(&input[range.clone()])),
-            range,
-        )
-    });
+pub fn lexer(input: &str) -> Lexer<impl Iterator<Item = Token>> {
+    let tokens = Token::lexer(input)
+        .spanned()
+        .map(|(res, range)| res.unwrap_or_else(|()| Token::UnrecognizedToken(&input[range])));
     Lexer {
         input,
         tokens: tokens.peekmore(),
