@@ -78,12 +78,11 @@ fn use_sub_tree(input: &str) -> SpannedResult<&str, &str> {
         recognize(token("*")),
         recognize(tuple((
             ts(token("{")),
-            cut(pair(
-                opt(tuple((
-                    ts(use_tree),
-                    many0(pair(ts(token(",")), ts(use_tree))),
+            cut(terminated(
+                opt(terminated(
+                    pair(ts(use_tree), many0(preceded(ts(token(",")), ts(use_tree)))),
                     opt(ts(token(","))),
-                ))),
+                )),
                 token("}"),
             )),
         ))),
@@ -292,12 +291,30 @@ fn special_code(input: &str) -> SpannedResult<&str, &str> {
     )))(input)
 }
 
-fn opt_streams0(input: &str) -> SpannedResult<&str, Option<Vec<&str>>> {
-    opt(preceded(token("["), cut(opened_streams0))).parse(input)
-}
-
-fn opened_streams0(input: &str) -> SpannedResult<&str, Vec<&str>> {
-    terminated(ps(separated_list0(token(","), ds(identifier))), token("]")).parse(input)
+pub fn opt_streams0(input: &str) -> SpannedResult<&str, Option<Vec<&str>>> {
+    opt(preceded(
+        ts(token("[")),
+        cut(terminated(
+            opt(terminated(
+                pair(
+                    ts(identifier),
+                    many0(preceded(ts(token(",")), ts(identifier))),
+                ),
+                opt(ts(token(","))),
+            )),
+            token("]"),
+        )),
+    ))
+    .map(|maybe_zero_streams| {
+        maybe_zero_streams.map(|maybe_more_streams| {
+            maybe_more_streams.map_or_else(Vec::new, |(first, more)| {
+                let mut all = more;
+                all.insert(0, first);
+                all
+            })
+        })
+    })
+    .parse(input)
 }
 
 fn opt_streams1(input: &str) -> SpannedResult<&str, Option<Vec<&str>>> {

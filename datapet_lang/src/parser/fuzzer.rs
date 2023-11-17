@@ -71,18 +71,22 @@ where
         recognize(token("*")),
         recognize(tuple((
             ts(token("{")),
-            cut(pair(
-                opt(tuple((
-                    ts(|rng: &mut R, buffer: &mut String| use_tree(rng, buffer, depth + 1)),
-                    many0(
-                        pair(
-                            ts(token(",")),
-                            ts(|rng: &mut R, buffer: &mut String| use_tree(rng, buffer, depth + 1)),
+            cut(terminated(
+                opt(terminated(
+                    pair(
+                        ts(|rng: &mut R, buffer: &mut String| use_tree(rng, buffer, depth + 1)),
+                        many0(
+                            preceded(
+                                ts(token(",")),
+                                ts(|rng: &mut R, buffer: &mut String| {
+                                    use_tree(rng, buffer, depth + 1)
+                                }),
+                            ),
+                            MAX_SCOPE_USE_TREES - 1,
                         ),
-                        MAX_SCOPE_USE_TREES - 1,
                     ),
                     opt(ts(token(","))),
-                ))),
+                )),
                 token("}"),
             )),
         ))),
@@ -118,21 +122,19 @@ pub fn opt_streams0<R>(rng: &mut R, buffer: &mut String)
 where
     R: AntiNomRng,
 {
-    opt(preceded(token("["), cut(opened_streams0))).gen(rng, buffer)
-}
-
-pub fn opened_streams0<R>(rng: &mut R, buffer: &mut String)
-where
-    R: AntiNomRng,
-{
-    terminated(
-        ps(separated_list0(
-            token(","),
-            ds(identifier),
-            MAX_FILTER_STREAMS,
+    opt(preceded(
+        ts(token("[")),
+        cut(terminated(
+            opt(terminated(
+                pair(
+                    ts(identifier),
+                    many0(preceded(ts(token(",")), ts(identifier)), MAX_FILTER_STREAMS),
+                ),
+                opt(ts(token(","))),
+            )),
+            token("]"),
         )),
-        token("]"),
-    )
+    ))
     .gen(rng, buffer)
 }
 

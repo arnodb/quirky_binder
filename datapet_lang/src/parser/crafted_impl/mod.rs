@@ -143,6 +143,47 @@ where
     Ok(lexer.input_slice(start, end))
 }
 
+pub fn opt_streams0<'a, I>(
+    lexer: &mut Lexer<'a, I>,
+) -> Result<Option<Vec<&'a str>>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    if let Some(Token::OpenSquare(_)) = lexer.tokens().peek() {
+        streams0(lexer).map(Some)
+    } else {
+        Ok(None)
+    }
+}
+
+fn streams0<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<Vec<&'a str>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    let mut streams = Vec::new();
+    match_token!(
+        lexer,
+        Token::OpenSquare,
+        super::SpannedErrorKind::Token("[")
+    )?;
+    while let Some(Token::Ident(_)) = lexer.tokens().peek() {
+        let ident = identifier(lexer)?;
+        streams.push(ident);
+        match lexer.tokens().peek() {
+            Some(Token::CloseSquare(_)) => break,
+            _ => {
+                match_token!(lexer, Token::Comma, super::SpannedErrorKind::Token(","))?;
+            }
+        }
+    }
+    match_token!(
+        lexer,
+        Token::CloseSquare,
+        super::SpannedErrorKind::Token("]")
+    )?;
+    Ok(streams)
+}
+
 pub fn simple_path<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<&'a str, SpannedError<&'a str>>
 where
     I: Iterator<Item = Token<'a>>,

@@ -10,6 +10,8 @@ pub enum Token<'a> {
     CloseBracket(&'a str),
     #[token("}")]
     CloseCurly(&'a str),
+    #[token("]")]
+    CloseSquare(&'a str),
     #[token("::")]
     Colon2(&'a str),
     #[token(",")]
@@ -20,6 +22,8 @@ pub enum Token<'a> {
     OpenBracket(&'a str),
     #[token("{")]
     OpenCurly(&'a str),
+    #[token("[")]
+    OpenSquare(&'a str),
     #[token(r";")]
     SemiColon(&'a str),
     #[token("*")]
@@ -39,11 +43,13 @@ impl<'a> Token<'a> {
             Self::As(span) => span,
             Self::CloseBracket(span) => span,
             Self::CloseCurly(span) => span,
+            Self::CloseSquare(span) => span,
             Self::Colon2(span) => span,
             Self::Comma(span) => span,
             Self::Ident(span) => span,
             Self::OpenBracket(span) => span,
             Self::OpenCurly(span) => span,
+            Self::OpenSquare(span) => span,
             Self::SemiColon(span) => span,
             Self::Star(span) => span,
             Self::Use(span) => span,

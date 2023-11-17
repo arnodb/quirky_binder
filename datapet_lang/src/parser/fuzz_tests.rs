@@ -165,6 +165,35 @@ fn fuzz_graph_definition_signature() {
 }
 
 #[test]
+fn fuzz_opt_streams0() {
+    let seed = None;
+    let fuzzer = fuzzer::opt_streams0;
+
+    let nom_parser = crate::parser::nom_impl::opt_streams0;
+    fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+
+    #[cfg(feature = "crafted_parser")]
+    {
+        use crate::parser::crafted_impl::lexer::lexer;
+
+        fn crafted_parser(input: &str) -> Result<Option<Vec<&str>>, SpannedError<&str>> {
+            let mut lexer = lexer(input);
+            crate::parser::crafted_impl::opt_streams0(&mut lexer)
+        }
+
+        fuzz_test!(seed, fuzzer, crafted_parser, AnarchyLevel::LawAndOrder);
+
+        fuzz_test_compare!(
+            seed,
+            fuzzer,
+            |input| nom_parser(input).map(|res| res.1),
+            crafted_parser,
+            AnarchyLevel::ALittleAnarchy
+        );
+    }
+}
+
+#[test]
 fn fuzz_simple_path() {
     let seed = None;
     let fuzzer = fuzzer::simple_path;
