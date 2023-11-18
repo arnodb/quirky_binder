@@ -373,8 +373,12 @@ pub fn identifier(input: &str) -> SpannedResult<&str, &str> {
         ))),
     )))
     .parse(input)
+    .and_then(|(tail, ident)| match ident {
+        "as" | "use" => Err(nom::Err::Error(())),
+        ident => Ok((tail, ident)),
+    })
     .map_err(|err| {
-        err.map(|_: SpannedError<&str>| SpannedError {
+        err.map(|_: ()| SpannedError {
             kind: SpannedErrorKind::Identifier,
             span: fake_lex(input),
         })
@@ -382,10 +386,21 @@ pub fn identifier(input: &str) -> SpannedResult<&str, &str> {
 }
 
 pub fn not_an_identifier(input: &str) -> SpannedResult<&str, &str> {
-    take_while1::<_, _, SpannedError<&str>>(|c: char| {
-        c.is_alphabetic() || c.is_numeric() || c == '_'
-    })
+    // See fake_lex, but may differ in the future
+    alt((
+        take_while1::<_, _, SpannedError<&str>>(|c: char| {
+            c.is_alphabetic() || c.is_numeric() || c == '_'
+        }),
+        tag("::"),
+    ))
     .parse(input)
+    .and_then(|(tail, ident)| match ident {
+        "as" | "use" | "::" => Err(nom::Err::Error(SpannedError {
+            kind: SpannedErrorKind::Identifier,
+            span: fake_lex(input),
+        })),
+        ident => Ok((tail, ident)),
+    })
 }
 
 fn token<'a>(token: &'static str) -> impl Parser<&'a str, &'a str, SpannedError<&'a str>> {
@@ -401,12 +416,17 @@ fn token<'a>(token: &'static str) -> impl Parser<&'a str, &'a str, SpannedError<
 }
 
 fn fake_lex(input: &str) -> &str {
-    alt((not_an_identifier, tag("::")))
-        .parse(input)
-        .map_or_else(
-            |_| &input[0..{ input.chars().next().map_or(0, |c| c.len_utf8()) }],
-            |(_, a)| a,
-        )
+    alt((
+        take_while1::<_, _, SpannedError<&str>>(|c: char| {
+            c.is_alphabetic() || c.is_numeric() || c == '_'
+        }),
+        tag("::"),
+    ))
+    .parse(input)
+    .map_or_else(
+        |_| &input[0..{ input.chars().next().map_or(0, |c| c.len_utf8()) }],
+        |(_, a)| a,
+    )
 }
 
 fn ds<I, O, E: ParseError<I>, F>(parser: F) -> impl FnMut(I) -> IResult<I, O, E>
@@ -488,6 +508,7 @@ mod tests {
     #[case("use foo as;", SpannedErrorKind::Identifier, ";", "use foo as".as_bytes().len())]
     #[case("use foo as\u{20};", SpannedErrorKind::Identifier, ";", "use foo as\u{20}".as_bytes().len())]
     #[case("use foo::{::,};", SpannedErrorKind::Token("{"), ",", "use foo::{::".as_bytes().len())]
+    #[case("use foo::as bar;", SpannedErrorKind::Token("{"), "as", "use foo::".as_bytes().len())]
     fn test_invalid_use_declaration(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
@@ -580,6 +601,7 @@ mod tests {
     #[rstest]
     #[case("::2bar", SpannedErrorKind::Identifier, "2bar", "::".as_bytes().len())]
     #[case("foo::2bar", SpannedErrorKind::Identifier, "2bar", "foo::".as_bytes().len())]
+    #[case(":: :: foo", SpannedErrorKind::Identifier, "::", ":: ".as_bytes().len())]
     fn test_invalid_simple_path(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
@@ -588,7 +610,8 @@ mod tests {
     ) {
         let (kind, span) = assert_matches!(
             simple_path(input),
-            Err(nom::Err::Failure(SpannedError { kind, span })) => (kind, span)
+            Err(nom::Err::Error(SpannedError { kind, span }))
+            | Err(nom::Err::Failure(SpannedError { kind, span })) => (kind, span)
         );
         assert_eq!(kind, expected_kind);
         assert_span_at_distance!(input, span, expected_span, expected_distance);

@@ -316,6 +316,7 @@ mod tests {
     #[case("use foo as;", SpannedErrorKind::Identifier, ";", "use foo as".as_bytes().len())]
     #[case("use foo as\u{20};", SpannedErrorKind::Identifier, ";", "use foo as\u{20}".as_bytes().len())]
     #[case("use foo::{::,};", SpannedErrorKind::Token("{"), ",", "use foo::{::".as_bytes().len())]
+    #[case("use foo::as bar;", SpannedErrorKind::Token("{"), "as", "use foo::".as_bytes().len())]
     fn test_invalid_use_declaration(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
@@ -370,6 +371,7 @@ mod tests {
     #[rstest]
     #[case("::2bar", SpannedErrorKind::Identifier, "2bar", "::".as_bytes().len())]
     #[case("foo::2bar", SpannedErrorKind::Identifier, "2bar", "foo::".as_bytes().len())]
+    #[case(":: :: foo", SpannedErrorKind::Identifier, "::", ":: ".as_bytes().len())]
     fn test_invalid_simple_path(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
