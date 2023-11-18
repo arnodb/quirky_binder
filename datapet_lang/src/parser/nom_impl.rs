@@ -297,8 +297,8 @@ pub fn opt_streams0(input: &str) -> SpannedResult<&str, Option<Vec<&str>>> {
         cut(terminated(
             opt(terminated(
                 pair(
-                    ts(identifier),
-                    many0(preceded(ts(token(",")), ts(identifier))),
+                    ts(identifier_or_fail),
+                    many0(preceded(ts(token(",")), ts(identifier_or_fail))),
                 ),
                 opt(ts(token(","))),
             )),
@@ -323,8 +323,8 @@ pub fn opt_streams1(input: &str) -> SpannedResult<&str, Option<Vec<&str>>> {
         cut(terminated(
             terminated(
                 pair(
-                    ts(identifier),
-                    many0(preceded(ts(token(",")), ts(identifier))),
+                    ts(identifier_or_fail),
+                    many0(preceded(ts(token(",")), ts(identifier_or_fail))),
                 ),
                 opt(ts(token(","))),
             ),
@@ -344,10 +344,21 @@ pub fn opt_streams1(input: &str) -> SpannedResult<&str, Option<Vec<&str>>> {
 pub fn simple_path(input: &str) -> SpannedResult<&str, &str> {
     recognize(tuple((
         opt(ts(tag("::"))),
-        identifier,
-        many0(pair(ps(tag("::")), ps(identifier))),
+        identifier_or_fail,
+        many0(pair(ps(tag("::")), ps(identifier_or_fail))),
     )))
     .parse(input)
+}
+
+fn identifier_or_fail(input: &str) -> SpannedResult<&str, &str> {
+    identifier
+        .or(not_an_identifier.and_then(|input| {
+            Err(nom::Err::Failure(SpannedError {
+                kind: SpannedErrorKind::Identifier,
+                span: fake_lex(input),
+            }))
+        }))
+        .parse(input)
 }
 
 pub fn identifier(input: &str) -> SpannedResult<&str, &str> {
@@ -370,6 +381,13 @@ pub fn identifier(input: &str) -> SpannedResult<&str, &str> {
     })
 }
 
+pub fn not_an_identifier(input: &str) -> SpannedResult<&str, &str> {
+    take_while1::<_, _, SpannedError<&str>>(|c: char| {
+        c.is_alphabetic() || c.is_numeric() || c == '_'
+    })
+    .parse(input)
+}
+
 fn token<'a>(token: &'static str) -> impl Parser<&'a str, &'a str, SpannedError<&'a str>> {
     let mut parser = tag(token);
     move |input| {
@@ -383,17 +401,12 @@ fn token<'a>(token: &'static str) -> impl Parser<&'a str, &'a str, SpannedError<
 }
 
 fn fake_lex(input: &str) -> &str {
-    alt((
-        take_while1::<_, _, nom::error::Error<&str>>(|c: char| {
-            c.is_alphabetic() || c.is_numeric() || c == '_'
-        }),
-        tag("::"),
-    ))
-    .parse(input)
-    .map_or_else(
-        |_| &input[0..{ input.chars().next().map_or(0, |c| c.len_utf8()) }],
-        |(_, a)| a,
-    )
+    alt((not_an_identifier, tag("::")))
+        .parse(input)
+        .map_or_else(
+            |_| &input[0..{ input.chars().next().map_or(0, |c| c.len_utf8()) }],
+            |(_, a)| a,
+        )
 }
 
 fn ds<I, O, E: ParseError<I>, F>(parser: F) -> impl FnMut(I) -> IResult<I, O, E>
@@ -528,6 +541,57 @@ mod tests {
         );
         assert_eq!(kind, SpannedErrorKind::Token("]"));
         assert_span_at_distance!(input, span, ",", 1);
+    }
+
+    #[rstest]
+    #[case("[2foo]", SpannedErrorKind::Identifier, "2foo", "[".as_bytes().len())]
+    #[case("[foo, 2bar]", SpannedErrorKind::Identifier, "2bar", "[foo, ".as_bytes().len())]
+    fn test_invalid_opt_streams0(
+        #[case] input: &str,
+        #[case] expected_kind: SpannedErrorKind,
+        #[case] expected_span: &str,
+        #[case] expected_distance: usize,
+    ) {
+        let (kind, span) = assert_matches!(
+            opt_streams0(input),
+            Err(nom::Err::Failure(SpannedError { kind, span })) => (kind, span)
+        );
+        assert_eq!(kind, expected_kind);
+        assert_span_at_distance!(input, span, expected_span, expected_distance);
+    }
+
+    #[rstest]
+    #[case("[2foo]", SpannedErrorKind::Identifier, "2foo", "[".as_bytes().len())]
+    #[case("[foo, 2bar]", SpannedErrorKind::Identifier, "2bar", "[foo, ".as_bytes().len())]
+    fn test_invalid_opt_streams1(
+        #[case] input: &str,
+        #[case] expected_kind: SpannedErrorKind,
+        #[case] expected_span: &str,
+        #[case] expected_distance: usize,
+    ) {
+        let (kind, span) = assert_matches!(
+            opt_streams1(input),
+            Err(nom::Err::Failure(SpannedError { kind, span })) => (kind, span)
+        );
+        assert_eq!(kind, expected_kind);
+        assert_span_at_distance!(input, span, expected_span, expected_distance);
+    }
+
+    #[rstest]
+    #[case("::2bar", SpannedErrorKind::Identifier, "2bar", "::".as_bytes().len())]
+    #[case("foo::2bar", SpannedErrorKind::Identifier, "2bar", "foo::".as_bytes().len())]
+    fn test_invalid_simple_path(
+        #[case] input: &str,
+        #[case] expected_kind: SpannedErrorKind,
+        #[case] expected_span: &str,
+        #[case] expected_distance: usize,
+    ) {
+        let (kind, span) = assert_matches!(
+            simple_path(input),
+            Err(nom::Err::Failure(SpannedError { kind, span })) => (kind, span)
+        );
+        assert_eq!(kind, expected_kind);
+        assert_span_at_distance!(input, span, expected_span, expected_distance);
     }
 
     #[test]

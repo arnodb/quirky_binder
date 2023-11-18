@@ -9,14 +9,16 @@ pub mod lexer;
 #[allow(unused)]
 macro_rules! identifier_lookahead {
     () => {
-        Some((Token::Ident(_), _))
+        Some((Token::Ident(_), _)) | Some((Token::NotAnIdent(_), _))
     };
 }
 
 macro_rules! simple_path_lookahead {
     () => {
-        // TODO catch NotAnIdent as a strong error, here and in nom_impl
-        [Some(Token::Colon2(_)), Some(Token::Ident(_))] | [Some(Token::Ident(_)), _]
+        [Some(Token::Colon2(_)), Some(Token::Ident(_))]
+            | [Some(Token::Colon2(_)), Some(Token::NotAnIdent(_))]
+            | [Some(Token::Ident(_)), _]
+            | [Some(Token::NotAnIdent(_)), _]
     };
 }
 
@@ -166,7 +168,7 @@ where
         Token::OpenSquare,
         super::SpannedErrorKind::Token("[")
     )?;
-    while let Some(Token::Ident(_)) = lexer.tokens().peek() {
+    while let Some(Token::Ident(_)) | Some(Token::NotAnIdent(_)) = lexer.tokens().peek() {
         let ident = identifier(lexer)?;
         streams.push(ident);
         match lexer.tokens().peek() {
@@ -213,7 +215,7 @@ where
         Some(Token::CloseSquare(_)) => {}
         _ => {
             match_token!(lexer, Token::Comma, super::SpannedErrorKind::Token(","))?;
-            while let Some(Token::Ident(_)) = lexer.tokens().peek() {
+            while let Some(Token::Ident(_)) | Some(Token::NotAnIdent(_)) = lexer.tokens().peek() {
                 let ident = identifier(lexer)?;
                 streams.push(ident);
                 match lexer.tokens().peek() {
@@ -246,8 +248,9 @@ where
     let ident = identifier(lexer)?;
     let start = start.unwrap_or(ident);
     let mut end = ident;
-    // TODO catch NotAnIdent as a strong error, here and in nom_impl
-    while let [Some(Token::Colon2(_)), Some(Token::Ident(_))] = lexer.tokens().peek_amount(2) {
+    while let [Some(Token::Colon2(_)), Some(Token::Ident(_))]
+    | [Some(Token::Colon2(_)), Some(Token::NotAnIdent(_))] = lexer.tokens().peek_amount(2)
+    {
         lexer.tokens().next().unwrap();
         let ident = identifier(lexer)?;
         end = ident;
@@ -322,6 +325,60 @@ mod tests {
         let mut lexer = lexer(input);
         let (kind, span) = assert_matches!(
             use_declaration(&mut lexer),
+            Err(SpannedError { kind, span }) => (kind, span)
+        );
+        assert_eq!(kind, expected_kind);
+        assert_span_at_distance!(input, span, expected_span, expected_distance);
+    }
+
+    #[rstest]
+    #[case("[2foo]", SpannedErrorKind::Identifier, "2foo", "[".as_bytes().len())]
+    #[case("[foo, 2bar]", SpannedErrorKind::Identifier, "2bar", "[foo, ".as_bytes().len())]
+    fn test_invalid_opt_streams0(
+        #[case] input: &str,
+        #[case] expected_kind: SpannedErrorKind,
+        #[case] expected_span: &str,
+        #[case] expected_distance: usize,
+    ) {
+        let mut lexer = lexer(input);
+        let (kind, span) = assert_matches!(
+            opt_streams0(&mut lexer),
+            Err(SpannedError { kind, span }) => (kind, span)
+        );
+        assert_eq!(kind, expected_kind);
+        assert_span_at_distance!(input, span, expected_span, expected_distance);
+    }
+
+    #[rstest]
+    #[case("[2foo]", SpannedErrorKind::Identifier, "2foo", "[".as_bytes().len())]
+    #[case("[foo, 2bar]", SpannedErrorKind::Identifier, "2bar", "[foo, ".as_bytes().len())]
+    fn test_invalid_opt_streams1(
+        #[case] input: &str,
+        #[case] expected_kind: SpannedErrorKind,
+        #[case] expected_span: &str,
+        #[case] expected_distance: usize,
+    ) {
+        let mut lexer = lexer(input);
+        let (kind, span) = assert_matches!(
+            opt_streams1(&mut lexer),
+            Err(SpannedError { kind, span }) => (kind, span)
+        );
+        assert_eq!(kind, expected_kind);
+        assert_span_at_distance!(input, span, expected_span, expected_distance);
+    }
+
+    #[rstest]
+    #[case("::2bar", SpannedErrorKind::Identifier, "2bar", "::".as_bytes().len())]
+    #[case("foo::2bar", SpannedErrorKind::Identifier, "2bar", "foo::".as_bytes().len())]
+    fn test_invalid_simple_path(
+        #[case] input: &str,
+        #[case] expected_kind: SpannedErrorKind,
+        #[case] expected_span: &str,
+        #[case] expected_distance: usize,
+    ) {
+        let mut lexer = lexer(input);
+        let (kind, span) = assert_matches!(
+            simple_path(&mut lexer),
             Err(SpannedError { kind, span }) => (kind, span)
         );
         assert_eq!(kind, expected_kind);
