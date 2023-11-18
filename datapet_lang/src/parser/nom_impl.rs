@@ -6,7 +6,7 @@ use nom::{
     },
     combinator::{cut, eof, opt, peek, recognize},
     error::ParseError,
-    multi::{many0, many0_count, many1, many_till, separated_list0, separated_list1},
+    multi::{many0, many0_count, many1, many_till, separated_list0},
     sequence::{delimited, pair, preceded, terminated, tuple},
     AsChar, IResult, InputTakeAtPosition, Parser,
 };
@@ -317,15 +317,27 @@ pub fn opt_streams0(input: &str) -> SpannedResult<&str, Option<Vec<&str>>> {
     .parse(input)
 }
 
-fn opt_streams1(input: &str) -> SpannedResult<&str, Option<Vec<&str>>> {
-    opt(preceded(token("["), cut(opened_streams1))).parse(input)
-}
-
-fn opened_streams1(input: &str) -> SpannedResult<&str, Vec<&str>> {
-    terminated(
-        ps(separated_list1(token(","), ds(cut(identifier)))),
-        token("]"),
-    )
+pub fn opt_streams1(input: &str) -> SpannedResult<&str, Option<Vec<&str>>> {
+    opt(preceded(
+        ts(token("[")),
+        cut(terminated(
+            terminated(
+                pair(
+                    ts(identifier),
+                    many0(preceded(ts(token(",")), ts(identifier))),
+                ),
+                opt(ts(token(","))),
+            ),
+            token("]"),
+        )),
+    ))
+    .map(|maybe_zero_streams| {
+        maybe_zero_streams.map(|(first, more)| {
+            let mut all = more;
+            all.insert(0, first);
+            all
+        })
+    })
     .parse(input)
 }
 

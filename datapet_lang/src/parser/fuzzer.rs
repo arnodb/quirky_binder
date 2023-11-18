@@ -128,10 +128,36 @@ where
             opt(terminated(
                 pair(
                     ts(identifier),
-                    many0(preceded(ts(token(",")), ts(identifier)), MAX_FILTER_STREAMS),
+                    many0(
+                        preceded(ts(token(",")), ts(identifier)),
+                        MAX_FILTER_STREAMS - 1,
+                    ),
                 ),
                 opt(ts(token(","))),
             )),
+            token("]"),
+        )),
+    ))
+    .gen(rng, buffer)
+}
+
+pub fn opt_streams1<R>(rng: &mut R, buffer: &mut String)
+where
+    R: AntiNomRng,
+{
+    opt(preceded(
+        ts(token("[")),
+        cut(terminated(
+            terminated(
+                pair(
+                    ts(identifier),
+                    many0(
+                        preceded(ts(token(",")), ts(identifier)),
+                        MAX_FILTER_STREAMS - 1,
+                    ),
+                ),
+                opt(ts(token(","))),
+            ),
             token("]"),
         )),
     ))
