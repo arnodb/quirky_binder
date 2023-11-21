@@ -9,6 +9,7 @@ use antinom::{
     Buffer, Generator,
 };
 
+const MAX_CODE_CHARS: u8 = 8;
 const MAX_FILTER_STREAMS: u8 = 5;
 const MAX_IDENTIFIER_FRAGMENT_LENGTH: u8 = 3;
 const MAX_IDENTIFIER_FRAGMENTS: u8 = 3;
@@ -17,7 +18,7 @@ const MAX_SCOPE_USE_TREES: u8 = 7;
 const MAX_SIMPLE_PATH_ITEMS: u8 = 3;
 const MAX_SPACES: u8 = 3;
 const MAX_SPECIAL_CODE: u8 = 3;
-const MAX_CODE_CHARS: u8 = 8;
+const MAX_USE_DEPTH: usize = 12;
 
 pub fn use_declaration<R>(rng: &mut R, buffer: &mut String)
 where
@@ -37,7 +38,7 @@ pub fn use_tree<R>(rng: &mut R, buffer: &mut String, depth: usize)
 where
     R: AntiNomRng,
 {
-    if depth >= 42 {
+    if depth >= MAX_USE_DEPTH {
         buffer.push_slice("very_deep");
         return;
     }
