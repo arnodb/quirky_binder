@@ -235,6 +235,93 @@ where
     Ok(streams)
 }
 
+pub fn code<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<&'a str, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    let mut brackets = Vec::new();
+    let mut start_end = None;
+    while let Some(token) = lexer.tokens().peek() {
+        let push = match token {
+            Token::OpenBracket(_) => true,
+            Token::OpenCurly(_) => true,
+            Token::OpenSquare(_) => true,
+            Token::CloseBracket(_) => match brackets.last() {
+                Some(Token::OpenBracket(_)) => {
+                    brackets.pop();
+                    false
+                }
+                Some(last) => {
+                    return Err(SpannedError {
+                        kind: super::SpannedErrorKind::UnbalancedCode,
+                        span: last.as_str(),
+                    });
+                }
+                None => break,
+            },
+            Token::CloseCurly(_) => match brackets.last() {
+                Some(Token::OpenCurly(_)) => {
+                    brackets.pop();
+                    false
+                }
+                Some(last) => {
+                    return Err(SpannedError {
+                        kind: super::SpannedErrorKind::UnbalancedCode,
+                        span: last.as_str(),
+                    });
+                }
+                None => break,
+            },
+            Token::CloseSquare(_) => match brackets.last() {
+                Some(Token::OpenSquare(_)) => {
+                    brackets.pop();
+                    false
+                }
+                Some(last) => {
+                    return Err(SpannedError {
+                        kind: super::SpannedErrorKind::UnbalancedCode,
+                        span: last.as_str(),
+                    });
+                }
+                None => break,
+            },
+            _ => false,
+        };
+        let eaten = lexer.tokens().next().unwrap();
+        if let Some((_start, end)) = start_end.as_mut() {
+            *end = eaten.as_str();
+        } else {
+            start_end = Some((eaten.as_str(), eaten.as_str()));
+        }
+        if push {
+            brackets.push(eaten);
+        }
+    }
+    if brackets.is_empty() {
+        if let Some((start, end)) = start_end {
+            return Ok(lexer.input_slice(start, end));
+        } else {
+            return Err(SpannedError {
+                kind: super::SpannedErrorKind::Code,
+                span: if let Some(next) = lexer.tokens().peek() {
+                    next.as_str()
+                } else {
+                    &lexer.input()[lexer.input().len()..]
+                },
+            });
+        }
+    } else {
+        return Err(SpannedError {
+            kind: super::SpannedErrorKind::UnbalancedCode,
+            span: if let Some(next) = lexer.tokens().peek() {
+                next.as_str()
+            } else {
+                &lexer.input()[lexer.input().len()..]
+            },
+        });
+    }
+}
+
 pub fn simple_path<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<&'a str, SpannedError<&'a str>>
 where
     I: Iterator<Item = Token<'a>>,

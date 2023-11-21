@@ -1,9 +1,9 @@
 use antinom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{alpha1, alphanumeric1, multispace0, multispace1},
+    character::complete::{alpha1, alphanumeric1, char, multispace0, multispace1},
     combinator::{cut, opt, recognize},
-    multi::{many0, separated_list0},
+    multi::{many0, many0_count, many1_count, separated_list0},
     rng::AntiNomRng,
     sequence::{delimited, pair, preceded, terminated, tuple},
     Buffer, Generator,
@@ -16,6 +16,8 @@ const MAX_PARAMS: u8 = 5;
 const MAX_SCOPE_USE_TREES: u8 = 7;
 const MAX_SIMPLE_PATH_ITEMS: u8 = 3;
 const MAX_SPACES: u8 = 3;
+const MAX_SPECIAL_CODE: u8 = 3;
+const MAX_CODE_CHARS: u8 = 8;
 
 pub fn use_declaration<R>(rng: &mut R, buffer: &mut String)
 where
@@ -75,7 +77,7 @@ where
                 opt(terminated(
                     pair(
                         ts(|rng: &mut R, buffer: &mut String| use_tree(rng, buffer, depth + 1)),
-                        many0(
+                        many0_count(
                             preceded(
                                 ts(token(",")),
                                 ts(|rng: &mut R, buffer: &mut String| {
@@ -164,6 +166,192 @@ where
     .gen(rng, buffer)
 }
 
+const ALL_CHARACTERS: &str = concat!(
+    "\u{20}!\"#$%&'()*+,-./",
+    "0123456789",
+    ":;<=>?@",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "[\\]^_`",
+    "abcdefghijklmnopqrstuvwxyz",
+    "{|}~"
+);
+
+const NO_SPECIAL_CHARACTERS: &str = concat!(
+    "\u{20}!#$%&*+,-./",
+    "0123456789",
+    ":;<=>?@",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "\\^_`",
+    "abcdefghijklmnopqrstuvwxyz",
+    "|~"
+);
+
+const NO_QUOTE_BACKSLASH: &str = concat!(
+    "\u{20}!#$%&'()*+,-./",
+    "0123456789",
+    ":;<=>?@",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "[]^_`",
+    "abcdefghijklmnopqrstuvwxyz",
+    "{|}~"
+);
+
+const NO_APOSTROPHE_BACKSLASH: &str = concat!(
+    "\u{20}!\"#$%&()*+,-./",
+    "0123456789",
+    ":;<=>?@",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "[]^_`",
+    "abcdefghijklmnopqrstuvwxyz",
+    "{|}~"
+);
+
+const NO_QUOTE_APOSTROPHE_BRACKETS: &str = concat!(
+    "\u{20}!#$%&*+,-./",
+    "0123456789",
+    ":;<=>?@",
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "\\^_`",
+    "abcdefghijklmnopqrstuvwxyz",
+    "|~"
+);
+
+pub fn one_of<R, B>(list: &'static str) -> impl Generator<R, B>
+where
+    R: AntiNomRng,
+    B: Buffer,
+    B::Char: From<u8>,
+{
+    move |rng: &mut R, buffer: &mut B| {
+        let i = rng.gen_range(0..list.len());
+        buffer.push(list.as_bytes()[i].into());
+    }
+}
+
+pub fn is_not<R, B>(list: &'static str, max_length: u8) -> impl Generator<R, B>
+where
+    R: AntiNomRng,
+    B: Buffer,
+    B::Char: From<u8>,
+{
+    move |rng: &mut R, buffer: &mut B| {
+        for _ in 1..max_length {
+            let i = rng.gen_range(0..list.len());
+            buffer.push(list.as_bytes()[i].into());
+        }
+    }
+}
+
+pub fn escaped<R, B, F, G>(
+    mut normal: F,
+    control_char: char,
+    mut escapable: G,
+    max_iter: u8,
+) -> impl Generator<R, B>
+where
+    R: AntiNomRng,
+    B: Buffer,
+    B::Char: From<char>,
+    F: Generator<R, B>,
+    G: Generator<R, B>,
+{
+    move |rng: &mut R, buffer: &mut B| {
+        let iters = rng.gen_range(0..max_iter);
+        for _ in 0..iters {
+            let norm = rng.gen_bool();
+            if norm {
+                normal.gen(rng, buffer);
+            } else {
+                buffer.push(control_char.into());
+                escapable.gen(rng, buffer);
+            }
+        }
+    }
+}
+
+pub fn code<R>(rng: &mut R, buffer: &mut String)
+where
+    R: AntiNomRng,
+{
+    recognize(many1_count(
+        alt((special_code, is_not(NO_SPECIAL_CHARACTERS, MAX_CODE_CHARS))),
+        MAX_SPECIAL_CODE,
+    ))
+    .gen(rng, buffer)
+}
+
+pub fn special_code<R>(rng: &mut R, buffer: &mut String)
+where
+    R: AntiNomRng,
+{
+    recognize(alt((
+        recognize(preceded(
+            char('"'),
+            cut(terminated(
+                opt(escaped(
+                    is_not(NO_QUOTE_BACKSLASH, 3),
+                    '\\',
+                    one_of(ALL_CHARACTERS),
+                    3,
+                )),
+                char('"'),
+            )),
+        )),
+        recognize(preceded(
+            char('\''),
+            cut(terminated(
+                opt(escaped(
+                    is_not(NO_APOSTROPHE_BACKSLASH, 3),
+                    '\\',
+                    one_of(ALL_CHARACTERS),
+                    3,
+                )),
+                char('\''),
+            )),
+        )),
+        recognize(preceded(
+            char('('),
+            cut(terminated(
+                many0_count(
+                    alt((
+                        code,
+                        recognize(is_not(NO_QUOTE_APOSTROPHE_BRACKETS, MAX_CODE_CHARS)),
+                    )),
+                    MAX_SPECIAL_CODE,
+                ),
+                char(')'),
+            )),
+        )),
+        recognize(preceded(
+            char('['),
+            cut(terminated(
+                many0_count(
+                    alt((
+                        code,
+                        recognize(is_not(NO_QUOTE_APOSTROPHE_BRACKETS, MAX_CODE_CHARS)),
+                    )),
+                    MAX_SPECIAL_CODE,
+                ),
+                char(']'),
+            )),
+        )),
+        recognize(preceded(
+            char('{'),
+            cut(terminated(
+                many0_count(
+                    alt((
+                        code,
+                        recognize(is_not(NO_QUOTE_APOSTROPHE_BRACKETS, MAX_CODE_CHARS)),
+                    )),
+                    MAX_SPECIAL_CODE,
+                ),
+                char('}'),
+            )),
+        )),
+    )))
+    .gen(rng, buffer)
+}
+
 pub fn simple_path<R>(rng: &mut R, buffer: &mut String)
 where
     R: AntiNomRng,
@@ -171,7 +359,7 @@ where
     recognize(tuple((
         opt(ts(tag("::"))),
         identifier,
-        many0(pair(ps(tag("::")), ps(identifier)), MAX_SIMPLE_PATH_ITEMS),
+        many0_count(pair(ps(tag("::")), ps(identifier)), MAX_SIMPLE_PATH_ITEMS),
     )))
     .gen(rng, buffer)
 }
@@ -183,7 +371,7 @@ where
     let mut id = String::new();
     recognize(tuple((
         alt((alpha1(MAX_IDENTIFIER_FRAGMENT_LENGTH), tag("_"))),
-        many0(
+        many0_count(
             alt((alphanumeric1(MAX_IDENTIFIER_FRAGMENT_LENGTH), tag("_"))),
             MAX_IDENTIFIER_FRAGMENTS - 1,
         ),

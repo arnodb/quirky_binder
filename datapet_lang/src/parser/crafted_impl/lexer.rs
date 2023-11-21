@@ -24,6 +24,10 @@ pub enum Token<'a> {
     OpenCurly(&'a str),
     #[token("[")]
     OpenSquare(&'a str),
+    #[regex(r#"'(\\.|[^\\'])*'"#)]
+    QuotedChar(&'a str),
+    #[regex(r#""(\\.|[^\\"])*""#)]
+    QuotedString(&'a str),
     #[token(r";")]
     SemiColon(&'a str),
     #[token("*")]
@@ -50,6 +54,8 @@ impl<'a> Token<'a> {
             Self::OpenBracket(span) => span,
             Self::OpenCurly(span) => span,
             Self::OpenSquare(span) => span,
+            Self::QuotedChar(span) => span,
+            Self::QuotedString(span) => span,
             Self::SemiColon(span) => span,
             Self::Star(span) => span,
             Self::Use(span) => span,
@@ -110,16 +116,35 @@ mod tests {
     use super::Token;
 
     #[rstest]
+    #[case(r#"'\''"#, vec![(Ok(Token::QuotedChar(r#"'\''"#)), 0..4)])]
+    #[case(r#"'\K\\'"#, vec![(Ok(Token::QuotedChar(r#"'\K\\'"#)), 0..6)])]
+    #[case(r#"'\K\\')"#, vec![(Ok(Token::QuotedChar(r#"'\K\\'"#)), 0..6), (Ok(Token::CloseBracket(")")), 6..7)])]
+    fn test_quoted_char(#[case] input: &str, #[case] expected: Vec<(Result<Token, ()>, Span)>) {
+        let tokens = Token::lexer(input)
+            .spanned()
+            .collect::<Vec<(Result<Token, _>, Span)>>();
+        assert_eq!(tokens, expected);
+    }
+
+    #[rstest]
+    #[case(r#""\"""#, vec![(Ok(Token::QuotedString(r#""\"""#)), 0..4)])]
+    #[case(r#""\K\\""#, vec![(Ok(Token::QuotedString(r#""\K\\""#)), 0..6)])]
+    #[case(r#""\K\\")"#, vec![(Ok(Token::QuotedString(r#""\K\\""#)), 0..6), (Ok(Token::CloseBracket(")")), 6..7)])]
+    fn test_quoted_string(#[case] input: &str, #[case] expected: Vec<(Result<Token, ()>, Span)>) {
+        let tokens = Token::lexer(input)
+            .spanned()
+            .collect::<Vec<(Result<Token, _>, Span)>>();
+        assert_eq!(tokens, expected);
+    }
+
+    #[rstest]
     #[case("foo", vec![(Ok(Token::Ident("foo")), 0..3)])]
     #[case("foo_bar", vec![(Ok(Token::Ident("foo_bar")), 0..7)])]
     #[case("_foo_bar", vec![(Ok(Token::Ident("_foo_bar")), 0..8)])]
     #[case("1foo", vec![(Ok(Token::NotAnIdent("1foo")), 0..4)])]
     #[case("fooé", vec![(Ok(Token::NotAnIdent("fooé")), 0..5)])]
     #[case("fooébar", vec![(Ok(Token::NotAnIdent("fooébar")), 0..8)])]
-    fn test_unrecognized_token(
-        #[case] input: &str,
-        #[case] expected: Vec<(Result<Token, ()>, Span)>,
-    ) {
+    fn test_not_an_ident(#[case] input: &str, #[case] expected: Vec<(Result<Token, ()>, Span)>) {
         let tokens = Token::lexer(input)
             .spanned()
             .collect::<Vec<(Result<Token, _>, Span)>>();

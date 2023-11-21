@@ -30,6 +30,8 @@ impl<I> nom::error::ParseError<I> for SpannedError<I> {
 pub enum SpannedErrorKind {
     Identifier,
     Token(&'static str),
+    Code,
+    UnbalancedCode,
     // Nom errors that have not been mapped but should probably be
     Nom(ErrorKind),
     NomIncomplete,
@@ -40,6 +42,8 @@ impl SpannedErrorKind {
         match self {
             Self::Identifier => "identifier",
             Self::Token(token) => token,
+            Self::Code => "code",
+            Self::UnbalancedCode => "unbalanced code",
             Self::Nom(nom) => nom.description(),
             Self::NomIncomplete => "incomplete",
         }

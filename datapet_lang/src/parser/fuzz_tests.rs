@@ -223,6 +223,35 @@ fn fuzz_opt_streams1() {
 }
 
 #[test]
+fn fuzz_code() {
+    let seed = None;
+    let fuzzer = fuzzer::code;
+
+    let nom_parser = crate::parser::nom_impl::code;
+    fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+
+    #[cfg(feature = "crafted_parser")]
+    {
+        use crate::parser::crafted_impl::lexer::lexer;
+
+        fn crafted_parser(input: &str) -> Result<&str, SpannedError<&str>> {
+            let mut lexer = lexer(input);
+            crate::parser::crafted_impl::code(&mut lexer)
+        }
+
+        fuzz_test!(seed, fuzzer, crafted_parser, AnarchyLevel::LawAndOrder);
+
+        fuzz_test_compare!(
+            seed,
+            fuzzer,
+            |input| nom_parser(input).map(|res| res.1),
+            crafted_parser,
+            AnarchyLevel::ALittleAnarchy
+        );
+    }
+}
+
+#[test]
 fn fuzz_simple_path() {
     let seed = None;
     let fuzzer = fuzzer::simple_path;

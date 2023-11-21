@@ -6,7 +6,7 @@ use nom::{
     },
     combinator::{cut, eof, opt, peek, recognize},
     error::ParseError,
-    multi::{many0, many0_count, many1, many_till, separated_list0},
+    multi::{many0, many0_count, many1_count, many_till, separated_list0},
     sequence::{delimited, pair, preceded, terminated, tuple},
     AsChar, IResult, InputTakeAtPosition, Parser,
 };
@@ -80,7 +80,10 @@ fn use_sub_tree(input: &str) -> SpannedResult<&str, &str> {
             ts(token("{")),
             cut(terminated(
                 opt(terminated(
-                    pair(ts(use_tree), many0(preceded(ts(token(",")), ts(use_tree)))),
+                    pair(
+                        ts(use_tree),
+                        many0_count(preceded(ts(token(",")), ts(use_tree))),
+                    ),
                     opt(ts(token(","))),
                 )),
                 token("}"),
@@ -247,48 +250,62 @@ fn filter_params(input: &str) -> SpannedResult<&str, &str> {
     recognize(preceded(
         char('('),
         cut(terminated(
-            many0(alt((code, recognize(is_not("\"'()[]{}"))))),
+            many0_count(alt((code, recognize(is_not("\"'()[]{}"))))),
             char(')'),
         )),
     ))(input)
 }
 
-fn code(input: &str) -> SpannedResult<&str, &str> {
-    recognize(many1(alt((special_code, is_not("\"'()[]{},;")))))(input)
+pub fn code(input: &str) -> SpannedResult<&str, &str> {
+    recognize(many1_count(alt((special_code, is_not("\"'()[]{}")))))
+        .parse(input)
+        .map_err(|err| {
+            err.map(|_| SpannedError {
+                kind: SpannedErrorKind::Code,
+                span: fake_lex(input),
+            })
+        })
 }
 
 fn special_code(input: &str) -> SpannedResult<&str, &str> {
     recognize(alt((
         recognize(preceded(
             char('"'),
-            cut(terminated(escaped(is_not("\""), '\\', anychar), char('"'))),
+            cut(terminated(
+                opt(escaped(is_not("\"\\"), '\\', anychar)),
+                char('"'),
+            )),
         )),
         recognize(preceded(
             char('\''),
-            cut(terminated(escaped(is_not("\'"), '\\', anychar), char('\''))),
+            cut(terminated(
+                opt(escaped(is_not("\'\\"), '\\', anychar)),
+                char('\''),
+            )),
         )),
         recognize(preceded(
             char('('),
             cut(terminated(
-                many0(alt((code, recognize(is_not("\"'()[]{}"))))),
+                many0_count(alt((code, recognize(is_not("\"'()[]{}"))))),
                 char(')'),
             )),
         )),
         recognize(preceded(
             char('['),
             cut(terminated(
-                many0(alt((code, recognize(is_not("\"'()[]{}"))))),
+                many0_count(alt((code, recognize(is_not("\"'()[]{}"))))),
                 char(']'),
             )),
         )),
         recognize(preceded(
             char('{'),
             cut(terminated(
-                many0(alt((code, recognize(is_not("\"'()[]{}"))))),
+                many0_count(alt((code, recognize(is_not("\"'()[]{}"))))),
                 char('}'),
             )),
         )),
-    )))(input)
+    )))
+    .parse(input)
 }
 
 pub fn opt_streams0(input: &str) -> SpannedResult<&str, Option<Vec<&str>>> {
@@ -345,7 +362,7 @@ pub fn simple_path(input: &str) -> SpannedResult<&str, &str> {
     recognize(tuple((
         opt(ts(tag("::"))),
         identifier_or_fail,
-        many0(pair(ps(tag("::")), ps(identifier_or_fail))),
+        many0_count(pair(ps(tag("::")), ps(identifier_or_fail))),
     )))
     .parse(input)
 }
