@@ -369,12 +369,19 @@ pub fn simple_path(input: &str) -> SpannedResult<&str, &str> {
 
 fn identifier_or_fail(input: &str) -> SpannedResult<&str, &str> {
     identifier
-        .or(not_an_identifier.and_then(|input| {
-            Err(nom::Err::Failure(SpannedError {
-                kind: SpannedErrorKind::Identifier,
-                span: fake_lex(input),
+        .or(not_an_identifier
+            .and_then(|input| {
+                Err(nom::Err::Failure(SpannedError {
+                    kind: SpannedErrorKind::Identifier,
+                    span: fake_lex(input),
+                }))
+            })
+            .or(|input| {
+                Err(nom::Err::Error(SpannedError {
+                    kind: SpannedErrorKind::Identifier,
+                    span: fake_lex(input),
+                }))
             }))
-        }))
         .parse(input)
 }
 
@@ -584,6 +591,7 @@ mod tests {
     #[rstest]
     #[case("[2foo]", SpannedErrorKind::Identifier, "2foo", "[".as_bytes().len())]
     #[case("[foo, 2bar]", SpannedErrorKind::Identifier, "2bar", "[foo, ".as_bytes().len())]
+    #[case("[, foo]", SpannedErrorKind::Token("]"), ",", "[".as_bytes().len())]
     fn test_invalid_opt_streams0(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
@@ -601,6 +609,7 @@ mod tests {
     #[rstest]
     #[case("[2foo]", SpannedErrorKind::Identifier, "2foo", "[".as_bytes().len())]
     #[case("[foo, 2bar]", SpannedErrorKind::Identifier, "2bar", "[foo, ".as_bytes().len())]
+    #[case("[, foo]", SpannedErrorKind::Identifier, ",", "[".as_bytes().len())]
     fn test_invalid_opt_streams1(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
