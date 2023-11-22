@@ -92,10 +92,6 @@ where
                     let ident = identifier(lexer)?;
                     (sp, ident)
                 }
-                use_sub_tree_lookahead!() => {
-                    let ust = use_sub_tree(lexer)?;
-                    (sp, ust)
-                }
                 _ => (sp, sp),
             }
         }
