@@ -128,10 +128,10 @@ where
             while let use_tree_lookahead!() = lexer.tokens().peek_amount(2) {
                 use_tree(lexer)?;
                 match lexer.tokens().peek() {
-                    Some(Token::CloseCurly(_)) => break,
-                    _ => {
-                        match_token!(lexer, Token::Comma, super::SpannedErrorKind::Token(","))?;
+                    Some(Token::Comma(_)) => {
+                        lexer.tokens().next().unwrap();
                     }
+                    _ => break,
                 }
             }
             let close = match_token!(
@@ -404,6 +404,7 @@ mod tests {
     #[case("use foo as\u{20};", SpannedErrorKind::Identifier, ";", "use foo as\u{20}".as_bytes().len())]
     #[case("use foo::{::,};", SpannedErrorKind::Token("{"), ",", "use foo::{::".as_bytes().len())]
     #[case("use foo::as bar;", SpannedErrorKind::Token("{"), "as", "use foo::".as_bytes().len())]
+    #[case("use ::{::{foo};", SpannedErrorKind::Token("}"), ";", "use ::{::{foo]".as_bytes().len())]
     fn test_invalid_use_declaration(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
