@@ -168,10 +168,10 @@ where
         let ident = identifier(lexer)?;
         streams.push(ident);
         match lexer.tokens().peek() {
-            Some(Token::CloseSquare(_)) => break,
-            _ => {
-                match_token!(lexer, Token::Comma, super::SpannedErrorKind::Token(","))?;
+            Some(Token::Comma(_)) => {
+                lexer.tokens().next().unwrap();
             }
+            _ => break,
         }
     }
     match_token!(
@@ -207,19 +207,16 @@ where
     )?;
     let ident = identifier(lexer)?;
     streams.push(ident);
-    match lexer.tokens().peek() {
-        Some(Token::CloseSquare(_)) => {}
-        _ => {
-            match_token!(lexer, Token::Comma, super::SpannedErrorKind::Token(","))?;
-            while let Some(Token::Ident(_)) | Some(Token::NotAnIdent(_)) = lexer.tokens().peek() {
-                let ident = identifier(lexer)?;
-                streams.push(ident);
-                match lexer.tokens().peek() {
-                    Some(Token::CloseSquare(_)) => break,
-                    _ => {
-                        match_token!(lexer, Token::Comma, super::SpannedErrorKind::Token(","))?;
-                    }
+    if let Some(Token::Comma(_)) = lexer.tokens().peek() {
+        lexer.tokens().next().unwrap();
+        while let Some(Token::Ident(_)) | Some(Token::NotAnIdent(_)) = lexer.tokens().peek() {
+            let ident = identifier(lexer)?;
+            streams.push(ident);
+            match lexer.tokens().peek() {
+                Some(Token::Comma(_)) => {
+                    lexer.tokens().next().unwrap();
                 }
+                _ => break,
             }
         }
     }
@@ -403,6 +400,7 @@ mod tests {
     #[case("use foo::as bar;", SpannedErrorKind::Token("{"), "as", "use foo::".as_bytes().len())]
     #[case("use ::{::{foo};", SpannedErrorKind::Token("}"), ";", "use ::{::{foo]".as_bytes().len())]
     #[case("use foo asbar;", SpannedErrorKind::Token(";"), "asbar", "use foo ".as_bytes().len())]
+    #[case("use ::{foo bar};", SpannedErrorKind::Token("}"), "bar", "use ::{foo ".as_bytes().len())]
     fn test_invalid_use_declaration(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
@@ -422,6 +420,7 @@ mod tests {
     #[case("[2foo]", SpannedErrorKind::Identifier, "2foo", "[".as_bytes().len())]
     #[case("[foo, 2bar]", SpannedErrorKind::Identifier, "2bar", "[foo, ".as_bytes().len())]
     #[case("[, foo]", SpannedErrorKind::Token("]"), ",", "[".as_bytes().len())]
+    #[case("[foo bar]", SpannedErrorKind::Token("]"), "bar", "[foo ".as_bytes().len())]
     fn test_invalid_opt_streams0(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
@@ -441,6 +440,7 @@ mod tests {
     #[case("[2foo]", SpannedErrorKind::Identifier, "2foo", "[".as_bytes().len())]
     #[case("[foo, 2bar]", SpannedErrorKind::Identifier, "2bar", "[foo, ".as_bytes().len())]
     #[case("[, foo]", SpannedErrorKind::Identifier, ",", "[".as_bytes().len())]
+    #[case("[foo bar]", SpannedErrorKind::Token("]"), "bar", "[foo ".as_bytes().len())]
     fn test_invalid_opt_streams1(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
