@@ -35,7 +35,18 @@ pub fn module(input: &str) -> SpannedResult<&str, Module> {
 
 pub fn use_declaration(input: &str) -> SpannedResult<&str, UseDeclaration> {
     preceded(
-        terminated(token("use"), multispace1),
+        terminated(
+            token("use"),
+            alt((
+                recognize(pair(
+                    peek(satisfy(|c: char| {
+                        c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '{'
+                    })),
+                    multispace0,
+                )),
+                eof,
+            )),
+        ),
         cut(terminated(use_tree, ps(token(";")))),
     )
     .map(|use_tree| UseDeclaration {
@@ -528,6 +539,7 @@ mod tests {
     }
 
     #[rstest]
+    #[case("use", SpannedErrorKind::Token("{"), "", "use".as_bytes().len())]
     #[case("use foo::{bar::,mar};", SpannedErrorKind::Token("{"), ",", "use foo::{bar::".as_bytes().len())]
     #[case("use foo as;", SpannedErrorKind::Identifier, ";", "use foo as".as_bytes().len())]
     #[case("use foo as\u{20};", SpannedErrorKind::Identifier, ";", "use foo as\u{20}".as_bytes().len())]
@@ -542,7 +554,8 @@ mod tests {
     ) {
         let (kind, span) = assert_matches!(
             use_declaration(input),
-            Err(nom::Err::Failure(SpannedError { kind, span })) => (kind, span)
+            Err(nom::Err::Error(SpannedError { kind, span }))
+            | Err(nom::Err::Failure(SpannedError { kind, span })) => (kind, span)
         );
         assert_eq!(kind, expected_kind);
         assert_span_at_distance!(input, span, expected_span, expected_distance);

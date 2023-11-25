@@ -395,6 +395,7 @@ mod tests {
     }
 
     #[rstest]
+    #[case("use", SpannedErrorKind::Token("{"), "", "use".as_bytes().len())]
     #[case("use foo::{bar::,mar};", SpannedErrorKind::Token("{"), ",", "use foo::{bar::".as_bytes().len())]
     #[case("use foo as;", SpannedErrorKind::Identifier, ";", "use foo as".as_bytes().len())]
     #[case("use foo as\u{20};", SpannedErrorKind::Identifier, ";", "use foo as\u{20}".as_bytes().len())]
