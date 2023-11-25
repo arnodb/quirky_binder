@@ -35,18 +35,7 @@ pub fn module(input: &str) -> SpannedResult<&str, Module> {
 
 pub fn use_declaration(input: &str) -> SpannedResult<&str, UseDeclaration> {
     preceded(
-        terminated(
-            token("use"),
-            alt((
-                recognize(pair(
-                    peek(satisfy(|c: char| {
-                        c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '{'
-                    })),
-                    multispace0,
-                )),
-                eof,
-            )),
-        ),
+        ts(keyword("use")),
         cut(terminated(use_tree, ps(token(";")))),
     )
     .map(|use_tree| UseDeclaration {
@@ -63,7 +52,7 @@ fn use_tree(input: &str) -> SpannedResult<&str, &str> {
                 recognize(pair(ds(token("::")), cut(use_sub_tree))),
                 recognize(opt(tuple((
                     multispace1,
-                    token("as"),
+                    keyword("as"),
                     cut(pair(
                         |input| {
                             multispace1(input).map_err(|err| {
@@ -450,6 +439,26 @@ fn token<'a>(token: &'static str) -> impl Parser<&'a str, &'a str, SpannedError<
     }
 }
 
+fn keyword<'a>(kw: &'static str) -> impl Parser<&'a str, &'a str, SpannedError<&'a str>> {
+    let mut parser = terminated(
+        tag(kw),
+        alt((
+            recognize(peek(satisfy(|c: char| {
+                !(c.is_alphabetic() || c.is_numeric() || c == '_')
+            }))),
+            eof,
+        )),
+    );
+    move |input| {
+        parser.parse(input).map_err(|err| {
+            err.map(|_: SpannedError<&str>| SpannedError {
+                kind: SpannedErrorKind::Token(kw),
+                span: fake_lex(input),
+            })
+        })
+    }
+}
+
 fn fake_lex(input: &str) -> &str {
     alt((
         take_while1::<_, _, SpannedError<&str>>(|c: char| {
@@ -546,6 +555,7 @@ mod tests {
     #[case("use foo::{::,};", SpannedErrorKind::Token("{"), ",", "use foo::{::".as_bytes().len())]
     #[case("use foo::as bar;", SpannedErrorKind::Token("{"), "as", "use foo::".as_bytes().len())]
     #[case("use ::{::{foo};", SpannedErrorKind::Token("}"), ";", "use ::{::{foo]".as_bytes().len())]
+    #[case("use foo asbar;", SpannedErrorKind::Token(";"), "asbar", "use foo ".as_bytes().len())]
     fn test_invalid_use_declaration(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,

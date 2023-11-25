@@ -402,6 +402,7 @@ mod tests {
     #[case("use foo::{::,};", SpannedErrorKind::Token("{"), ",", "use foo::{::".as_bytes().len())]
     #[case("use foo::as bar;", SpannedErrorKind::Token("{"), "as", "use foo::".as_bytes().len())]
     #[case("use ::{::{foo};", SpannedErrorKind::Token("}"), ";", "use ::{::{foo]".as_bytes().len())]
+    #[case("use foo asbar;", SpannedErrorKind::Token(";"), "asbar", "use foo ".as_bytes().len())]
     fn test_invalid_use_declaration(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
