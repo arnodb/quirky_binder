@@ -56,7 +56,7 @@ macro_rules! fuzz_test {
             println!("Seed: {:#04x?}", rng.rng.get_seed());
             let mut dtpt = String::new();
             $fuzzer(&mut rng, &mut dtpt);
-            if let Err(err) = $parser(&dtpt) {
+            if let Err(err) = $parser(dtpt.as_str()) {
                 let err = err.to_spanned_error(&dtpt);
                 eprintln!(
                     "{}",
@@ -96,7 +96,7 @@ macro_rules! fuzz_test_compare {
             let dtpt_trimmed =
                 dtpt.trim_matches(|c| c == ' ' || c == '\t' || c == '\n' || c == '\r');
             let res = $parser(dtpt_trimmed).map_err(|err| err.to_spanned_error(&dtpt));
-            let res2 = $parser2(&dtpt_trimmed).map_err(|err| err.to_spanned_error(&dtpt));
+            let res2 = $parser2(dtpt_trimmed).map_err(|err| err.to_spanned_error(&dtpt));
             if res != res2 {
                 if let Err(err) = &res {
                     let err = err.to_spanned_error(&dtpt);

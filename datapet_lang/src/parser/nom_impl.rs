@@ -271,14 +271,14 @@ fn special_code(input: &str) -> SpannedResult<&str, &str> {
     recognize(alt((
         recognize(preceded(
             char('"'),
-            cut(terminated(
+            opt(terminated(
                 opt(escaped(is_not("\"\\"), '\\', anychar)),
                 char('"'),
             )),
         )),
         recognize(preceded(
             char('\''),
-            cut(terminated(
+            opt(terminated(
                 opt(escaped(is_not("\'\\"), '\\', anychar)),
                 char('\''),
             )),
@@ -611,6 +611,17 @@ mod tests {
         );
         assert_eq!(kind, SpannedErrorKind::Token("]"));
         assert_span_at_distance!(input, span, ",", 1);
+    }
+
+    #[rstest]
+    #[case("foo'bar", "foo'bar")]
+    fn test_valid_code(#[case] input: &str, #[case] expected_code: &str) {
+        let (tail, c) = assert_matches!(
+            code(input),
+            Ok((tail, c)) => (tail, c)
+        );
+        assert_span_at_distance!(input, tail, "", input.len(), "tail");
+        assert_eq!(c, expected_code);
     }
 
     #[rstest]

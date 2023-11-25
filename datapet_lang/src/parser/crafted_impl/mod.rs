@@ -2,7 +2,7 @@ use crate::ast::UseDeclaration;
 
 use self::lexer::{Lexer, Token};
 
-use super::SpannedError;
+use super::{SpannedError, SpannedErrorKind};
 
 pub mod lexer;
 
@@ -66,9 +66,9 @@ pub fn use_declaration<'a, I>(
 where
     I: Iterator<Item = Token<'a>>,
 {
-    match_token!(lexer, Token::Use, super::SpannedErrorKind::Token("use"))?;
+    match_token!(lexer, Token::Use, SpannedErrorKind::Token("use"))?;
     let use_tree = use_tree(lexer)?;
-    match_token!(lexer, Token::SemiColon, super::SpannedErrorKind::Token(";"))?;
+    match_token!(lexer, Token::SemiColon, SpannedErrorKind::Token(";"))?;
     Ok(UseDeclaration {
         use_tree: use_tree.into(),
     })
@@ -120,7 +120,7 @@ where
             (star.as_str(), star.as_str())
         }
         _ => {
-            let open = match_token!(lexer, Token::OpenCurly, super::SpannedErrorKind::Token("{"))?;
+            let open = match_token!(lexer, Token::OpenCurly, SpannedErrorKind::Token("{"))?;
             while let use_tree_lookahead!() = lexer.tokens().peek_amount(2) {
                 use_tree(lexer)?;
                 match lexer.tokens().peek() {
@@ -130,11 +130,7 @@ where
                     _ => break,
                 }
             }
-            let close = match_token!(
-                lexer,
-                Token::CloseCurly,
-                super::SpannedErrorKind::Token("}")
-            )?;
+            let close = match_token!(lexer, Token::CloseCurly, SpannedErrorKind::Token("}"))?;
             (open, close)
         }
     };
@@ -159,11 +155,7 @@ where
     I: Iterator<Item = Token<'a>>,
 {
     let mut streams = Vec::new();
-    match_token!(
-        lexer,
-        Token::OpenSquare,
-        super::SpannedErrorKind::Token("[")
-    )?;
+    match_token!(lexer, Token::OpenSquare, SpannedErrorKind::Token("["))?;
     while let Some(Token::Ident(_)) | Some(Token::NotAnIdent(_)) = lexer.tokens().peek() {
         let ident = identifier(lexer)?;
         streams.push(ident);
@@ -174,11 +166,7 @@ where
             _ => break,
         }
     }
-    match_token!(
-        lexer,
-        Token::CloseSquare,
-        super::SpannedErrorKind::Token("]")
-    )?;
+    match_token!(lexer, Token::CloseSquare, SpannedErrorKind::Token("]"))?;
     Ok(streams)
 }
 
@@ -200,11 +188,7 @@ where
     I: Iterator<Item = Token<'a>>,
 {
     let mut streams = Vec::new();
-    match_token!(
-        lexer,
-        Token::OpenSquare,
-        super::SpannedErrorKind::Token("[")
-    )?;
+    match_token!(lexer, Token::OpenSquare, SpannedErrorKind::Token("["))?;
     let ident = identifier(lexer)?;
     streams.push(ident);
     if let Some(Token::Comma(_)) = lexer.tokens().peek() {
@@ -220,11 +204,7 @@ where
             }
         }
     }
-    match_token!(
-        lexer,
-        Token::CloseSquare,
-        super::SpannedErrorKind::Token("]")
-    )?;
+    match_token!(lexer, Token::CloseSquare, SpannedErrorKind::Token("]"))?;
     Ok(streams)
 }
 
@@ -246,7 +226,7 @@ where
                 }
                 Some(last) => {
                     return Err(SpannedError {
-                        kind: super::SpannedErrorKind::UnbalancedCode,
+                        kind: SpannedErrorKind::UnbalancedCode,
                         span: last.as_str(),
                     });
                 }
@@ -259,7 +239,7 @@ where
                 }
                 Some(last) => {
                     return Err(SpannedError {
-                        kind: super::SpannedErrorKind::UnbalancedCode,
+                        kind: SpannedErrorKind::UnbalancedCode,
                         span: last.as_str(),
                     });
                 }
@@ -272,7 +252,7 @@ where
                 }
                 Some(last) => {
                     return Err(SpannedError {
-                        kind: super::SpannedErrorKind::UnbalancedCode,
+                        kind: SpannedErrorKind::UnbalancedCode,
                         span: last.as_str(),
                     });
                 }
@@ -295,7 +275,7 @@ where
             return Ok(lexer.input_slice(start, end));
         } else {
             return Err(SpannedError {
-                kind: super::SpannedErrorKind::Code,
+                kind: SpannedErrorKind::Code,
                 span: if let Some(next) = lexer.tokens().peek() {
                     next.as_str()
                 } else {
@@ -305,7 +285,7 @@ where
         }
     } else {
         return Err(SpannedError {
-            kind: super::SpannedErrorKind::UnbalancedCode,
+            kind: SpannedErrorKind::UnbalancedCode,
             span: if let Some(next) = lexer.tokens().peek() {
                 next.as_str()
             } else {
@@ -342,7 +322,7 @@ pub fn identifier<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<&'a str, SpannedErr
 where
     I: Iterator<Item = Token<'a>>,
 {
-    match_token!(lexer, Token::Ident, super::SpannedErrorKind::Identifier)
+    match_token!(lexer, Token::Ident, SpannedErrorKind::Identifier)
 }
 
 #[cfg(test)]
@@ -414,6 +394,14 @@ mod tests {
         );
         assert_eq!(kind, expected_kind);
         assert_span_at_distance!(input, span, expected_span, expected_distance);
+    }
+
+    #[rstest]
+    #[case("foo'bar", "foo'bar")]
+    fn test_valid_code(#[case] input: &str, #[case] expected_code: &str) {
+        let mut lexer = lexer(input);
+        let c = assert_matches!(code(&mut lexer), Ok(c) => c);
+        assert_eq!(c, expected_code);
     }
 
     #[rstest]
