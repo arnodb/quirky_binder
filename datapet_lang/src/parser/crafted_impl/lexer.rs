@@ -18,6 +18,8 @@ pub enum Token<'a> {
     Comma(&'a str),
     #[regex(r"[A-Z_a-z][A-Z_a-z0-9]*")]
     Ident(&'a str),
+    #[token("#")]
+    Hash(&'a str),
     #[token("(")]
     OpenBracket(&'a str),
     #[token("{")]
@@ -54,6 +56,7 @@ impl<'a> Token<'a> {
             Self::Colon2(span) => span,
             Self::Comma(span) => span,
             Self::Ident(span) => span,
+            Self::Hash(span) => span,
             Self::OpenBracket(span) => span,
             Self::OpenCurly(span) => span,
             Self::OpenSquare(span) => span,

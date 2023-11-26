@@ -1,4 +1,4 @@
-use crate::ast::UseDeclaration;
+use crate::ast::{Filter, UseDeclaration};
 
 use self::lexer::{Lexer, Token};
 
@@ -134,6 +134,83 @@ where
             (open, close)
         }
     };
+    Ok(lexer.input_slice(start, end))
+}
+
+pub fn filter<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<Filter<'a>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    let name = simple_path(lexer)?;
+    let alias = if let Some(Token::Hash(_)) = lexer.tokens().peek() {
+        lexer.tokens().next().unwrap();
+        Some(identifier(lexer)?)
+    } else {
+        None
+    };
+    let params = filter_params(lexer)?;
+    let extra_streams = opt_streams1(lexer)?;
+    Ok(Filter {
+        name: name.into(),
+        alias: alias.map(Into::into),
+        params: params.into(),
+        extra_outputs: extra_streams.map_or_else(Vec::new, |extra_outputs| {
+            extra_outputs.into_iter().map(Into::into).collect()
+        }),
+    })
+}
+
+pub fn filter_params<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<&'a str, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    let start = match_token!(lexer, Token::OpenBracket, SpannedErrorKind::Token("("))?;
+    loop {
+        match lexer.tokens().peek() {
+            Some(Token::CloseBracket(_)) => {
+                break;
+            }
+            Some(Token::QuotedChar(_))
+            | Some(Token::QuotedString(_))
+            | Some(Token::OpenBracket(_))
+            | Some(Token::OpenCurly(_))
+            | Some(Token::OpenSquare(_)) => {
+                code(lexer)?;
+            }
+            Some(Token::As(_))
+            | Some(Token::Colon2(_))
+            | Some(Token::Comma(_))
+            | Some(Token::Ident(_))
+            | Some(Token::Hash(_))
+            | Some(Token::SemiColon(_))
+            | Some(Token::Star(_))
+            | Some(Token::Use(_))
+            | Some(Token::NotAnIdent(_))
+            | Some(Token::Char(_)) => {
+                lexer.tokens().next().unwrap();
+            }
+            Some(Token::CloseCurly(_)) | Some(Token::CloseSquare(_)) | None => {
+                break;
+            }
+            Some(Token::UnrecognizedToken(span)) => {
+                return match span.chars().next() {
+                    Some('\'') => Err(SpannedError {
+                        kind: SpannedErrorKind::UnterminatedChar,
+                        span: &span[0..1],
+                    }),
+                    Some('"') => Err(SpannedError {
+                        kind: SpannedErrorKind::UnterminatedString,
+                        span: &span[0..1],
+                    }),
+                    _ => Err(SpannedError {
+                        kind: SpannedErrorKind::UnrecognizedToken,
+                        span,
+                    }),
+                };
+            }
+        }
+    }
+    let end = match_token!(lexer, Token::CloseBracket, SpannedErrorKind::Token(")"))?;
     Ok(lexer.input_slice(start, end))
 }
 

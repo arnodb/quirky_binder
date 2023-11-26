@@ -10,6 +10,7 @@ use antinom::{
 };
 
 const MAX_CODE_CHARS: u8 = 8;
+const MAX_FILTER_PARAMS: u8 = 8;
 const MAX_FILTER_STREAMS: u8 = 5;
 const MAX_IDENTIFIER_FRAGMENT_LENGTH: u8 = 3;
 const MAX_IDENTIFIER_FRAGMENTS: u8 = 3;
@@ -118,6 +119,39 @@ where
         ps(separated_list0(token(","), ds(identifier), MAX_PARAMS)),
         token(")"),
     )
+    .gen(rng, buffer)
+}
+
+pub fn filter<R>(rng: &mut R, buffer: &mut String)
+where
+    R: AntiNomRng,
+{
+    tuple((
+        simple_path,
+        ps(opt(preceded(token("#"), cut(ps(identifier))))),
+        cut(ps(filter_params)),
+        ps(opt_streams1),
+    ))
+    .gen(rng, buffer)
+}
+
+pub fn filter_params<R>(rng: &mut R, buffer: &mut String)
+where
+    R: AntiNomRng,
+{
+    recognize(preceded(
+        token("("),
+        terminated(
+            many0_count(
+                alt((
+                    code,
+                    recognize(is_not(NO_QUOTE_APOSTROPHE_BRACKETS, MAX_CODE_CHARS)),
+                )),
+                MAX_FILTER_PARAMS,
+            ),
+            token(")"),
+        ),
+    ))
     .gen(rng, buffer)
 }
 

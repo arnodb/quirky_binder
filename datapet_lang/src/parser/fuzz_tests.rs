@@ -8,7 +8,7 @@ use annotate_snippets::display_list::DisplayList;
 use antinom::rng::{AnarchyLevel, AntiNomRandRng};
 use rand_chacha::rand_core::SeedableRng;
 
-use crate::{parser::SpannedErrorKind, snippet::snippet_for_input_and_part};
+use crate::{ast::Filter, parser::SpannedErrorKind, snippet::snippet_for_input_and_part};
 
 use super::{fuzzer, SpannedError};
 
@@ -162,6 +162,35 @@ fn fuzz_graph_definition_signature() {
 
     let nom_parser = crate::parser::nom_impl::graph_definition_signature;
     fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+}
+
+#[test]
+fn fuzz_filter() {
+    let seed = None;
+    let fuzzer = fuzzer::filter;
+
+    let nom_parser = crate::parser::nom_impl::filter;
+    fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+
+    #[cfg(feature = "crafted_parser")]
+    {
+        use crate::parser::crafted_impl::lexer::lexer;
+
+        fn crafted_parser(input: &str) -> Result<Filter, SpannedError<&str>> {
+            let mut lexer = lexer(input);
+            crate::parser::crafted_impl::filter(&mut lexer)
+        }
+
+        fuzz_test!(seed, fuzzer, crafted_parser, AnarchyLevel::LawAndOrder);
+
+        fuzz_test_compare!(
+            seed,
+            fuzzer,
+            |input| nom_parser(input).map(|res| res.1),
+            crafted_parser,
+            AnarchyLevel::ALittleAnarchy
+        );
+    }
 }
 
 #[test]

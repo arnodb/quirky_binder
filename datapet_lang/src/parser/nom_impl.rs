@@ -228,11 +228,11 @@ fn filter_input_streams(input: &str) -> SpannedResult<&str, (&str, Vec<&str>)> {
         .parse(input)
 }
 
-fn filter(input: &str) -> SpannedResult<&str, Filter> {
+pub fn filter(input: &str) -> SpannedResult<&str, Filter> {
     tuple((
         simple_path,
         ps(opt(preceded(token("#"), cut(ps(identifier))))),
-        ps(filter_params),
+        cut(ps(filter_params)),
         ps(opt_streams1),
     ))
     .map(|(name, alias, params, extra_streams)| Filter {
@@ -248,12 +248,13 @@ fn filter(input: &str) -> SpannedResult<&str, Filter> {
 
 fn filter_params(input: &str) -> SpannedResult<&str, &str> {
     recognize(preceded(
-        char('('),
-        cut(terminated(
+        token("("),
+        terminated(
             many0_count(alt((code, recognize(is_not("\"'()[]{}"))))),
-            char(')'),
-        )),
-    ))(input)
+            token(")"),
+        ),
+    ))
+    .parse(input)
 }
 
 pub fn code(input: &str) -> SpannedResult<&str, &str> {
@@ -510,6 +511,14 @@ fn fake_lex(input: &str) -> &str {
         take_while1::<_, _, SpannedError<&str>>(|c: char| {
             c.is_alphabetic() || c.is_numeric() || c == '_'
         }),
+        recognize(preceded(
+            char('"'),
+            tuple((opt(escaped(is_not("\"\\"), '\\', anychar)), opt(char('"')))),
+        )),
+        recognize(preceded(
+            char('\''),
+            tuple((opt(escaped(is_not("'\\"), '\\', anychar)), opt(char('\'')))),
+        )),
         tag("::"),
     ))
     .parse(input)

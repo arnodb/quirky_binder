@@ -62,7 +62,7 @@ pub struct ConnectedFilter<'a> {
     pub filter: Filter<'a>,
 }
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct Filter<'a> {
     pub name: Cow<'a, str>,
     pub alias: Option<Cow<'a, str>>,
