@@ -310,44 +310,38 @@ where
                 char('\''),
             )),
         )),
-        recognize(preceded(
+        recognize(delimited(
             char('('),
-            cut(terminated(
-                many0_count(
-                    alt((
-                        code,
-                        recognize(is_not(NO_QUOTE_APOSTROPHE_BRACKETS, MAX_CODE_CHARS)),
-                    )),
-                    MAX_SPECIAL_CODE,
-                ),
-                char(')'),
-            )),
+            many0_count(
+                alt((
+                    code,
+                    recognize(is_not(NO_QUOTE_APOSTROPHE_BRACKETS, MAX_CODE_CHARS)),
+                )),
+                MAX_SPECIAL_CODE,
+            ),
+            char(')'),
         )),
-        recognize(preceded(
+        recognize(delimited(
             char('['),
-            cut(terminated(
-                many0_count(
-                    alt((
-                        code,
-                        recognize(is_not(NO_QUOTE_APOSTROPHE_BRACKETS, MAX_CODE_CHARS)),
-                    )),
-                    MAX_SPECIAL_CODE,
-                ),
-                char(']'),
-            )),
+            many0_count(
+                alt((
+                    code,
+                    recognize(is_not(NO_QUOTE_APOSTROPHE_BRACKETS, MAX_CODE_CHARS)),
+                )),
+                MAX_SPECIAL_CODE,
+            ),
+            char(']'),
         )),
-        recognize(preceded(
+        recognize(delimited(
             char('{'),
-            cut(terminated(
-                many0_count(
-                    alt((
-                        code,
-                        recognize(is_not(NO_QUOTE_APOSTROPHE_BRACKETS, MAX_CODE_CHARS)),
-                    )),
-                    MAX_SPECIAL_CODE,
-                ),
-                char('}'),
-            )),
+            many0_count(
+                alt((
+                    code,
+                    recognize(is_not(NO_QUOTE_APOSTROPHE_BRACKETS, MAX_CODE_CHARS)),
+                )),
+                MAX_SPECIAL_CODE,
+            ),
+            char('}'),
         )),
     )))
     .gen(rng, buffer)

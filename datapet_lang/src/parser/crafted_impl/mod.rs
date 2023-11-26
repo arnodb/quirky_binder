@@ -258,6 +258,22 @@ where
                 }
                 None => break,
             },
+            Token::UnrecognizedToken(span) => {
+                return match span.chars().next() {
+                    Some('\'') => Err(SpannedError {
+                        kind: SpannedErrorKind::UnterminatedChar,
+                        span: &span[0..1],
+                    }),
+                    Some('"') => Err(SpannedError {
+                        kind: SpannedErrorKind::UnterminatedString,
+                        span: &span[0..1],
+                    }),
+                    _ => Err(SpannedError {
+                        kind: SpannedErrorKind::UnrecognizedToken,
+                        span,
+                    }),
+                };
+            }
             _ => false,
         };
         let eaten = lexer.tokens().next().unwrap();
@@ -270,22 +286,16 @@ where
             brackets.push(eaten);
         }
     }
-    if brackets.is_empty() {
-        if let Some((start, end)) = start_end {
-            return Ok(lexer.input_slice(start, end));
-        } else {
-            return Err(SpannedError {
-                kind: SpannedErrorKind::Code,
-                span: if let Some(next) = lexer.tokens().peek() {
-                    next.as_str()
-                } else {
-                    &lexer.input()[lexer.input().len()..]
-                },
-            });
-        }
-    } else {
+    if let Some(last) = brackets.last() {
         return Err(SpannedError {
             kind: SpannedErrorKind::UnbalancedCode,
+            span: last.as_str(),
+        });
+    } else if let Some((start, end)) = start_end {
+        return Ok(lexer.input_slice(start, end));
+    } else {
+        return Err(SpannedError {
+            kind: SpannedErrorKind::Code,
             span: if let Some(next) = lexer.tokens().peek() {
                 next.as_str()
             } else {
@@ -397,11 +407,24 @@ mod tests {
     }
 
     #[rstest]
-    #[case("foo'bar", "foo'bar")]
-    fn test_valid_code(#[case] input: &str, #[case] expected_code: &str) {
+    #[case("foo{bar", SpannedErrorKind::UnbalancedCode, "{", "foo".as_bytes().len())]
+    #[case("foo{(bar", SpannedErrorKind::UnbalancedCode, "(", "foo{".as_bytes().len())]
+    #[case("(foo\"bar", SpannedErrorKind::UnterminatedString, "\"", "(foo".as_bytes().len())]
+    #[case("foo'bar", SpannedErrorKind::UnterminatedChar, "'", "foo".as_bytes().len())]
+    #[case("foo'bar\\", SpannedErrorKind::UnterminatedChar, "'", "foo".as_bytes().len())]
+    fn test_invalid_code(
+        #[case] input: &str,
+        #[case] expected_kind: SpannedErrorKind,
+        #[case] expected_span: &str,
+        #[case] expected_distance: usize,
+    ) {
         let mut lexer = lexer(input);
-        let c = assert_matches!(code(&mut lexer), Ok(c) => c);
-        assert_eq!(c, expected_code);
+        let (kind, span) = assert_matches!(
+            code(&mut lexer),
+            Err(SpannedError { kind, span }) => (kind, span)
+        );
+        assert_eq!(kind, expected_kind);
+        assert_span_at_distance!(input, span, expected_span, expected_distance);
     }
 
     #[rstest]

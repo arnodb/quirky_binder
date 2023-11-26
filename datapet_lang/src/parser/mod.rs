@@ -32,6 +32,9 @@ pub enum SpannedErrorKind {
     Token(&'static str),
     Code,
     UnbalancedCode,
+    UnterminatedChar,
+    UnterminatedString,
+    UnrecognizedToken,
     // Nom errors that have not been mapped but should probably be
     Nom(ErrorKind),
     NomIncomplete,
@@ -44,6 +47,9 @@ impl SpannedErrorKind {
             Self::Token(token) => token,
             Self::Code => "code",
             Self::UnbalancedCode => "unbalanced code",
+            Self::UnterminatedChar => "unterminated char",
+            Self::UnterminatedString => "unterminated string",
+            Self::UnrecognizedToken => "unrecognized token",
             Self::Nom(nom) => nom.description(),
             Self::NomIncomplete => "incomplete",
         }

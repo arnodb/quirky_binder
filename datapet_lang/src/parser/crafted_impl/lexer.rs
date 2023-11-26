@@ -38,6 +38,9 @@ pub enum Token<'a> {
     // breaking at the first non recognized character.
     #[regex(r"\w+", priority = 0)]
     NotAnIdent(&'a str),
+    // Prevent falling into UnrecognizedToken
+    #[regex(r#"[^ \t\n\r\f\w'"]"#)]
+    Char(&'a str),
     UnrecognizedToken(&'a str),
 }
 
@@ -61,6 +64,7 @@ impl<'a> Token<'a> {
             Self::Use(span) => span,
             // Other
             Self::NotAnIdent(span) => span,
+            Self::Char(span) => span,
             Self::UnrecognizedToken(span) => span,
         }
     }

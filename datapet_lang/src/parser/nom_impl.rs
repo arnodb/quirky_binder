@@ -4,7 +4,7 @@ use nom::{
     character::complete::{
         alpha1, alphanumeric1, anychar, char, multispace0, multispace1, satisfy,
     },
-    combinator::{cut, eof, opt, peek, recognize},
+    combinator::{consumed, cut, eof, opt, peek, recognize},
     error::ParseError,
     multi::{many0, many0_count, many1_count, many_till, separated_list0},
     sequence::{delimited, pair, preceded, terminated, tuple},
@@ -259,50 +259,96 @@ fn filter_params(input: &str) -> SpannedResult<&str, &str> {
 pub fn code(input: &str) -> SpannedResult<&str, &str> {
     recognize(many1_count(alt((special_code, is_not("\"'()[]{}")))))
         .parse(input)
+        .map(|(tail, c)| {
+            (
+                tail,
+                c.trim_matches(|c| c == ' ' || c == '\t' || c == '\n' || c == '\r'),
+            )
+        })
         .map_err(|err| {
-            err.map(|_| SpannedError {
-                kind: SpannedErrorKind::Code,
-                span: fake_lex(input),
+            err.map(|err| match err.kind {
+                SpannedErrorKind::Nom(_) | SpannedErrorKind::NomIncomplete => SpannedError {
+                    kind: SpannedErrorKind::Code,
+                    span: fake_lex(input),
+                },
+                _ => err,
             })
         })
 }
 
-fn special_code(input: &str) -> SpannedResult<&str, &str> {
+fn special_code<'a>(input: &'a str) -> SpannedResult<&'a str, &'a str> {
     recognize(alt((
-        recognize(preceded(
+        consumed(preceded(
             char('"'),
-            opt(terminated(
-                opt(escaped(is_not("\"\\"), '\\', anychar)),
-                char('"'),
-            )),
-        )),
-        recognize(preceded(
+            tuple((opt(escaped(is_not("\"\\"), '\\', anychar)), opt(char('"'))))
+                .map(|(_, close)| close.is_some()),
+        ))
+        .and_then(|(span, full): (&'a str, bool)| {
+            if full {
+                Ok(((span, full), &span[span.len()..]))
+            } else {
+                Err(nom::Err::Failure(SpannedError {
+                    kind: SpannedErrorKind::UnterminatedString,
+                    span: &span[0..1],
+                }))
+            }
+        }),
+        consumed(preceded(
             char('\''),
-            opt(terminated(
-                opt(escaped(is_not("\'\\"), '\\', anychar)),
-                char('\''),
-            )),
-        )),
+            tuple((opt(escaped(is_not("\'\\"), '\\', anychar)), opt(char('\''))))
+                .map(|(_, close)| close.is_some()),
+        ))
+        .and_then(|(span, full): (&'a str, bool)| {
+            if full {
+                Ok(((span, full), &span[span.len()..]))
+            } else {
+                Err(nom::Err::Failure(SpannedError {
+                    kind: SpannedErrorKind::UnterminatedChar,
+                    span: &span[0..1],
+                }))
+            }
+        }),
         recognize(preceded(
-            char('('),
-            cut(terminated(
+            peek(char('(')),
+            delimited(
+                char('('),
                 many0_count(alt((code, recognize(is_not("\"'()[]{}"))))),
                 char(')'),
-            )),
+            )
+            .or(|input| {
+                Err(nom::Err::Failure(SpannedError {
+                    kind: SpannedErrorKind::UnbalancedCode,
+                    span: fake_lex(input),
+                }))
+            }),
         )),
         recognize(preceded(
-            char('['),
-            cut(terminated(
+            peek(char('[')),
+            delimited(
+                char('['),
                 many0_count(alt((code, recognize(is_not("\"'()[]{}"))))),
                 char(']'),
-            )),
+            )
+            .or(|input| {
+                Err(nom::Err::Failure(SpannedError {
+                    kind: SpannedErrorKind::UnbalancedCode,
+                    span: fake_lex(input),
+                }))
+            }),
         )),
         recognize(preceded(
-            char('{'),
-            cut(terminated(
+            peek(char('{')),
+            delimited(
+                char('{'),
                 many0_count(alt((code, recognize(is_not("\"'()[]{}"))))),
                 char('}'),
-            )),
+            )
+            .or(|input| {
+                Err(nom::Err::Failure(SpannedError {
+                    kind: SpannedErrorKind::UnbalancedCode,
+                    span: fake_lex(input),
+                }))
+            }),
         )),
     )))
     .parse(input)
@@ -614,14 +660,23 @@ mod tests {
     }
 
     #[rstest]
-    #[case("foo'bar", "foo'bar")]
-    fn test_valid_code(#[case] input: &str, #[case] expected_code: &str) {
-        let (tail, c) = assert_matches!(
+    #[case("foo{bar", SpannedErrorKind::UnbalancedCode, "{", "foo".as_bytes().len())]
+    #[case("foo{(bar", SpannedErrorKind::UnbalancedCode, "(", "foo{".as_bytes().len())]
+    #[case("(foo\"bar", SpannedErrorKind::UnterminatedString, "\"", "(foo".as_bytes().len())]
+    #[case("foo'bar", SpannedErrorKind::UnterminatedChar, "'", "foo".as_bytes().len())]
+    #[case("foo'bar\\", SpannedErrorKind::UnterminatedChar, "'", "foo".as_bytes().len())]
+    fn test_invalid_code(
+        #[case] input: &str,
+        #[case] expected_kind: SpannedErrorKind,
+        #[case] expected_span: &str,
+        #[case] expected_distance: usize,
+    ) {
+        let (kind, span) = assert_matches!(
             code(input),
-            Ok((tail, c)) => (tail, c)
+            Err(nom::Err::Failure(SpannedError { kind, span })) => (kind, span)
         );
-        assert_span_at_distance!(input, tail, "", input.len(), "tail");
-        assert_eq!(c, expected_code);
+        assert_eq!(kind, expected_kind);
+        assert_span_at_distance!(input, span, expected_span, expected_distance);
     }
 
     #[rstest]
