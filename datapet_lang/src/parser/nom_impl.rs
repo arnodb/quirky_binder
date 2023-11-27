@@ -6,7 +6,7 @@ use nom::{
     },
     combinator::{consumed, cut, eof, opt, peek, recognize},
     error::ParseError,
-    multi::{many0, many0_count, many1_count, many_till, separated_list0},
+    multi::{many0, many0_count, many1_count, many_till},
     sequence::{delimited, pair, preceded, terminated, tuple},
     AsChar, IResult, InputTakeAtPosition, Parser,
 };
@@ -16,7 +16,7 @@ use crate::ast::{
     StreamLineInput, StreamLineOutput, UseDeclaration,
 };
 
-use super::{SpannedError, SpannedErrorKind};
+use super::{assemble_inputs, SpannedError, SpannedErrorKind};
 
 pub type SpannedResult<I, O> = IResult<I, O, SpannedError<I>>;
 
@@ -95,7 +95,7 @@ fn use_sub_tree(input: &str) -> SpannedResult<&str, &str> {
 
 fn graph_definition(input: &str) -> SpannedResult<&str, GraphDefinition> {
     tuple((
-        opt(tag("pub")),
+        opt(keyword("pub")),
         ps(graph_definition_signature),
         cut(ps(stream_lines)),
     ))
@@ -125,11 +125,26 @@ pub fn graph_definition_signature(input: &str) -> SpannedResult<&str, GraphDefin
 }
 
 fn params(input: &str) -> SpannedResult<&str, Vec<&str>> {
-    delimited(
-        token("("),
-        ps(separated_list0(token(","), ds(identifier))),
-        token(")"),
+    preceded(
+        ts(token("(")),
+        cut(terminated(
+            opt(terminated(
+                pair(
+                    ts(identifier_or_fail),
+                    many0(preceded(ts(token(",")), ts(identifier_or_fail))),
+                ),
+                opt(ts(token(","))),
+            )),
+            token(")"),
+        )),
     )
+    .map(|maybe_params| {
+        maybe_params.map_or_else(Vec::new, |(first, more)| {
+            let mut all = more;
+            all.insert(0, first);
+            all
+        })
+    })
     .parse(input)
 }
 
@@ -205,21 +220,6 @@ fn stream_line_filter(input: &str) -> SpannedResult<&str, ConnectedFilter> {
             filter,
         })
         .parse(input)
-}
-
-fn assemble_inputs<'a>(
-    first: StreamLineInput<'a>,
-    extra_streams: Vec<&'a str>,
-) -> Vec<StreamLineInput<'a>> {
-    Some(first)
-        .into_iter()
-        .chain(
-            extra_streams
-                .into_iter()
-                .map(Into::into)
-                .map(StreamLineInput::Named),
-        )
-        .collect()
 }
 
 fn filter_input_streams(input: &str) -> SpannedResult<&str, (&str, Vec<&str>)> {
@@ -445,7 +445,7 @@ pub fn identifier(input: &str) -> SpannedResult<&str, &str> {
     )))
     .parse(input)
     .and_then(|(tail, ident)| match ident {
-        "as" | "use" => Err(nom::Err::Error(())),
+        "as" | "pub" | "use" => Err(nom::Err::Error(())),
         ident => Ok((tail, ident)),
     })
     .map_err(|err| {
@@ -466,7 +466,7 @@ pub fn not_an_identifier(input: &str) -> SpannedResult<&str, &str> {
     ))
     .parse(input)
     .and_then(|(tail, ident)| match ident {
-        "as" | "use" | "::" => Err(nom::Err::Error(SpannedError {
+        "as" | "pub" | "use" | "::" => Err(nom::Err::Error(SpannedError {
             kind: SpannedErrorKind::Identifier,
             span: fake_lex(input),
         })),

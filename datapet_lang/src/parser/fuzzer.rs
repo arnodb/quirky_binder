@@ -3,7 +3,7 @@ use antinom::{
     bytes::complete::tag,
     character::complete::{alpha1, alphanumeric1, char, multispace0, multispace1},
     combinator::{cut, opt, recognize},
-    multi::{many0, many0_count, many1_count, separated_list0},
+    multi::{many0, many0_count, many1_count},
     rng::AntiNomRng,
     sequence::{delimited, pair, preceded, terminated, tuple},
     Buffer, Generator,
@@ -114,10 +114,18 @@ pub fn params<R>(rng: &mut R, buffer: &mut String)
 where
     R: AntiNomRng,
 {
-    delimited(
-        token("("),
-        ps(separated_list0(token(","), ds(identifier), MAX_PARAMS)),
-        token(")"),
+    preceded(
+        ts(token("(")),
+        cut(terminated(
+            opt(terminated(
+                pair(
+                    ts(identifier),
+                    many0(preceded(ts(token(",")), ts(identifier)), MAX_PARAMS - 1),
+                ),
+                opt(ts(token(","))),
+            )),
+            token(")"),
+        )),
     )
     .gen(rng, buffer)
 }

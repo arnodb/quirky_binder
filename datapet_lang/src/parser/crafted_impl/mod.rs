@@ -1,15 +1,17 @@
-use crate::ast::{Filter, UseDeclaration};
+use crate::ast::{
+    ConnectedFilter, Filter, Graph, GraphDefinition, GraphDefinitionSignature, Module, StreamLine,
+    StreamLineInput, StreamLineOutput, UseDeclaration,
+};
 
 use self::lexer::{Lexer, Token};
 
-use super::{SpannedError, SpannedErrorKind};
+use super::{assemble_inputs, SpannedError, SpannedErrorKind};
 
 pub mod lexer;
 
-#[allow(unused)]
 macro_rules! identifier_lookahead {
     () => {
-        Some((Token::Ident(_), _)) | Some((Token::NotAnIdent(_), _))
+        Some(Token::Ident(_)) | Some(Token::NotAnIdent(_))
     };
 }
 
@@ -19,6 +21,30 @@ macro_rules! simple_path_lookahead {
             | [Some(Token::Colon2(_)), Some(Token::NotAnIdent(_))]
             | [Some(Token::Ident(_)), _]
             | [Some(Token::NotAnIdent(_)), _]
+    };
+}
+
+macro_rules! streams0_lookahead {
+    () => {
+        Some(Token::OpenSquare(_))
+    };
+}
+
+macro_rules! stream_line_input_lookahead {
+    () => {
+        Some(Token::OpenAngle(_)) | Some(Token::Dash(_))
+    };
+}
+
+macro_rules! graph_definition_signature_lookahead {
+    () => {
+        streams0_lookahead!() | identifier_lookahead!()
+    };
+}
+
+macro_rules! graph_definition_lookahead {
+    () => {
+        Some(Token::Pub(_)) | graph_definition_signature_lookahead!()
     };
 }
 
@@ -34,7 +60,6 @@ macro_rules! use_tree_lookahead {
     };
 }
 
-#[allow(unused)]
 macro_rules! use_declaration_lookahead {
     () => {
         Some(Token::Use(_))
@@ -58,6 +83,31 @@ macro_rules! match_token {
             }),
         }
     };
+}
+
+pub fn module<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<Module<'a>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    let mut items = Vec::new();
+    loop {
+        match lexer.tokens().peek() {
+            use_declaration_lookahead!() => {
+                let item = use_declaration(lexer)?;
+                items.push(item.into());
+            }
+            graph_definition_lookahead!() => {
+                let item = graph_definition(lexer)?;
+                items.push(item.into());
+            }
+            Some(_) => {
+                let item = graph(lexer)?;
+                items.push(item.into());
+            }
+            None => break,
+        }
+    }
+    Ok(Module { items })
 }
 
 pub fn use_declaration<'a, I>(
@@ -137,6 +187,182 @@ where
     Ok(lexer.input_slice(start, end))
 }
 
+pub fn graph_definition<'a, I>(
+    lexer: &mut Lexer<'a, I>,
+) -> Result<GraphDefinition<'a>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    let visibility = if let Some(Token::Pub(_)) = lexer.tokens().peek() {
+        Some(lexer.tokens().next().unwrap().as_str())
+    } else {
+        None
+    };
+    let signature = graph_definition_signature(lexer)?;
+    let stream_lines = stream_lines(lexer)?;
+    Ok(GraphDefinition {
+        signature,
+        stream_lines,
+        visible: visibility.is_some(),
+    })
+}
+
+pub fn graph_definition_signature<'a, I>(
+    lexer: &mut Lexer<'a, I>,
+) -> Result<GraphDefinitionSignature<'a>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    let inputs = opt_streams0(lexer)?;
+    let name = identifier(lexer)?;
+    let params = params(lexer)?;
+    let outputs = opt_streams0(lexer)?;
+    Ok(GraphDefinitionSignature {
+        inputs: inputs.map(|inputs| inputs.into_iter().map(Into::into).collect()),
+        name: name.into(),
+        params: params.into_iter().map(Into::into).collect(),
+        outputs: outputs.map(|outputs| outputs.into_iter().map(|s| (*s).into()).collect()),
+    })
+}
+
+pub fn params<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<Vec<&'a str>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    match_token!(lexer, Token::OpenBracket, SpannedErrorKind::Token("("))?;
+    let mut params = Vec::new();
+    while let identifier_lookahead!() = lexer.tokens().peek() {
+        let param = identifier(lexer)?;
+        params.push(param);
+        match lexer.tokens().peek() {
+            Some(Token::Comma(_)) => {
+                lexer.tokens().next().unwrap();
+            }
+            _ => break,
+        }
+    }
+    match_token!(lexer, Token::CloseBracket, SpannedErrorKind::Token(")"))?;
+    Ok(params)
+}
+
+pub fn graph<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<Graph<'a>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    Ok(Graph {
+        stream_lines: stream_lines(lexer)?,
+    })
+}
+
+pub fn stream_lines<'a, I>(
+    lexer: &mut Lexer<'a, I>,
+) -> Result<Vec<StreamLine<'a>>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    match_token!(lexer, Token::OpenCurly, SpannedErrorKind::Token("{"))?;
+    let mut stream_lines = Vec::new();
+    loop {
+        match lexer.tokens().peek() {
+            Some(Token::CloseCurly(_)) => {
+                break;
+            }
+            _ => {
+                let stream_line = stream_line(lexer)?;
+                stream_lines.push(stream_line);
+            }
+        }
+    }
+    match_token!(lexer, Token::CloseCurly, SpannedErrorKind::Token("}"))?;
+    Ok(stream_lines)
+}
+
+pub fn stream_line<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<StreamLine<'a>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    match_token!(lexer, Token::OpenBracket, SpannedErrorKind::Token("("))?;
+    let first_filter = {
+        let inputs = if let stream_line_input_lookahead!() = lexer.tokens().peek() {
+            stream_line_inputs(lexer)?
+        } else {
+            Vec::default()
+        };
+        let filter = filter(lexer)?;
+        ConnectedFilter { inputs, filter }
+    };
+    let mut filters = vec![first_filter];
+    let output = loop {
+        match lexer.tokens().peek_amount(2) {
+            [Some(Token::Dash(_)), Some(Token::CloseBracket(_))] => {
+                let main_output = lexer.tokens().next().unwrap().as_str();
+                break Some(StreamLineOutput::Main(main_output.into()));
+            }
+            [Some(Token::Dash(_)), Some(Token::CloseAngle(_))] => {
+                lexer.tokens().next().unwrap();
+                lexer.tokens().next().unwrap();
+                break Some(StreamLineOutput::Named(identifier(lexer)?.into()));
+            }
+            [Some(Token::CloseBracket(_)), _] => {
+                break None;
+            }
+            _ => {
+                let filter = stream_line_filter(lexer)?;
+                filters.push(filter);
+            }
+        }
+    };
+    match_token!(lexer, Token::CloseBracket, SpannedErrorKind::Token(")"))?;
+    Ok(StreamLine { filters, output })
+}
+
+pub fn stream_line_inputs<'a, I>(
+    lexer: &mut Lexer<'a, I>,
+) -> Result<Vec<StreamLineInput<'a>>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    let main_input = if let Some(Token::OpenAngle(_)) = lexer.tokens().peek() {
+        lexer.tokens().next().unwrap();
+        Some(identifier(lexer)?)
+    } else {
+        None
+    };
+    let (main_stream, extra_streams) = filter_input_streams(lexer)?;
+    Ok(assemble_inputs(
+        main_input.map_or_else(
+            || StreamLineInput::Main(main_stream.into()),
+            |main_input| StreamLineInput::Named(main_input.into()),
+        ),
+        extra_streams,
+    ))
+}
+
+pub fn stream_line_filter<'a, I>(
+    lexer: &mut Lexer<'a, I>,
+) -> Result<ConnectedFilter<'a>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    let (main_stream, extra_streams) = filter_input_streams(lexer)?;
+    let filter = filter(lexer)?;
+    Ok(ConnectedFilter {
+        inputs: assemble_inputs(StreamLineInput::Main(main_stream.into()), extra_streams),
+        filter,
+    })
+}
+
+pub fn filter_input_streams<'a, I>(
+    lexer: &mut Lexer<'a, I>,
+) -> Result<(&'a str, Vec<&'a str>), SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    let main = match_token!(lexer, Token::Dash, SpannedErrorKind::Token("-"))?;
+    let streams = opt_streams1(lexer)?;
+    Ok((main, streams.unwrap_or_default()))
+}
+
 pub fn filter<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<Filter<'a>, SpannedError<&'a str>>
 where
     I: Iterator<Item = Token<'a>>,
@@ -178,10 +404,14 @@ where
                 code(lexer)?;
             }
             Some(Token::As(_))
+            | Some(Token::CloseAngle(_))
             | Some(Token::Colon2(_))
             | Some(Token::Comma(_))
+            | Some(Token::Dash(_))
             | Some(Token::Ident(_))
             | Some(Token::Hash(_))
+            | Some(Token::OpenAngle(_))
+            | Some(Token::Pub(_))
             | Some(Token::SemiColon(_))
             | Some(Token::Star(_))
             | Some(Token::Use(_))
@@ -233,7 +463,7 @@ where
 {
     let mut streams = Vec::new();
     match_token!(lexer, Token::OpenSquare, SpannedErrorKind::Token("["))?;
-    while let Some(Token::Ident(_)) | Some(Token::NotAnIdent(_)) = lexer.tokens().peek() {
+    while let identifier_lookahead!() = lexer.tokens().peek() {
         let ident = identifier(lexer)?;
         streams.push(ident);
         match lexer.tokens().peek() {
@@ -270,7 +500,7 @@ where
     streams.push(ident);
     if let Some(Token::Comma(_)) = lexer.tokens().peek() {
         lexer.tokens().next().unwrap();
-        while let Some(Token::Ident(_)) | Some(Token::NotAnIdent(_)) = lexer.tokens().peek() {
+        while let identifier_lookahead!() = lexer.tokens().peek() {
             let ident = identifier(lexer)?;
             streams.push(ident);
             match lexer.tokens().peek() {

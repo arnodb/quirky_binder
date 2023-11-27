@@ -1,5 +1,5 @@
 use annotate_snippets::display_list::DisplayList;
-use datapet_codegen::ParseError;
+use datapet_codegen::{codegen_parse_module, ParseError};
 use datapet_lang::snippet::snippet_for_input_and_part;
 use proc_macro2::Ident;
 use proc_macro_error::{abort_if_dirty, emit_error, proc_macro_error};
@@ -53,7 +53,7 @@ pub fn dtpt(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         def_type: &def_type,
         input: &input,
     };
-    let module = match datapet_codegen::parse_module(&input, &mut error_emitter) {
+    let module = match codegen_parse_module(&input, &mut error_emitter) {
         Ok(res) => res,
         Err(ParseError) => {
             abort_if_dirty();

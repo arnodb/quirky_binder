@@ -8,31 +8,9 @@ use annotate_snippets::display_list::DisplayList;
 use antinom::rng::{AnarchyLevel, AntiNomRandRng};
 use rand_chacha::rand_core::SeedableRng;
 
-use crate::{ast::Filter, parser::SpannedErrorKind, snippet::snippet_for_input_and_part};
+use crate::snippet::snippet_for_input_and_part;
 
-use super::{fuzzer, SpannedError};
-
-trait ToSpannedError<'a> {
-    fn to_spanned_error(&self, input: &'a str) -> SpannedError<&'a str>;
-}
-
-impl<'a> ToSpannedError<'a> for SpannedError<&'a str> {
-    fn to_spanned_error(&self, _input: &'a str) -> SpannedError<&'a str> {
-        self.clone()
-    }
-}
-
-impl<'a> ToSpannedError<'a> for nom::Err<SpannedError<&'a str>> {
-    fn to_spanned_error(&self, input: &'a str) -> SpannedError<&'a str> {
-        match self {
-            nom::Err::Incomplete(_) => SpannedError {
-                kind: SpannedErrorKind::NomIncomplete,
-                span: &input[input.len()..],
-            },
-            nom::Err::Error(err) | nom::Err::Failure(err) => err.clone(),
-        }
-    }
-}
+use super::{fuzzer, ToSpannedError};
 
 const FUZZ_ITERATIONS: usize = 1000;
 
@@ -131,20 +109,35 @@ fn fuzz_use_declaration() {
     let seed = None;
     let fuzzer = fuzzer::use_declaration;
 
-    let nom_parser = crate::parser::nom_impl::use_declaration;
-    fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+    #[cfg(feature = "nom_parser")]
+    #[allow(unused)]
+    let nom_parser = {
+        let nom_parser = crate::parser::nom_impl::use_declaration;
+
+        fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+
+        nom_parser
+    };
 
     #[cfg(feature = "crafted_parser")]
-    {
-        use crate::{ast::UseDeclaration, parser::crafted_impl::lexer::lexer};
+    #[allow(unused)]
+    let crafted_parser = {
+        use crate::parser::crafted_impl::lexer::lexer;
 
-        fn crafted_parser(input: &str) -> Result<UseDeclaration, SpannedError<&str>> {
+        fn crafted_parser(
+            input: &str,
+        ) -> Result<crate::ast::UseDeclaration, super::SpannedError<&str>> {
             let mut lexer = lexer(input);
             crate::parser::crafted_impl::use_declaration(&mut lexer)
         }
 
         fuzz_test!(seed, fuzzer, crafted_parser, AnarchyLevel::LawAndOrder);
 
+        crafted_parser
+    };
+
+    #[cfg(feature = "full_fuzz_tests")]
+    {
         fuzz_test_compare!(
             seed,
             fuzzer,
@@ -160,8 +153,43 @@ fn fuzz_graph_definition_signature() {
     let seed = None;
     let fuzzer = fuzzer::graph_definition_signature;
 
-    let nom_parser = crate::parser::nom_impl::graph_definition_signature;
-    fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+    #[cfg(feature = "nom_parser")]
+    #[allow(unused)]
+    let nom_parser = {
+        let nom_parser = crate::parser::nom_impl::graph_definition_signature;
+
+        fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+
+        nom_parser
+    };
+
+    #[cfg(feature = "crafted_parser")]
+    #[allow(unused)]
+    let crafted_parser = {
+        use crate::parser::crafted_impl::lexer::lexer;
+
+        fn crafted_parser(
+            input: &str,
+        ) -> Result<crate::ast::GraphDefinitionSignature, super::SpannedError<&str>> {
+            let mut lexer = lexer(input);
+            crate::parser::crafted_impl::graph_definition_signature(&mut lexer)
+        }
+
+        fuzz_test!(seed, fuzzer, crafted_parser, AnarchyLevel::LawAndOrder);
+
+        crafted_parser
+    };
+
+    #[cfg(feature = "full_fuzz_tests")]
+    {
+        fuzz_test_compare!(
+            seed,
+            fuzzer,
+            |input| nom_parser(input).map(|res| res.1),
+            crafted_parser,
+            AnarchyLevel::ALittleAnarchy
+        );
+    }
 }
 
 #[test]
@@ -169,20 +197,33 @@ fn fuzz_filter() {
     let seed = None;
     let fuzzer = fuzzer::filter;
 
-    let nom_parser = crate::parser::nom_impl::filter;
-    fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+    #[cfg(feature = "nom_parser")]
+    #[allow(unused)]
+    let nom_parser = {
+        let nom_parser = crate::parser::nom_impl::filter;
+
+        fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+
+        nom_parser
+    };
 
     #[cfg(feature = "crafted_parser")]
-    {
+    #[allow(unused)]
+    let crafted_parser = {
         use crate::parser::crafted_impl::lexer::lexer;
 
-        fn crafted_parser(input: &str) -> Result<Filter, SpannedError<&str>> {
+        fn crafted_parser(input: &str) -> Result<crate::ast::Filter, super::SpannedError<&str>> {
             let mut lexer = lexer(input);
             crate::parser::crafted_impl::filter(&mut lexer)
         }
 
         fuzz_test!(seed, fuzzer, crafted_parser, AnarchyLevel::LawAndOrder);
 
+        crafted_parser
+    };
+
+    #[cfg(feature = "full_fuzz_tests")]
+    {
         fuzz_test_compare!(
             seed,
             fuzzer,
@@ -198,20 +239,33 @@ fn fuzz_opt_streams0() {
     let seed = None;
     let fuzzer = fuzzer::opt_streams0;
 
-    let nom_parser = crate::parser::nom_impl::opt_streams0;
-    fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+    #[cfg(feature = "nom_parser")]
+    #[allow(unused)]
+    let nom_parser = {
+        let nom_parser = crate::parser::nom_impl::opt_streams0;
+
+        fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+
+        nom_parser
+    };
 
     #[cfg(feature = "crafted_parser")]
-    {
+    #[allow(unused)]
+    let crafted_parser = {
         use crate::parser::crafted_impl::lexer::lexer;
 
-        fn crafted_parser(input: &str) -> Result<Option<Vec<&str>>, SpannedError<&str>> {
+        fn crafted_parser(input: &str) -> Result<Option<Vec<&str>>, super::SpannedError<&str>> {
             let mut lexer = lexer(input);
             crate::parser::crafted_impl::opt_streams0(&mut lexer)
         }
 
         fuzz_test!(seed, fuzzer, crafted_parser, AnarchyLevel::LawAndOrder);
 
+        crafted_parser
+    };
+
+    #[cfg(feature = "full_fuzz_tests")]
+    {
         fuzz_test_compare!(
             seed,
             fuzzer,
@@ -227,20 +281,33 @@ fn fuzz_opt_streams1() {
     let seed = None;
     let fuzzer = fuzzer::opt_streams1;
 
-    let nom_parser = crate::parser::nom_impl::opt_streams1;
-    fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+    #[cfg(feature = "nom_parser")]
+    #[allow(unused)]
+    let nom_parser = {
+        let nom_parser = crate::parser::nom_impl::opt_streams1;
+
+        fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+
+        nom_parser
+    };
 
     #[cfg(feature = "crafted_parser")]
-    {
+    #[allow(unused)]
+    let crafted_parser = {
         use crate::parser::crafted_impl::lexer::lexer;
 
-        fn crafted_parser(input: &str) -> Result<Option<Vec<&str>>, SpannedError<&str>> {
+        fn crafted_parser(input: &str) -> Result<Option<Vec<&str>>, super::SpannedError<&str>> {
             let mut lexer = lexer(input);
             crate::parser::crafted_impl::opt_streams1(&mut lexer)
         }
 
         fuzz_test!(seed, fuzzer, crafted_parser, AnarchyLevel::LawAndOrder);
 
+        crafted_parser
+    };
+
+    #[cfg(feature = "full_fuzz_tests")]
+    {
         fuzz_test_compare!(
             seed,
             fuzzer,
@@ -256,20 +323,33 @@ fn fuzz_code() {
     let seed = None;
     let fuzzer = fuzzer::code;
 
-    let nom_parser = crate::parser::nom_impl::code;
-    fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+    #[cfg(feature = "nom_parser")]
+    #[allow(unused)]
+    let nom_parser = {
+        let nom_parser = crate::parser::nom_impl::code;
+
+        fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+
+        nom_parser
+    };
 
     #[cfg(feature = "crafted_parser")]
-    {
+    #[allow(unused)]
+    let crafted_parser = {
         use crate::parser::crafted_impl::lexer::lexer;
 
-        fn crafted_parser(input: &str) -> Result<&str, SpannedError<&str>> {
+        fn crafted_parser(input: &str) -> Result<&str, super::SpannedError<&str>> {
             let mut lexer = lexer(input);
             crate::parser::crafted_impl::code(&mut lexer)
         }
 
         fuzz_test!(seed, fuzzer, crafted_parser, AnarchyLevel::LawAndOrder);
 
+        crafted_parser
+    };
+
+    #[cfg(feature = "full_fuzz_tests")]
+    {
         fuzz_test_compare!(
             seed,
             fuzzer,
@@ -285,20 +365,33 @@ fn fuzz_simple_path() {
     let seed = None;
     let fuzzer = fuzzer::simple_path;
 
-    let nom_parser = crate::parser::nom_impl::simple_path;
-    fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+    #[cfg(feature = "nom_parser")]
+    #[allow(unused)]
+    let nom_parser = {
+        let nom_parser = crate::parser::nom_impl::simple_path;
+
+        fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+
+        nom_parser
+    };
 
     #[cfg(feature = "crafted_parser")]
-    {
+    #[allow(unused)]
+    let crafted_parser = {
         use crate::parser::crafted_impl::lexer::lexer;
 
-        fn crafted_parser(input: &str) -> Result<&str, SpannedError<&str>> {
+        fn crafted_parser(input: &str) -> Result<&str, super::SpannedError<&str>> {
             let mut lexer = lexer(input);
             crate::parser::crafted_impl::simple_path(&mut lexer)
         }
 
         fuzz_test!(seed, fuzzer, crafted_parser, AnarchyLevel::LawAndOrder);
 
+        crafted_parser
+    };
+
+    #[cfg(feature = "full_fuzz_tests")]
+    {
         fuzz_test_compare!(
             seed,
             fuzzer,
@@ -314,20 +407,33 @@ fn fuzz_identifier() {
     let seed = None;
     let fuzzer = fuzzer::identifier;
 
-    let nom_parser = crate::parser::nom_impl::identifier;
-    fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+    #[cfg(feature = "nom_parser")]
+    #[allow(unused)]
+    let nom_parser = {
+        let nom_parser = crate::parser::nom_impl::identifier;
+
+        fuzz_test!(seed, fuzzer, nom_parser, AnarchyLevel::LawAndOrder);
+
+        nom_parser
+    };
 
     #[cfg(feature = "crafted_parser")]
-    {
+    #[allow(unused)]
+    let crafted_parser = {
         use crate::parser::crafted_impl::lexer::lexer;
 
-        fn crafted_parser(input: &str) -> Result<&str, SpannedError<&str>> {
+        fn crafted_parser(input: &str) -> Result<&str, super::SpannedError<&str>> {
             let mut lexer = lexer(input);
             crate::parser::crafted_impl::identifier(&mut lexer)
         }
 
         fuzz_test!(seed, fuzzer, crafted_parser, AnarchyLevel::LawAndOrder);
 
+        crafted_parser
+    };
+
+    #[cfg(feature = "full_fuzz_tests")]
+    {
         fuzz_test_compare!(
             seed,
             fuzzer,

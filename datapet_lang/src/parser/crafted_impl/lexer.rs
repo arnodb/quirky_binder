@@ -6,6 +6,8 @@ use peekmore::{PeekMore, PeekMoreIterator};
 pub enum Token<'a> {
     #[token("as")]
     As(&'a str),
+    #[token(">")]
+    CloseAngle(&'a str),
     #[token(")")]
     CloseBracket(&'a str),
     #[token("}")]
@@ -16,16 +18,22 @@ pub enum Token<'a> {
     Colon2(&'a str),
     #[token(",")]
     Comma(&'a str),
+    #[token("-")]
+    Dash(&'a str),
     #[regex(r"[A-Z_a-z][A-Z_a-z0-9]*")]
     Ident(&'a str),
     #[token("#")]
     Hash(&'a str),
+    #[token("<")]
+    OpenAngle(&'a str),
     #[token("(")]
     OpenBracket(&'a str),
     #[token("{")]
     OpenCurly(&'a str),
     #[token("[")]
     OpenSquare(&'a str),
+    #[token(r"pub")]
+    Pub(&'a str),
     #[regex(r#"'(\\.|[^\\'])*'"#)]
     QuotedChar(&'a str),
     #[regex(r#""(\\.|[^\\"])*""#)]
@@ -50,16 +58,20 @@ impl<'a> Token<'a> {
     pub fn as_str(&self) -> &'a str {
         match self {
             Self::As(span) => span,
+            Self::CloseAngle(span) => span,
             Self::CloseBracket(span) => span,
             Self::CloseCurly(span) => span,
             Self::CloseSquare(span) => span,
             Self::Colon2(span) => span,
             Self::Comma(span) => span,
+            Self::Dash(span) => span,
             Self::Ident(span) => span,
             Self::Hash(span) => span,
+            Self::OpenAngle(span) => span,
             Self::OpenBracket(span) => span,
             Self::OpenCurly(span) => span,
             Self::OpenSquare(span) => span,
+            Self::Pub(span) => span,
             Self::QuotedChar(span) => span,
             Self::QuotedString(span) => span,
             Self::SemiColon(span) => span,

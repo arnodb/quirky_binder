@@ -5,13 +5,17 @@ edition = "2021"
 rust-version = "1.65.0"
 
 [features]
-default = []
+default = ["crafted_parser"]
+
 crafted_parser = ["logos", "peekmore"]
+nom_parser = ["nom"]
+
+full_fuzz_tests = ["nom_parser", "crafted_parser"]
 
 [dependencies]
 annotate-snippets = { version = "0.9", features = ["color"] }
 logos = { version = "0.13", optional = true }
-nom = "7"
+nom = { version = "7", optional = true }
 peekmore = { version = "1", optional = true }
 
 [dev-dependencies]

@@ -3,7 +3,7 @@ use datapet_lang::{
         ConnectedFilter, Graph, GraphDefinition, Module, ModuleItem, StreamLine, StreamLineInput,
         StreamLineOutput, UseDeclaration,
     },
-    parser::module,
+    parser::parse_module,
 };
 use inflector::Inflector;
 use proc_macro2::{Ident, TokenStream};
@@ -18,37 +18,20 @@ pub trait ErrorEmitter {
     fn emit_error(&mut self, part: &str, error: Cow<str>);
 }
 
-pub fn parse_module<'a>(
+pub fn codegen_parse_module<'a>(
     input: &'a str,
     error_emitter: &mut dyn ErrorEmitter,
 ) -> Result<Module<'a>, ParseError> {
-    let res = module(input);
-    let (i, module) = match res {
+    let res = parse_module(input);
+    let module = match res {
         Ok(res) => res,
         Err(err) => {
-            let part = match &err {
-                datapet_lang::nom::Err::Incomplete(_) => input,
-                datapet_lang::nom::Err::Error(err) | datapet_lang::nom::Err::Failure(err) => {
-                    err.span
-                }
-            };
-            let error = match &err {
-                datapet_lang::nom::Err::Incomplete(_) => "incomplete",
-                datapet_lang::nom::Err::Error(err) | datapet_lang::nom::Err::Failure(err) => {
-                    err.kind.description()
-                }
-            };
+            let part = err.span;
+            let error = err.kind.description();
             error_emitter.emit_error(part, error.into());
             return Err(ParseError);
         }
     };
-    if !i.is_empty() {
-        error_emitter.emit_error(
-            i,
-            format!("did not consume the entire input, {:?}", i).into(),
-        );
-        return Err(ParseError);
-    }
     Ok(module)
 }
 
