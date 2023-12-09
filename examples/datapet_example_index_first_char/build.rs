@@ -96,8 +96,11 @@ fn main() {
         r###"
 use datapet::{
     filter::{
-        group::group, sink::sink, sort::sort,
-        source::function::function_source,
+        function::{
+            produce::function_produce,
+            terminate::function_terminate,
+        },
+        group::group, sort::sort,
     },
 };
 
@@ -105,9 +108,9 @@ use super::tokenize;
 
 {
   (
-      function_source#read_input(
+      function_produce#read_input(
         fields: [("words", "Box<str>")],
-        function: r#"{
+        body: r#"{
             use std::io::BufRead;
 
             let stdin = std::io::stdin();
@@ -119,9 +122,9 @@ use super::tokenize;
                     let value = std::mem::take(&mut buffer);
                     let value = value.trim_end_matches('\n');
                     let record = new_record(value.to_string().into_boxed_str());
-                    out.send(Some(record))?;
+                    output.send(Some(record))?;
                 } else {
-                    out.send(None)?;
+                    output.send(None)?;
                     return Ok(());
                 }
             }
@@ -130,19 +133,21 @@ use super::tokenize;
     - tokenize#tokenize()
     - sort#sort(fields: ["first_char", "word"])
     - group#group(fields: ["word"], group_field: "words")
-    - sink#sink(
-        debug: Some(r#"
+    - function_terminate#term(
+        body: r#"
             use itertools::Itertools;
-
-            println!(
-                "{} - [{}]",
-                record.first_char(),
-                record.words()
-                    .iter()
-                    .map(|word|word.word())
-                    .join(", ")
-            );
-        "#)
+            while let Some(record) = input.next()? {
+                println!(
+                    "{} - [{}]",
+                    record.first_char(),
+                    record.words()
+                        .iter()
+                        .map(|word|word.word())
+                        .join(", ")
+                );
+            }
+            Ok(())
+"#,
       )
   )
 }

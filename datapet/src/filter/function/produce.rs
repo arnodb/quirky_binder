@@ -5,30 +5,30 @@ use truc::record::type_resolver::TypeResolver;
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct FunctionSourceParams<'a> {
+pub struct FunctionProduceParams<'a> {
     fields: TypedFieldsParam<'a>,
     order_fields: Option<DirectedFieldsParam<'a>>,
     distinct_fields: Option<FieldsParam<'a>>,
-    function: &'a str,
+    body: &'a str,
 }
 
 #[derive(Getters)]
-pub struct FunctionSource {
+pub struct FunctionProduce {
     name: FullyQualifiedName,
     #[getset(get = "pub")]
     inputs: [NodeStream; 0],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     fields: Vec<(String, String)>,
-    function: String,
+    body: String,
 }
 
-impl FunctionSource {
+impl FunctionProduce {
     fn new<R: TypeResolver + Copy>(
         graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
-        params: FunctionSourceParams,
+        params: FunctionProduceParams,
     ) -> Self {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_main_stream(graph);
@@ -62,12 +62,12 @@ impl FunctionSource {
                 .iter()
                 .map(|(name, r#type)| ((*name).to_owned(), (*r#type).to_owned()))
                 .collect(),
-            function: params.function.to_owned(),
+            body: params.body.to_owned(),
         }
     }
 }
 
-impl DynNode for FunctionSource {
+impl DynNode for FunctionProduce {
     fn name(&self) -> &FullyQualifiedName {
         &self.name
     }
@@ -101,15 +101,15 @@ impl DynNode for FunctionSource {
             (quote!(#(#names: #types),*), quote!(#(#names),*))
         };
 
-        let func_body: TokenStream = self.function.parse().expect("function body");
+        let body: TokenStream = self.body.parse().expect("function body");
 
         let thread_body = quote! {
+            let output = thread_control.output_0.take().expect("output 0");
+            let new_record = |#new_record_args| {
+                #record::new(#unpacked_record { #new_record_fields })
+            };
             move || {
-                let out = thread_control.output_0.take().expect("output 0");
-                let new_record = |#new_record_args| {
-                    #record::new(#unpacked_record { #new_record_fields })
-                };
-                #func_body
+                #body
             }
         };
 
@@ -121,11 +121,11 @@ impl DynNode for FunctionSource {
     }
 }
 
-pub fn function_source<R: TypeResolver + Copy>(
+pub fn function_produce<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 0],
-    params: FunctionSourceParams,
-) -> FunctionSource {
-    FunctionSource::new(graph, name, inputs, params)
+    params: FunctionProduceParams,
+) -> FunctionProduce {
+    FunctionProduce::new(graph, name, inputs, params)
 }

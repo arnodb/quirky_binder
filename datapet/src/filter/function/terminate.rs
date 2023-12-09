@@ -5,37 +5,37 @@ use truc::record::type_resolver::TypeResolver;
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
-pub struct SinkParams<'a> {
-    debug: Option<&'a str>,
+pub struct FunctionTerminateParams<'a> {
+    body: &'a str,
 }
 
 #[derive(Getters)]
-pub struct Sink {
+pub struct FunctionTerminate {
     name: FullyQualifiedName,
     #[getset(get = "pub")]
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 0],
-    debug: Option<String>,
+    body: String,
 }
 
-impl Sink {
+impl FunctionTerminate {
     fn new<R: TypeResolver + Copy>(
         _graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
-        params: SinkParams,
+        params: FunctionTerminateParams,
     ) -> Self {
         Self {
             name,
             inputs,
             outputs: [],
-            debug: params.debug.map(ToString::to_string),
+            body: params.body.to_owned(),
         }
     }
 }
 
-impl DynNode for Sink {
+impl DynNode for FunctionTerminate {
     fn name(&self) -> &FullyQualifiedName {
         &self.name
     }
@@ -55,27 +55,18 @@ impl DynNode for Sink {
             self.outputs.none(),
         );
 
-        let input = thread.format_input(self.inputs.single().source(), graph.chain_customizer());
+        let input = thread.format_input(
+            self.inputs.single().source(),
+            graph.chain_customizer(),
+            true,
+        );
 
-        let debug: Option<TokenStream> = self
-            .debug
-            .as_ref()
-            .map(|debug| debug.parse().expect("function body"));
-
-        let full_name = &self.name.to_string();
+        let body: TokenStream = self.body.parse().expect("function body");
 
         let thread_body = quote! {
             #input
             move || {
-                let mut input = input;
-                let mut read = 0;
-                while let Some(record) = input.next()? {
-                    #debug
-                    read += 1;
-                }
-                let full_name = #full_name;
-                println!("read {} {}", full_name, read);
-                Ok(())
+                #body
             }
         };
 
@@ -89,11 +80,11 @@ impl DynNode for Sink {
     }
 }
 
-pub fn sink<R: TypeResolver + Copy>(
+pub fn function_terminate<R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
-    params: SinkParams,
-) -> Sink {
-    Sink::new(graph, name, inputs, params)
+    params: FunctionTerminateParams,
+) -> FunctionTerminate {
+    FunctionTerminate::new(graph, name, inputs, params)
 }

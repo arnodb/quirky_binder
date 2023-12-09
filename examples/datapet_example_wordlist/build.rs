@@ -9,17 +9,20 @@ fn main() {
         r###"
 use datapet::{
     filter::{
-        anchor::anchor, dedup::dedup, hof::index::wordlist::build_word_list, sink::sink,
+        anchor::anchor, dedup::dedup, hof::index::wordlist::build_word_list,
+        function::{
+            produce::function_produce,
+            terminate::function_terminate,
+        },
         sort::sort,
-        source::function::function_source,
     },
 };
 
 {
   (
-      function_source#read_token(
+      function_produce#read_token(
         fields: [("token", "Box<str>")],
-        function: r#"{
+        body: r#"{
             use std::io::BufRead;
 
             let stdin = std::io::stdin();
@@ -31,9 +34,9 @@ use datapet::{
                     let value = std::mem::take(&mut buffer);
                     let value = value.trim_end_matches('\n');
                     let record = new_record(value.to_string().into_boxed_str());
-                    out.send(Some(record))?;
+                    output.send(Some(record))?;
                 } else {
-                    out.send(None)?;
+                    output.send(None)?;
                     return Ok(());
                 }
             }
@@ -48,31 +51,49 @@ use datapet::{
         ci_anchor_field: "ci_anchor",
         ci_refs_field: "ci_refs",
       ) [s2, s3, s4]
-    - sink#sink_1(
-        debug: Some(r#"println!("sink_1 {} (id = {:?})", record.token(), record.anchor());"#)
+    - function_terminate#term_1(
+        body: r#"
+            while let Some(record) = input.next()? {
+                println!("term_1 {} (id = {:?})", record.token(), record.anchor());
+            }
+            Ok(())
+"#,
       )
   )
 
   ( < s2
-    - sink#sink_2(
-        debug: Some(r#"println!("sink_2 {} (id = {:?})", record.token(), record.anchor());"#)
+    - function_terminate#term_2(
+        body: r#"
+            while let Some(record) = input.next()? {
+                println!("term_2 {} (id = {:?})", record.token(), record.anchor());
+            }
+            Ok(())
+"#,
       )
   )
 
   ( < s3
-    - sink#sink_3(
-        debug: Some(r#"
-            println!("sink_3 {} (ci id = {:?}) == {}", record.token(), record.ci_anchor(), record.ci_refs().len());
-            for r in record.ci_refs().iter() {
-                println!("    {:?}", r.anchor());
+    - function_terminate#term_3(
+        body: r#"
+            while let Some(record) = input.next()? {
+                println!("term_3 {} (ci id = {:?}) == {}", record.token(), record.ci_anchor(), record.ci_refs().len());
+                for r in record.ci_refs().iter() {
+                    println!("    {:?}", r.anchor());
+                }
             }
-        "#)
+            Ok(())
+"#,
       )
   )
 
   ( < s4
-    - sink#sink_4(
-        debug: Some(r#"println!("sink_4 {} (ci id = {:?})", record.token(), record.ci_anchor()); "#)
+    - function_terminate#term_4(
+        body: r#"
+            while let Some(record) = input.next()? {
+                println!("term_4 {} (ci id = {:?})", record.token(), record.ci_anchor());
+            }
+            Ok(())
+"#,
       )
   )
 }

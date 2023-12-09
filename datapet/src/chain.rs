@@ -27,7 +27,9 @@ impl ChainSourceThread {
         &self,
         source_name: &NodeStreamSource,
         customizer: &ChainCustomizer,
+        mutable: bool,
     ) -> TokenStream {
+        let mutable_input = mutable.then(|| quote! {mut});
         if !self.piped {
             let input = syn::parse_str::<syn::Path>(&format!(
                 "{}::{}",
@@ -35,13 +37,13 @@ impl ChainSourceThread {
             ))
             .expect("chain_module");
             quote! {
-                let input = #input(thread_control);
+                let #mutable_input input = #input(thread_control);
             }
         } else {
             let input = format_ident!("input_{}", self.stream_index);
             let error_type = customizer.error_type.to_name();
             quote! {
-                let input = {
+                let #mutable_input input = {
                     let rx = thread_control.#input.take().expect("input {stream_index}");
                     datapet_support::iterator::sync::mpsc::Receive::<_, #error_type>::new(rx)
                 };
@@ -251,14 +253,13 @@ impl<'a> Chain<'a> {
             {
                 let error_type = self.customizer.error_type.to_name();
 
-                let input = source_thread.format_input(source, self.customizer);
+                let input = source_thread.format_input(source, self.customizer, true);
 
                 let pipe_def = quote! {
                     pub fn datapet_pipe(mut thread_control: ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
                         move || {
                             let tx = thread_control.output_0.take().expect("output 0");
                             #input
-                            let mut input = input;
                             while let Some(record) = input.next()? {
                                 tx.send(Some(record))?;
                             }
@@ -507,7 +508,7 @@ impl<'a> Chain<'a> {
         let thread_module = format_ident!("thread_{}", thread.thread_id);
         let error_type = self.customizer.error_type.to_name();
 
-        let input = thread.format_input(input.source(), self.customizer);
+        let input = thread.format_input(input.source(), self.customizer, false);
 
         let fn_def = quote! {
               pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {

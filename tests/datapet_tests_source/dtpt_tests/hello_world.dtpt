@@ -1,25 +1,30 @@
 use datapet::{
     filter::{
-        sink::sink,
-        source::function::function_source,
+        function::{
+            produce::function_produce,
+            terminate::function_terminate,
+        },
     },
 };
 
 {
   (
-      function_source(
+      function_produce(
         fields: [("hello", "String")],
-        function: r#"{
+        body: r#"{
             let record = new_record("world".to_string());
-            out.send(Some(record))?;
-            out.send(None)?;
+            output.send(Some(record))?;
+            output.send(None)?;
             Ok(())
         }"#,
       )
-    - sink(
-        debug: Some(r#"
+    - function_terminate(
+        body: r#"
+            let record = input.next()?.unwrap();
             assert_eq!(record.hello(), "world");
-        "#)
+            assert!(input.next()?.is_none());
+            Ok(())
+"#,
       )
   )
 }

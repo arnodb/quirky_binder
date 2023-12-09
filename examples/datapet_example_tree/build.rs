@@ -13,21 +13,23 @@ use datapet::{
             extract_fields::extract_fields,
             join::join,
         },
+        function::{
+            produce::function_produce,
+            terminate::function_terminate,
+        },
         group::group,
-        sink::sink,
         sort::sort,
-        source::function::function_source,
         unwrap::unwrap,
     },
 };
 
 {
   (
-      function_source#read_fs(
+      function_produce#read_fs(
         fields: [("id", "usize"), ("file_name", "String"), ("path", "String"), ("parent_id", "Option<usize>")],
         order_fields: Some(["id"]),
         distinct_fields: Some(["id"]),
-        function: r#"{
+        body: r#"{
             use std::collections::BTreeMap;
             use std::collections::btree_map::Entry;
             use std::path::PathBuf;
@@ -58,26 +60,29 @@ use datapet::{
                     entry.path().to_string_lossy().to_string(),
                     parent_id,
                 );
-                out.send(Some(record))?;
+                output.send(Some(record))?;
             }
-            out.send(None)?;
+            output.send(None)?;
             Ok(())
         }"#,
       )
     - extract_fields(fields: ["id", "parent_id"]) [extracted]
     - accumulate()
     - [children] join(primary_fields: ["id"], secondary_fields: ["parent_id"])
-    - sink(
-        debug: Some(r#"
-            println!(
-                "({}) {} ({:?}) / {}, children: {:?}",
-                record.id(),
-                record.path(),
-                record.parent_id(),
-                record.file_name(),
-                record.children().iter().map(|rec| rec.id()).collect::<Vec<_>>()
-            );
-        "#)
+    - function_terminate(
+        body: r#"
+            while let Some(record) = input.next()? {
+                println!(
+                    "({}) {} ({:?}) / {}, children: {:?}",
+                    record.id(),
+                    record.path(),
+                    record.parent_id(),
+                    record.file_name(),
+                    record.children().iter().map(|rec| rec.id()).collect::<Vec<_>>()
+                );
+            }
+            Ok(())
+"#,
       )
   )
 
