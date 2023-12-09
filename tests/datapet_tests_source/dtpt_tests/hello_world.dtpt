@@ -1,0 +1,25 @@
+use datapet::{
+    filter::{
+        sink::sink,
+        source::function::function_source,
+    },
+};
+
+{
+  (
+      function_source(
+        fields: [("hello", "String")],
+        function: r#"{
+            let record = new_record("world".to_string());
+            out.send(Some(record))?;
+            out.send(None)?;
+            Ok(())
+        }"#,
+      )
+    - sink(
+        debug: Some(r#"
+            assert_eq!(record.hello(), "world");
+        "#)
+      )
+  )
+}

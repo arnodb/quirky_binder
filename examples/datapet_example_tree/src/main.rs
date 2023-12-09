@@ -6,7 +6,9 @@ extern crate static_assertions;
 #[allow(dead_code)]
 #[allow(clippy::borrowed_box)]
 #[allow(clippy::module_inception)]
-mod chain;
+mod chain {
+    include!(concat!(env!("OUT_DIR"), "/chain.rs"));
+}
 
 fn main() {
     let mut chain_configuration = ChainConfiguration::new();

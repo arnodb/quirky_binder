@@ -92,8 +92,8 @@ pub fn tokenize<R: TypeResolver + Copy>(
 }
 
 fn main() {
-    dtpt! {
-        def r###"
+    dtpt!(inline(
+        r###"
 use datapet::{
     filter::{
         group::group, sink::sink, sort::sort,
@@ -147,7 +147,7 @@ use super::tokenize;
   )
 }
 "###
-    }
+    ));
 
     let type_resolver = {
         let mut resolver = StaticTypeResolver::new();

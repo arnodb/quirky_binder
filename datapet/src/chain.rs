@@ -428,8 +428,23 @@ impl<'a> Chain<'a> {
                 "datapet_support::chain::configuration",
                 "ChainConfiguration",
             );
+
+            let main_attrs = if !self.customizer.main_attrs.is_empty() {
+                let attrs = &self
+                    .customizer
+                    .main_attrs
+                    .iter()
+                    .map(|attr| format_ident!("{}", attr))
+                    .collect::<Vec<_>>();
+                quote! {#[#(#attrs),*]}
+            } else {
+                quote! {}
+            };
+            let main_name = format_ident!("{}", &self.customizer.main_name);
             let main_def = quote! {
-                pub fn main(chain_configuration: ChainConfiguration) -> Result<(), #error_type> {
+                #main_attrs
+                pub fn #main_name(chain_configuration: ChainConfiguration) -> Result<(), #error_type> {
+                    #[allow(unused_variables)]
                     let chain_configuration = Arc::new(chain_configuration);
 
                     #(#channels)*
@@ -548,12 +563,15 @@ impl<'a> Chain<'a> {
 pub const DEFAULT_CHAIN_ROOT_MODULE_NAME: [&str; 2] = ["crate", "chain"];
 pub const DEFAULT_CHAIN_STREAMS_MODULE_NAME: &str = "streams";
 pub const DEFAULT_CHAIN_ERROR_TYPE: [&str; 2] = ["datapet_support", "DatapetError"];
+pub const DEFAULT_CHAIN_MAIN_NAME: &str = "main";
 
 pub struct ChainCustomizer {
     pub streams_module_name: FullyQualifiedName,
     pub module_name: FullyQualifiedName,
     pub custom_module_imports: Vec<(String, String)>,
     pub error_type: FullyQualifiedName,
+    pub main_name: String,
+    pub main_attrs: Vec<String>,
 }
 
 impl ChainCustomizer {
@@ -585,6 +603,8 @@ impl Default for ChainCustomizer {
             module_name: FullyQualifiedName::new_n(DEFAULT_CHAIN_ROOT_MODULE_NAME.iter()),
             custom_module_imports: vec![],
             error_type: FullyQualifiedName::new_n(DEFAULT_CHAIN_ERROR_TYPE.iter()),
+            main_name: DEFAULT_CHAIN_MAIN_NAME.to_string(),
+            main_attrs: Vec::default(),
         }
     }
 }

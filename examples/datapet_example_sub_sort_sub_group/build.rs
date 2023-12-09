@@ -4,8 +4,8 @@ use std::path::Path;
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
 
 fn main() {
-    dtpt! {
-        def r###"
+    dtpt!(inline(
+        r###"
 use datapet::{
     filter::{
         sink::sink,
@@ -61,7 +61,7 @@ use datapet::{
   )
 }
 "###
-    }
+    ));
 
     let type_resolver = {
         let mut resolver = StaticTypeResolver::new();

@@ -1,7 +1,7 @@
-use crate::dtpt;
+use datapet_codegen_macro::dtpt_internal;
 
-dtpt! {
-    datapet_def r#"
+dtpt_internal!(inline(
+    r#"
 use crate::{
     filter::{
         anchor::anchor,
@@ -66,4 +66,4 @@ pub [] build_word_list(token_field, anchor_field, ci_anchor_field, ci_refs_field
   )
 }
 "#
-}
+));
