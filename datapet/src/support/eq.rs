@@ -5,9 +5,11 @@ where
     F: IntoIterator<Item = FStr>,
     FStr: AsRef<str>,
 {
-    let eq = Some(quote! {|a: &#record_type, b: &#record_type|}.to_string())
+    let mut count = 0;
+    let mut eq = Some(quote! {|a: &#record_type, b: &#record_type|}.to_string())
         .into_iter()
         .chain(fields.into_iter().enumerate().map(|(i, field)| {
+            count += 1;
             let and = if i > 0 { " && " } else { "" };
             format!(
                 "{and}a.{field}().eq(b.{field}())",
@@ -16,6 +18,9 @@ where
             )
         }))
         .collect::<String>();
+    if count == 0 {
+        eq = quote! {|_a: &#record_type, _b: &#record_type| true}.to_string();
+    }
     syn::parse_str::<syn::Expr>(&eq).expect("eq")
 }
 
@@ -31,12 +36,14 @@ where
     G: IntoIterator<Item = GStr>,
     GStr: AsRef<str>,
 {
-    let eq = Some(quote! {|a: &#record_type_a, b: &#record_type_b|}.to_string())
+    let mut count = 0;
+    let mut eq = Some(quote! {|a: &#record_type_a, b: &#record_type_b|}.to_string())
         .into_iter()
         .chain(
             zip_eq(fields_a, fields_b)
                 .enumerate()
                 .map(|(i, (field_a, field_b))| {
+                    count += 1;
                     let and = if i > 0 { " && " } else { "" };
                     format!(
                         "{and}a.{field_a}().eq(b.{field_b}())",
@@ -47,5 +54,8 @@ where
                 }),
         )
         .collect::<String>();
+    if count == 0 {
+        eq = quote! {|_a: &#record_type_a, _b: &#record_type_b| true}.to_string();
+    }
     syn::parse_str::<syn::Expr>(&eq).expect("eq")
 }

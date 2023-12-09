@@ -1,4 +1,6 @@
 #[macro_use]
+extern crate more_asserts;
+#[macro_use]
 extern crate static_assertions;
 
 #[allow(dead_code)]

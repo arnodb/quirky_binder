@@ -12,10 +12,11 @@ pub fn generate_tests(out_dir: &Path) {
     };
 
     dtpt_generate_deep(out_dir, |module_path| {
+        let module_name = FullyQualifiedName::new_n(&["crate", "all_chains"]).sub_n(module_path);
+        let streams_module_name = module_name.sub("streams");
         let customizer = ChainCustomizer {
-            streams_module_name: FullyQualifiedName::new_n(&["crate", "all_chains"])
-                .sub_n(module_path)
-                .sub("streams"),
+            streams_module_name,
+            module_name,
             ..Default::default()
         };
         GraphBuilder::new(&type_resolver, customizer)
