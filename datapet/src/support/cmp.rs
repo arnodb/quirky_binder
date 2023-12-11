@@ -49,7 +49,7 @@ impl<T> Directed<T> {
     pub fn is_asc(&self) -> bool {
         match self {
             Self::Ascending(_) => true,
-            Self::Descending(_) => true,
+            Self::Descending(_) => false,
         }
     }
 
@@ -85,7 +85,7 @@ impl<T> Deref for Directed<T> {
 pub fn fields_cmp<F, FStr>(record_type: &syn::Type, fields: F) -> syn::Expr
 where
     F: IntoIterator<Item = Directed<FStr>>,
-    FStr: AsRef<str>,
+    FStr: AsRef<str> + Debug,
 {
     let cmp = Some(quote! {|a: &#record_type, b: &#record_type|}.to_string())
         .into_iter()
@@ -97,7 +97,7 @@ where
             };
             let reverse = if field.is_asc() { "" } else { ".reverse()" };
             format!(
-                "{then}a.{field}().cmp(b.{field}(){reverse}{end_then})",
+                "{then}a.{field}().cmp(b.{field}()){reverse}{end_then}",
                 then = then,
                 end_then = end_then,
                 field = (*field.as_ref()).as_ref(),
@@ -116,9 +116,9 @@ pub fn fields_cmp_ab<F, FStr, G, GStr>(
 ) -> syn::Expr
 where
     F: IntoIterator<Item = FStr>,
-    FStr: AsRef<str>,
+    FStr: AsRef<str> + Debug,
     G: IntoIterator<Item = GStr>,
-    GStr: AsRef<str>,
+    GStr: AsRef<str> + Debug,
 {
     let cmp = Some(quote! {|a: &#record_type_a, b: &#record_type_b|}.to_string())
         .into_iter()
@@ -132,7 +132,7 @@ where
                         ("", "")
                     };
                     format!(
-                        "{then}a.{field_a}().cmp(b.{field_b}(){end_then})",
+                        "{then}a.{field_a}().cmp(b.{field_b}()){end_then}",
                         then = then,
                         end_then = end_then,
                         field_a = field_a.as_ref(),
@@ -142,4 +142,125 @@ where
         )
         .collect::<String>();
     syn::parse_str::<syn::Expr>(&cmp).expect("cmp")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{fields_cmp, fields_cmp_ab, Directed};
+
+    #[test]
+    fn test_fields_cmp_1() {
+        let expr = fields_cmp(
+            &syn::parse_str::<syn::Type>("Record").unwrap(),
+            [Directed::Ascending("foo")],
+        );
+        assert_eq!(
+            "| a : & Record , b : & Record | a . foo () . cmp (b . foo ())",
+            quote! {#expr}.to_string()
+        );
+    }
+
+    #[test]
+    fn test_fields_cmp_2() {
+        let expr = fields_cmp(
+            &syn::parse_str::<syn::Type>("Record").unwrap(),
+            [Directed::Ascending("foo"), Directed::Ascending("bar")],
+        );
+        assert_eq!(
+            concat!(
+                "| a : & Record , b : & Record | a . foo () . cmp (b . foo ())",
+                " . then_with (| | a . bar () . cmp (b . bar ()))"
+            ),
+            quote! {#expr}.to_string()
+        );
+    }
+
+    #[test]
+    fn test_fields_cmp_3() {
+        let expr = fields_cmp(
+            &syn::parse_str::<syn::Type>("Record").unwrap(),
+            [
+                Directed::Ascending("foo"),
+                Directed::Descending("bar"),
+                Directed::Descending("foobar"),
+            ],
+        );
+        assert_eq!(
+            concat!(
+                "| a : & Record , b : & Record | a . foo () . cmp (b . foo ())",
+                " . then_with (| | a . bar () . cmp (b . bar ()) . reverse ())",
+                " . then_with (| | a . foobar () . cmp (b . foobar ()) . reverse ())"
+            ),
+            quote! {#expr}.to_string()
+        );
+    }
+
+    #[test]
+    fn test_fields_cmp_4() {
+        let expr = fields_cmp(
+            &syn::parse_str::<syn::Type>("Record").unwrap(),
+            [
+                Directed::Descending("foo"),
+                Directed::Descending("bar"),
+                Directed::Descending("foobar"),
+            ],
+        );
+        assert_eq!(
+            concat!(
+                "| a : & Record , b : & Record | a . foo () . cmp (b . foo ()) . reverse ()",
+                " . then_with (| | a . bar () . cmp (b . bar ()) . reverse ())",
+                " . then_with (| | a . foobar () . cmp (b . foobar ()) . reverse ())"
+            ),
+            quote! {#expr}.to_string()
+        );
+    }
+
+    #[test]
+    fn test_fields_cmp_ab_1() {
+        let expr = fields_cmp_ab(
+            &syn::parse_str::<syn::Type>("A").unwrap(),
+            ["foo_a"],
+            &syn::parse_str::<syn::Type>("B").unwrap(),
+            ["foo_b"],
+        );
+        assert_eq!(
+            "| a : & A , b : & B | a . foo_a () . cmp (b . foo_b ())",
+            quote! {#expr}.to_string()
+        );
+    }
+
+    #[test]
+    fn test_fields_cmp_ab_2() {
+        let expr = fields_cmp_ab(
+            &syn::parse_str::<syn::Type>("A").unwrap(),
+            ["foo_a", "bar_a"],
+            &syn::parse_str::<syn::Type>("B").unwrap(),
+            ["foo_b", "bar_b"],
+        );
+        assert_eq!(
+            concat!(
+                "| a : & A , b : & B | a . foo_a () . cmp (b . foo_b ())",
+                " . then_with (| | a . bar_a () . cmp (b . bar_b ()))"
+            ),
+            quote! {#expr}.to_string()
+        );
+    }
+
+    #[test]
+    fn test_fields_cmp_ab_3() {
+        let expr = fields_cmp_ab(
+            &syn::parse_str::<syn::Type>("A").unwrap(),
+            ["foo_a", "bar_a", "foobar_a"],
+            &syn::parse_str::<syn::Type>("B").unwrap(),
+            ["foo_b", "bar_b", "foobar_b"],
+        );
+        assert_eq!(
+            concat!(
+                "| a : & A , b : & B | a . foo_a () . cmp (b . foo_b ())",
+                " . then_with (| | a . bar_a () . cmp (b . bar_b ()))",
+                " . then_with (| | a . foobar_a () . cmp (b . foobar_b ()))"
+            ),
+            quote! {#expr}.to_string()
+        );
+    }
 }
