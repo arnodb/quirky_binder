@@ -3,6 +3,7 @@ use datapet::{
         function::{
             produce::function_produce,
             terminate::function_terminate,
+            update::function_update,
         },
         group::group,
         sort::sub_sort,
@@ -32,6 +33,21 @@ use datapet::{
       )
     - group(group_field: "group", fields: ["num"])
     - sub_sort(path_fields: ["group"], fields: ["num"])
+    - function_update(
+        body: r#"
+            input.inspect(move |group_record| {
+                let mut prev_num = None;
+                for record in group_record.group().iter() {
+                    if let Some(prev_num) = prev_num {
+                        assert_le!(prev_num, *record.num());
+                    }
+                    prev_num = Some(*record.num());
+                }
+                Ok(())
+            })
+"#,
+      )
+    - sub_sort(path_fields: ["group"], fields: [Descending("num")])
     - function_terminate(
         body: r#"
             let mut read = 0;
@@ -39,7 +55,7 @@ use datapet::{
                 let mut prev_num = None;
                 for record in group_record.group().iter() {
                     if let Some(prev_num) = prev_num {
-                        assert_le!(prev_num, *record.num());
+                        assert_ge!(prev_num, *record.num());
                     }
                     prev_num = Some(*record.num());
                     read += 1;
