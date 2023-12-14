@@ -32,7 +32,7 @@ impl Join {
         name: FullyQualifiedName,
         inputs: [NodeStream; 2],
         params: JoinParams,
-    ) -> Self {
+    ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
         let joined_fields =
@@ -106,7 +106,7 @@ impl Join {
 
         let outputs = streams.build();
 
-        Self {
+        Ok(Self {
             name,
             inputs,
             outputs,
@@ -121,7 +121,7 @@ impl Join {
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
             joined_fields,
-        }
+        })
     }
 }
 
@@ -240,6 +240,6 @@ pub fn join<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 2],
     params: JoinParams,
-) -> Join {
+) -> ChainResult<Join> {
     Join::new(graph, name, inputs, params)
 }

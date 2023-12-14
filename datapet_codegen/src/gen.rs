@@ -126,7 +126,7 @@ fn dtpt_graph_definition(
             name: FullyQualifiedName,
             inputs: [NodeStream; #input_count],
             #params_type_name { #(#params,)* }: #params_type_name,
-        ) -> NodeCluster<#input_count, #output_count> {
+        ) -> ChainResult<NodeCluster<#input_count, #output_count>> {
 
             #setup_handlebars
 
@@ -134,12 +134,12 @@ fn dtpt_graph_definition(
 
             let outputs = [#(#outputs.clone(),)*];
 
-            NodeCluster::new(
+            Ok(NodeCluster::new(
                 name,
                 vec![#(Box::new(#ordered_var_names),)*],
                 inputs,
                 outputs,
-            )
+            ))
         }
     }
 }
@@ -156,18 +156,18 @@ fn dtpt_graph(graph: &Graph, id: usize, error_emitter: &mut DtptErrorEmitter) ->
         pub fn #name<R: TypeResolver + Copy>(
             graph: &mut GraphBuilder<R>,
             name: FullyQualifiedName,
-        ) -> NodeCluster<0, 0> {
+        ) -> ChainResult<NodeCluster<0, 0>> {
             let handlebars = Handlebars::new();
             let handlebars_data = BTreeMap::<&str, &str>::new();
 
             #body
 
-            NodeCluster::new(
+            Ok(NodeCluster::new(
                 name.sub(stringify!(#name)),
                 vec![#(Box::new(#ordered_var_names),)*],
                 [],
                 [],
-            )
+            ))
         }
     }
 }
@@ -398,7 +398,7 @@ fn dtpt_stream_lines<'a>(
                                 [#(#inputs,)*],
                                 graph.params().from_ron_str(&ron_params_str).expect("params"),
                             )
-                        };
+                        }?;
                     });
                     ordered_var_names.push(var_name.clone());
                     go_back_on_unstarted = true;
@@ -509,7 +509,7 @@ pub(crate) fn generate_module(
         quote! {
             pub fn dtpt_main<R>(
                 mut graph: GraphBuilder<R>,
-            ) -> Graph
+            ) -> ChainResult<Graph>
             where
                 R: TypeResolver + Copy,
             {
@@ -519,20 +519,20 @@ pub(crate) fn generate_module(
                 let root = FullyQualifiedName::default();
 
                 let entry_nodes: Vec<Box<dyn DynNode>> = vec![
-                    #(Box::new(__dtpt_private::#main_names(&mut graph, root)),)*
+                    #(Box::new(__dtpt_private::#main_names(&mut graph, root)?),)*
                 ];
-                graph.build(entry_nodes)
+                Ok(graph.build(entry_nodes))
             }
 
             pub fn dtpt_generate<R, NGB>(
                 out_dir: &Path,
                 new_graph_builder: NGB,
-            ) -> Result<(), std::io::Error>
+            ) -> Result<(), GraphGenerationError>
             where
                 R: TypeResolver + Copy,
                 NGB: Fn() -> GraphBuilder<R>,
             {
-                let graph = dtpt_main(new_graph_builder());
+                let graph = dtpt_main(new_graph_builder())?;
 
                 graph.generate(out_dir)?;
 

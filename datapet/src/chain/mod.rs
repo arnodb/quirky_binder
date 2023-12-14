@@ -4,6 +4,12 @@ use itertools::Itertools;
 use proc_macro2::TokenStream;
 use std::{collections::HashMap, ops::Deref};
 
+use self::error::ChainError;
+
+pub mod error;
+
+pub type ChainResult<T> = Result<T, ChainError>;
+
 #[derive(Debug)]
 struct ChainThread {
     id: usize,

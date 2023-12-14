@@ -105,7 +105,8 @@ use datapet::{
     let graph = dtpt_main(GraphBuilder::new(
         &type_resolver,
         ChainCustomizer::default(),
-    ));
+    ))
+    .unwrap();
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
     graph.generate(Path::new(&out_dir)).unwrap();

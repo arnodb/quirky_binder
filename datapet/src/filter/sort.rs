@@ -25,7 +25,7 @@ impl Sort {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SortParams,
-    ) -> Self {
+    ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
@@ -34,7 +34,7 @@ impl Sort {
                 facts_proof.order_facts_updated().distinct_facts_updated()
             });
         let outputs = streams.build();
-        Self {
+        Ok(Self {
             name,
             inputs,
             outputs,
@@ -43,7 +43,7 @@ impl Sort {
                 .iter()
                 .map(|field| field.as_ref().map(ToString::to_string))
                 .collect::<Vec<_>>(),
-        }
+        })
     }
 }
 
@@ -89,7 +89,7 @@ pub fn sort<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SortParams,
-) -> Sort {
+) -> ChainResult<Sort> {
     Sort::new(graph, name, inputs, params)
 }
 
@@ -119,7 +119,7 @@ impl SubSort {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SubSortParams,
-    ) -> Self {
+    ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         let path_sub_stream =
             streams
@@ -146,7 +146,7 @@ impl SubSort {
 
         let outputs = streams.build();
 
-        Self {
+        Ok(Self {
             name,
             inputs,
             outputs,
@@ -161,7 +161,7 @@ impl SubSort {
                 .iter()
                 .map(|field| field.as_ref().map(ToString::to_string))
                 .collect::<Vec<_>>(),
-        }
+        })
     }
 }
 
@@ -226,6 +226,6 @@ pub fn sub_sort<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubSortParams,
-) -> SubSort {
+) -> ChainResult<SubSort> {
     SubSort::new(graph, name, inputs, params)
 }

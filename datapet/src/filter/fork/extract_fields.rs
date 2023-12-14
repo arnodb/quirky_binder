@@ -24,7 +24,7 @@ impl ExtractFields {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: ExtractFieldsParams,
-    ) -> Self {
+    ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("extracted", graph);
 
@@ -61,11 +61,11 @@ impl ExtractFields {
 
         let outputs = streams.build();
 
-        Self {
+        Ok(Self {
             name,
             inputs,
             outputs,
-        }
+        })
     }
 }
 
@@ -140,6 +140,6 @@ pub fn extract_fields<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: ExtractFieldsParams,
-) -> ExtractFields {
+) -> ChainResult<ExtractFields> {
     ExtractFields::new(graph, name, inputs, params)
 }

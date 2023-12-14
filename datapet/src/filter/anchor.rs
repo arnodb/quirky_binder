@@ -25,7 +25,7 @@ impl Anchor {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: AnchorParams,
-    ) -> Self {
+    ) -> ChainResult<Self> {
         let anchor_table_id = graph.new_anchor_table();
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
@@ -48,12 +48,12 @@ impl Anchor {
 
         let outputs = streams.build();
 
-        Self {
+        Ok(Self {
             name,
             inputs,
             outputs,
             anchor_field: params.anchor_field.to_string(),
-        }
+        })
     }
 }
 
@@ -108,6 +108,6 @@ pub fn anchor<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: AnchorParams,
-) -> Anchor {
+) -> ChainResult<Anchor> {
     Anchor::new(graph, name, inputs, params)
 }

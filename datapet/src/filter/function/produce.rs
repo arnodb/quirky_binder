@@ -29,7 +29,7 @@ impl FunctionProduce {
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
         params: FunctionProduceParams,
-    ) -> Self {
+    ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_main_stream(graph);
 
@@ -53,7 +53,7 @@ impl FunctionProduce {
 
         let outputs = streams.build();
 
-        Self {
+        Ok(Self {
             name,
             inputs,
             outputs,
@@ -63,7 +63,7 @@ impl FunctionProduce {
                 .map(|(name, r#type)| ((*name).to_owned(), (*r#type).to_owned()))
                 .collect(),
             body: params.body.to_owned(),
-        }
+        })
     }
 }
 
@@ -126,6 +126,6 @@ pub fn function_produce<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 0],
     params: FunctionProduceParams,
-) -> FunctionProduce {
+) -> ChainResult<FunctionProduce> {
     FunctionProduce::new(graph, name, inputs, params)
 }

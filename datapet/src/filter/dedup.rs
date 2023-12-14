@@ -16,7 +16,7 @@ impl Dedup {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
-    ) -> Self {
+    ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
@@ -25,11 +25,11 @@ impl Dedup {
                 facts_proof.order_facts_updated().distinct_facts_updated()
             });
         let outputs = streams.build();
-        Self {
+        Ok(Self {
             name,
             inputs,
             outputs,
-        }
+        })
     }
 }
 
@@ -77,6 +77,6 @@ pub fn dedup<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: (),
-) -> Dedup {
+) -> ChainResult<Dedup> {
     Dedup::new(graph, name, inputs, params)
 }

@@ -27,7 +27,7 @@ impl Unwrap {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: UnwrapParams,
-    ) -> Self {
+    ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
         streams
@@ -72,7 +72,7 @@ impl Unwrap {
 
         let outputs = streams.build();
 
-        Self {
+        Ok(Self {
             name,
             inputs,
             outputs,
@@ -82,7 +82,7 @@ impl Unwrap {
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
             skip_nones: params.skip_nones,
-        }
+        })
     }
 }
 
@@ -172,6 +172,6 @@ pub fn unwrap<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: UnwrapParams,
-) -> Unwrap {
+) -> ChainResult<Unwrap> {
     Unwrap::new(graph, name, inputs, params)
 }

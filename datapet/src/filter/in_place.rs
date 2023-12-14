@@ -21,7 +21,7 @@ impl InPlaceFilter {
         inputs: [NodeStream; 1],
         break_order_fact_at: &[&str],
         break_distinct_fact_for: Option<&[&str]>,
-    ) -> Self {
+    ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
@@ -33,11 +33,11 @@ impl InPlaceFilter {
                 facts_proof.order_facts_updated().distinct_facts_updated()
             });
         let outputs = streams.build();
-        Self {
+        Ok(Self {
             name,
             inputs,
             outputs,
-        }
+        })
     }
 
     fn gen_chain<B>(&self, node: &dyn DynNode, graph: &Graph, chain: &mut Chain, body: B)
@@ -162,9 +162,15 @@ pub mod string {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: InplaceStringParams,
-    ) -> ToLowercase {
-        ToLowercase {
-            in_place: InPlaceFilter::new(graph, name, inputs, &params.fields, Some(&params.fields)),
+    ) -> ChainResult<ToLowercase> {
+        Ok(ToLowercase {
+            in_place: InPlaceFilter::new(
+                graph,
+                name,
+                inputs,
+                &params.fields,
+                Some(&params.fields),
+            )?,
             fields: params
                 .fields
                 .iter()
@@ -172,7 +178,7 @@ pub mod string {
                 .map(Into::into)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
-        }
+        })
     }
 
     pub struct ReverseChars {
@@ -223,15 +229,15 @@ pub mod string {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: InplaceStringParams,
-    ) -> ReverseChars {
-        ReverseChars {
+    ) -> ChainResult<ReverseChars> {
+        Ok(ReverseChars {
             in_place: InPlaceFilter::new(
                 graph,
                 name,
                 inputs,
                 /* TODO nice to have: change order direction */ &params.fields,
                 None,
-            ),
+            )?,
             fields: params
                 .fields
                 .iter()
@@ -239,6 +245,6 @@ pub mod string {
                 .map(Into::into)
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
-        }
+        })
     }
 }

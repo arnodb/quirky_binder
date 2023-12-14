@@ -31,7 +31,7 @@ impl Group {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: GroupParams,
-    ) -> Group {
+    ) -> ChainResult<Group> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("group", graph);
 
@@ -105,7 +105,7 @@ impl Group {
 
         let outputs = streams.build();
 
-        Group {
+        Ok(Group {
             name: name.clone(),
             inputs,
             outputs,
@@ -116,7 +116,7 @@ impl Group {
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
-        }
+        })
     }
 }
 
@@ -216,7 +216,7 @@ pub fn group<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: GroupParams,
-) -> Group {
+) -> ChainResult<Group> {
     Group::new(graph, name, inputs, params)
 }
 
@@ -247,7 +247,7 @@ impl SubGroup {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SubGroupParams,
-    ) -> SubGroup {
+    ) -> ChainResult<SubGroup> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("group", graph);
 
@@ -373,7 +373,7 @@ impl SubGroup {
 
         let outputs = streams.build();
 
-        SubGroup {
+        Ok(SubGroup {
             name: name.clone(),
             inputs,
             outputs,
@@ -385,7 +385,7 @@ impl SubGroup {
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
-        }
+        })
     }
 }
 
@@ -561,6 +561,6 @@ pub fn sub_group<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubGroupParams,
-) -> SubGroup {
+) -> ChainResult<SubGroup> {
     SubGroup::new(graph, name, inputs, params)
 }

@@ -6,6 +6,8 @@ extern crate derive_new;
 extern crate getset;
 #[macro_use]
 extern crate quote;
+#[macro_use]
+extern crate thiserror;
 
 pub mod chain;
 pub mod drawing;

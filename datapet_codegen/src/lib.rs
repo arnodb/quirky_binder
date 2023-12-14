@@ -82,7 +82,7 @@ impl ModuleCode {
         let code = &self.code;
         let main_generate = code.as_ref().map(|_| {
             quote! {
-                let graph = dtpt_main(new_graph_builder(&[#(#path),*]));
+                let graph = dtpt_main(new_graph_builder(&[#(#path),*]))?;
 
                 graph.generate(out_dir)?;
             }
@@ -132,7 +132,7 @@ impl ModuleCode {
             pub fn dtpt_generate_deep<R, NGB>(
                 out_dir: &Path,
                 new_graph_builder: NGB,
-            ) -> Result<(), std::io::Error>
+            ) -> Result<(), GraphGenerationError>
             where
                 R: TypeResolver + Copy,
                 NGB: Fn(&[&str]) -> GraphBuilder<R> + Copy,
@@ -141,7 +141,10 @@ impl ModuleCode {
 
                 #all_chains_generate
 
-                #(#sub_generates)*
+                #(
+                    #sub_generates
+
+                )*
 
                 Ok(())
             }
@@ -195,7 +198,7 @@ impl ModuleCode {
             }
         });
         quote! {{
-            let mut file = File::create(out_dir.join("all_chains.rs")).unwrap();
+            let mut file = File::create(out_dir.join("all_chains.rs"))?;
 
             #local
 

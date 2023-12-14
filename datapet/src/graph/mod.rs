@@ -16,6 +16,7 @@ use std::{
 use truc::record::definition::{DatumId, RecordDefinition};
 
 pub mod builder;
+pub mod error;
 pub mod node;
 
 pub struct Graph {

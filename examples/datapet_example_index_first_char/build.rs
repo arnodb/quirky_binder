@@ -23,7 +23,7 @@ impl Tokenize {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
-    ) -> Self {
+    ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
         streams
@@ -43,11 +43,11 @@ impl Tokenize {
 
         let outputs = streams.build();
 
-        Self {
+        Ok(Self {
             name,
             inputs,
             outputs,
-        }
+        })
     }
 }
 
@@ -87,7 +87,7 @@ pub fn tokenize<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: (),
-) -> Tokenize {
+) -> ChainResult<Tokenize> {
     Tokenize::new(graph, name, inputs, params)
 }
 
@@ -163,7 +163,8 @@ use super::tokenize;
     let graph = dtpt_main(GraphBuilder::new(
         &type_resolver,
         ChainCustomizer::default(),
-    ));
+    ))
+    .unwrap();
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
     graph.generate(Path::new(&out_dir)).unwrap();

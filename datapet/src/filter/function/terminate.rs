@@ -25,13 +25,13 @@ impl FunctionTerminate {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: FunctionTerminateParams,
-    ) -> Self {
-        Self {
+    ) -> ChainResult<Self> {
+        Ok(Self {
             name,
             inputs,
             outputs: [],
             body: params.body.to_owned(),
-        }
+        })
     }
 }
 
@@ -85,6 +85,6 @@ pub fn function_terminate<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: FunctionTerminateParams,
-) -> FunctionTerminate {
+) -> ChainResult<FunctionTerminate> {
     FunctionTerminate::new(graph, name, inputs, params)
 }
