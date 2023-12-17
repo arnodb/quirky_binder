@@ -21,3 +21,5 @@ syn = { version = "1", features = ["full"] }
 thiserror = "1"
 truc = { git = "https://github.com/arnodb/truc.git" }
 which = "4"
+# because of msrv, via "which"
+home = "=0.5.5"

@@ -38,9 +38,7 @@ pub fn use_declaration(input: &str) -> SpannedResult<&str, UseDeclaration> {
         ts(keyword("use")),
         cut(terminated(use_tree, ps(token(";")))),
     )
-    .map(|use_tree| UseDeclaration {
-        use_tree: use_tree.into(),
-    })
+    .map(|use_tree| UseDeclaration { use_tree })
     .parse(input)
 }
 
@@ -115,10 +113,10 @@ pub fn graph_definition_signature(input: &str) -> SpannedResult<&str, GraphDefin
     ))
     .map(
         |(inputs, name, (params, outputs))| GraphDefinitionSignature {
-            inputs: inputs.map(|inputs| inputs.into_iter().map(Into::into).collect()),
-            name: name.into(),
-            params: params.into_iter().map(Into::into).collect(),
-            outputs: outputs.map(|outputs| outputs.into_iter().map(|s| (*s).into()).collect()),
+            inputs,
+            name,
+            params,
+            outputs,
         },
     )
     .parse(input)
@@ -173,11 +171,10 @@ fn opened_stream_line(input: &str) -> SpannedResult<&str, StreamLine> {
                 ts(stream_line_filter),
                 alt((
                     terminated(tag("-"), ps(peek(tag(")"))))
-                        .map(|main_output: &str| Some(StreamLineOutput::Main(main_output.into()))),
+                        .map(|main_output: &str| Some(StreamLineOutput::Main(main_output))),
                     preceded(
                         tag("-"),
                         ps(preceded(tag(">"), cut(ds(identifier))))
-                            .map(Into::into)
                             .map(StreamLineOutput::Named)
                             .map(Some),
                     ),
@@ -203,8 +200,8 @@ fn stream_line_inputs(input: &str) -> SpannedResult<&str, Vec<StreamLineInput>> 
     .map(|(main_input, (main_stream, extra_streams))| {
         assemble_inputs(
             main_input.map_or_else(
-                || StreamLineInput::Main(main_stream.into()),
-                |main_input| StreamLineInput::Named(main_input.into()),
+                || StreamLineInput::Main(main_stream),
+                StreamLineInput::Named,
             ),
             extra_streams,
         )
@@ -216,7 +213,7 @@ fn stream_line_inputs(input: &str) -> SpannedResult<&str, Vec<StreamLineInput>> 
 fn stream_line_filter(input: &str) -> SpannedResult<&str, ConnectedFilter> {
     pair(filter_input_streams, ps(filter))
         .map(|((main_stream, extra_streams), filter)| ConnectedFilter {
-            inputs: assemble_inputs(StreamLineInput::Main(main_stream.into()), extra_streams),
+            inputs: assemble_inputs(StreamLineInput::Main(main_stream), extra_streams),
             filter,
         })
         .parse(input)
@@ -236,12 +233,10 @@ pub fn filter(input: &str) -> SpannedResult<&str, Filter> {
         ps(opt_streams1),
     ))
     .map(|(name, alias, params, extra_streams)| Filter {
-        name: name.into(),
-        alias: alias.map(Into::into),
-        params: params.into(),
-        extra_outputs: extra_streams.map_or_else(Vec::new, |extra_outputs| {
-            extra_outputs.into_iter().map(Into::into).collect()
-        }),
+        name,
+        alias,
+        params,
+        extra_outputs: extra_streams.unwrap_or_default(),
     })
     .parse(input)
 }
@@ -638,10 +633,10 @@ mod tests {
         assert_eq!(
             signature,
             GraphDefinitionSignature {
-                inputs: Some(vec!["a".into(), "b".into()]),
-                name: "foo_123".into(),
-                params: vec!["foo".into(), "bar".into()],
-                outputs: Some(vec!["c".into()]),
+                inputs: Some(vec!["a", "b"]),
+                name: "foo_123",
+                params: vec!["foo", "bar"],
+                outputs: Some(vec!["c"]),
             }
         );
     }

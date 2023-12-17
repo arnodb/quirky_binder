@@ -119,9 +119,7 @@ where
     match_token!(lexer, Token::Use, SpannedErrorKind::Token("use"))?;
     let use_tree = use_tree(lexer)?;
     match_token!(lexer, Token::SemiColon, SpannedErrorKind::Token(";"))?;
-    Ok(UseDeclaration {
-        use_tree: use_tree.into(),
-    })
+    Ok(UseDeclaration { use_tree })
 }
 
 pub fn use_tree<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<&'a str, SpannedError<&'a str>>
@@ -218,10 +216,10 @@ where
     let params = params(lexer)?;
     let outputs = opt_streams0(lexer)?;
     Ok(GraphDefinitionSignature {
-        inputs: inputs.map(|inputs| inputs.into_iter().map(Into::into).collect()),
-        name: name.into(),
-        params: params.into_iter().map(Into::into).collect(),
-        outputs: outputs.map(|outputs| outputs.into_iter().map(|s| (*s).into()).collect()),
+        inputs,
+        name,
+        params,
+        outputs,
     })
 }
 
@@ -296,12 +294,12 @@ where
         match lexer.tokens().peek_amount(2) {
             [Some(Token::Dash(_)), Some(Token::CloseBracket(_))] => {
                 let main_output = lexer.tokens().next().unwrap().as_str();
-                break Some(StreamLineOutput::Main(main_output.into()));
+                break Some(StreamLineOutput::Main(main_output));
             }
             [Some(Token::Dash(_)), Some(Token::CloseAngle(_))] => {
                 lexer.tokens().next().unwrap();
                 lexer.tokens().next().unwrap();
-                break Some(StreamLineOutput::Named(identifier(lexer)?.into()));
+                break Some(StreamLineOutput::Named(identifier(lexer)?));
             }
             [Some(Token::CloseBracket(_)), _] => {
                 break None;
@@ -331,8 +329,8 @@ where
     let (main_stream, extra_streams) = filter_input_streams(lexer)?;
     Ok(assemble_inputs(
         main_input.map_or_else(
-            || StreamLineInput::Main(main_stream.into()),
-            |main_input| StreamLineInput::Named(main_input.into()),
+            || StreamLineInput::Main(main_stream),
+            StreamLineInput::Named,
         ),
         extra_streams,
     ))
@@ -347,7 +345,7 @@ where
     let (main_stream, extra_streams) = filter_input_streams(lexer)?;
     let filter = filter(lexer)?;
     Ok(ConnectedFilter {
-        inputs: assemble_inputs(StreamLineInput::Main(main_stream.into()), extra_streams),
+        inputs: assemble_inputs(StreamLineInput::Main(main_stream), extra_streams),
         filter,
     })
 }
@@ -377,12 +375,10 @@ where
     let params = filter_params(lexer)?;
     let extra_streams = opt_streams1(lexer)?;
     Ok(Filter {
-        name: name.into(),
-        alias: alias.map(Into::into),
-        params: params.into(),
-        extra_outputs: extra_streams.map_or_else(Vec::new, |extra_outputs| {
-            extra_outputs.into_iter().map(Into::into).collect()
-        }),
+        name,
+        alias,
+        params,
+        extra_outputs: extra_streams.unwrap_or_default(),
     })
 }
 

@@ -27,7 +27,7 @@ pub(crate) fn codegen_parse_module<'a>(
 }
 
 fn dtpt_use_declaration(use_declaration: &UseDeclaration) -> TokenStream {
-    let use_tree: syn::UseTree = syn::parse_str(&use_declaration.use_tree).expect("use expr");
+    let use_tree: syn::UseTree = syn::parse_str(use_declaration.use_tree).expect("use expr");
     quote! {
         use #use_tree;
     }
@@ -79,7 +79,7 @@ fn dtpt_graph_definition(
         Some(outputs) => {
             if main_stream.is_none() {
                 error_emitter.emit_error(
-                    &graph_definition.signature.name,
+                    graph_definition.signature.name,
                     "main stream not found".into(),
                 );
             }
@@ -338,7 +338,7 @@ fn dtpt_stream_lines<'a>(
                 while let Some((filter_index, filter)) = flow_line_iter.filter_iter.peek() {
                     let filter_index = *filter_index;
                     let var_name = &var_names[&(flow_line_index, filter_index)];
-                    let name: syn::Path = syn::parse_str(&filter.filter.name).expect("filter name");
+                    let name: syn::Path = syn::parse_str(filter.filter.name).expect("filter name");
                     let inputs = filter
                         .inputs
                         .iter()
@@ -356,9 +356,7 @@ fn dtpt_stream_lines<'a>(
                                 match named_streams.try_connect_stream(name) {
                                     Ok(tokens) => Some(tokens),
                                     Err(ConnectError::NotFound) => {
-                                        flow_line_iter
-                                            .missing_inputs
-                                            .insert(name.clone().into_owned());
+                                        flow_line_iter.missing_inputs.insert((*name).to_owned());
                                         None
                                     }
                                     Err(ConnectError::AlreadyConnected) => {
@@ -387,7 +385,7 @@ fn dtpt_stream_lines<'a>(
                         let output_index = extra_output_index + 1;
                         let tokens = quote! { #var_name.outputs()[#output_index].clone() };
                         named_streams.new_stream(extra_output, tokens, error_emitter);
-                        new_named_streams.insert(extra_output.clone().into_owned());
+                        new_named_streams.insert((*extra_output).to_owned());
                     }
                     body.push(quote! {
                         let #var_name = {
@@ -421,7 +419,7 @@ fn dtpt_stream_lines<'a>(
                                 },
                                 StreamLineOutput::Named(output) => {
                                     named_streams.new_stream(output, tokens, error_emitter);
-                                    new_named_streams.insert(output.clone().into_owned());
+                                    new_named_streams.insert((*output).to_owned());
                                 }
                             }
                         }
@@ -454,7 +452,7 @@ fn dtpt_stream_lines<'a>(
         if blocked {
             for iter in &mut flow_line_iters {
                 if let Some(filter) = iter.filter_iter.peek() {
-                    error_emitter.emit_error(&filter.1.filter.name, "Unresolved inputs".into());
+                    error_emitter.emit_error(filter.1.filter.name, "Unresolved inputs".into());
                 }
             }
             break;

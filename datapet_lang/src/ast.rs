@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 #[derive(Debug)]
 pub struct Module<'a> {
     pub items: Vec<ModuleItem<'a>>,
@@ -32,7 +30,7 @@ impl<'a> From<Graph<'a>> for ModuleItem<'a> {
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct UseDeclaration<'a> {
-    pub use_tree: Cow<'a, str>,
+    pub use_tree: &'a str,
 }
 
 #[derive(Debug)]
@@ -44,10 +42,10 @@ pub struct GraphDefinition<'a> {
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct GraphDefinitionSignature<'a> {
-    pub inputs: Option<Vec<Cow<'a, str>>>,
-    pub name: Cow<'a, str>,
-    pub params: Vec<Cow<'a, str>>,
-    pub outputs: Option<Vec<Cow<'a, str>>>,
+    pub inputs: Option<Vec<&'a str>>,
+    pub name: &'a str,
+    pub params: Vec<&'a str>,
+    pub outputs: Option<Vec<&'a str>>,
 }
 
 #[derive(Debug)]
@@ -64,22 +62,22 @@ pub struct ConnectedFilter<'a> {
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct Filter<'a> {
-    pub name: Cow<'a, str>,
-    pub alias: Option<Cow<'a, str>>,
-    pub params: Cow<'a, str>,
-    pub extra_outputs: Vec<Cow<'a, str>>,
+    pub name: &'a str,
+    pub alias: Option<&'a str>,
+    pub params: &'a str,
+    pub extra_outputs: Vec<&'a str>,
 }
 
 #[derive(Debug)]
 pub enum StreamLineInput<'a> {
-    Main(Cow<'a, str>),
-    Named(Cow<'a, str>),
+    Main(&'a str),
+    Named(&'a str),
 }
 
 #[derive(Debug)]
 pub enum StreamLineOutput<'a> {
-    Main(Cow<'a, str>),
-    Named(Cow<'a, str>),
+    Main(&'a str),
+    Named(&'a str),
 }
 
 #[derive(Debug)]
