@@ -1,3 +1,10 @@
+use std::{cell::RefCell, collections::BTreeMap};
+
+use truc::record::{
+    definition::{DatumDefinition, DatumId, RecordDefinitionBuilder, RecordVariantId},
+    type_resolver::TypeResolver,
+};
+
 use super::{
     add_vec_datum_to_record_definition, break_distinct_fact_for, break_distinct_fact_for_ids,
     break_order_fact_at, break_order_fact_at_ids, replace_vec_datum_in_record_definition,
@@ -6,11 +13,6 @@ use super::{
 use crate::{
     prelude::*,
     stream::{NodeSubStream, StreamFacts},
-};
-use std::{cell::RefCell, collections::BTreeMap};
-use truc::record::{
-    definition::{DatumDefinition, DatumId, RecordDefinitionBuilder, RecordVariantId},
-    type_resolver::TypeResolver,
 };
 
 #[derive(Getters, CopyGetters)]
@@ -66,9 +68,9 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
         sub_stream: NodeSubStream,
         graph: &'g GraphBuilder<R>,
         build: B,
-    ) -> NodeSubStream
+    ) -> ChainResult<NodeSubStream>
     where
-        B: FnOnce(&mut Self, &mut SubStreamBuilderForUpdate<'g, R>),
+        B: FnOnce(&mut Self, &mut SubStreamBuilderForUpdate<'g, R>) -> ChainResult<()>,
     {
         let record_definition = graph
             .get_stream(sub_stream.record_type())
@@ -81,8 +83,8 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
             sub_streams,
             facts,
         };
-        build(self, &mut builder);
-        builder.close_record_variant()
+        build(self, &mut builder)?;
+        Ok(builder.close_record_variant())
     }
 
     pub fn update_path<UpdateLeafSubStream, UpdatePathStream, UpdateRootStream>(
@@ -92,15 +94,19 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
         update_path_stream: UpdatePathStream,
         update_root_stream: UpdateRootStream,
         graph: &'g GraphBuilder<R>,
-    ) -> Vec<PathUpdateElement>
+    ) -> ChainResult<Vec<PathUpdateElement>>
     where
         UpdateLeafSubStream: for<'c, 'd> FnOnce(
             NodeSubStream,
             &mut OutputBuilderForUpdate<'c, 'd, 'g, R>,
-        ) -> NodeSubStream,
-        UpdatePathStream: Fn(&str, &mut SubStreamBuilderForUpdate<'g, R>, NodeSubStream),
-        UpdateRootStream:
-            for<'c, 'd> FnOnce(&str, &mut OutputBuilderForUpdate<'c, 'd, 'g, R>, NodeSubStream),
+        ) -> ChainResult<NodeSubStream>,
+        UpdatePathStream:
+            Fn(&str, &mut SubStreamBuilderForUpdate<'g, R>, NodeSubStream) -> ChainResult<()>,
+        UpdateRootStream: for<'c, 'd> FnOnce(
+            &str,
+            &mut OutputBuilderForUpdate<'c, 'd, 'g, R>,
+            NodeSubStream,
+        ) -> ChainResult<()>,
     {
         struct PathFieldDetails<'a> {
             stream: NodeSubStream,
@@ -161,7 +167,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
 
         // Then update the leaf sub stream
         let mut sub_input_stream = Some(leaf_sub_input_stream.clone());
-        let mut sub_output_stream = Some(update_leaf_sub_stream(leaf_sub_input_stream, self));
+        let mut sub_output_stream = Some(update_leaf_sub_stream(leaf_sub_input_stream, self)?);
 
         // Then all streams up to the root
         let mut path_update_streams = Vec::<PathUpdateElement>::with_capacity(path_fields.len());
@@ -186,9 +192,10 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
                     field_details.stream.clone(),
                     graph,
                     |_, path_stream| {
-                        update_path_stream(field_details.field, path_stream, sub_stream);
+                        update_path_stream(field_details.field, path_stream, sub_stream)?;
+                        Ok(())
                     },
-                );
+                )?;
 
                 sub_input_stream = Some(field_details.stream);
                 sub_output_stream = Some(updated_stream);
@@ -206,13 +213,13 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
                 sub_input_stream: sub_input_stream.take().expect("sub_input_stream"),
                 sub_output_stream: sub_stream.clone(),
             });
-            update_root_stream(root_field, self, sub_stream);
+            update_root_stream(root_field, self, sub_stream)?;
         }
 
         // They were pushed in reverse order
         path_update_streams.reverse();
 
-        path_update_streams
+        Ok(path_update_streams)
     }
 
     pub fn add_vec_datum(&mut self, field: &str, record: &str, sub_stream: NodeSubStream) {

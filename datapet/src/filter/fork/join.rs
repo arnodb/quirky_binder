@@ -1,10 +1,11 @@
+use serde::Deserialize;
+use truc::record::type_resolver::TypeResolver;
+
 use crate::{
     graph::builder::{assert_directed_order_starts_with, assert_distinct_eq},
     prelude::*,
     support::cmp::fields_cmp_ab,
 };
-use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -99,11 +100,11 @@ impl Join {
                         .collect::<Vec<String>>();
 
                     // XXX That is actually not true, let's see what we can do later.
-                    facts_proof
+                    Ok(facts_proof
                         .order_facts_updated()
                         .distinct_facts_updated()
-                        .with_output(joined_fields)
-                });
+                        .with_output(joined_fields))
+                })?;
 
         let outputs = streams.build();
 

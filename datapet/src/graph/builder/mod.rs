@@ -1,18 +1,20 @@
-use self::{
-    params::ParamsBuilder, pass_through::OutputBuilderForPassThrough,
-    update::OutputBuilderForUpdate,
-};
-use crate::prelude::*;
-use itertools::Itertools;
 use std::{
     cell::RefCell,
     collections::{btree_map::Entry, BTreeMap, BTreeSet},
     ops::Deref,
 };
+
+use itertools::Itertools;
 use truc::record::{
     definition::{DatumDefinitionOverride, DatumId, RecordDefinitionBuilder, RecordVariantId},
     type_resolver::TypeResolver,
 };
+
+use self::{
+    params::ParamsBuilder, pass_through::OutputBuilderForPassThrough,
+    update::OutputBuilderForUpdate,
+};
+use crate::prelude::*;
 
 pub mod params;
 pub mod pass_through;
@@ -69,7 +71,10 @@ impl<R: TypeResolver + Copy> GraphBuilder<R> {
         let def = self.get_stream(stream.record_type()).expect("def").borrow();
         for field in fields {
             def.get_current_datum_definition_by_name(field)
-                .ok_or_else(|| ChainError::FieldNotFound((*field).to_owned(), trace()))?;
+                .ok_or_else(|| ChainError::FieldNotFound {
+                    field: (*field).to_owned(),
+                    trace: trace(),
+                })?;
         }
         Ok(())
     }
@@ -88,7 +93,10 @@ impl<R: TypeResolver + Copy> GraphBuilder<R> {
             let def = self.get_stream(stream.record_type()).expect("def").borrow();
             let datum = def
                 .get_current_datum_definition_by_name(path_fields[0])
-                .ok_or_else(|| ChainError::FieldNotFound(path_fields[0].to_owned(), trace()))?;
+                .ok_or_else(|| ChainError::FieldNotFound {
+                    field: path_fields[0].to_owned(),
+                    trace: trace(),
+                })?;
             let s = &stream.sub_streams()[&datum.id()];
             let def = self.get_stream(s.record_type()).expect("def").borrow();
             (s, def)
@@ -96,13 +104,19 @@ impl<R: TypeResolver + Copy> GraphBuilder<R> {
         for field in &path_fields[1..] {
             let datum = def
                 .get_current_datum_definition_by_name(field)
-                .ok_or_else(|| ChainError::FieldNotFound((*field).to_owned(), trace()))?;
+                .ok_or_else(|| ChainError::FieldNotFound {
+                    field: (*field).to_owned(),
+                    trace: trace(),
+                })?;
             s = &s.sub_streams()[&datum.id()];
             def = self.get_stream(s.record_type()).expect("def").borrow();
         }
         for field in fields {
             def.get_current_datum_definition_by_name(field)
-                .ok_or_else(|| ChainError::FieldNotFound((*field).to_owned(), trace()))?;
+                .ok_or_else(|| ChainError::FieldNotFound {
+                    field: (*field).to_owned(),
+                    trace: trace(),
+                })?;
         }
         Ok(())
     }
@@ -253,12 +267,12 @@ pub struct OutputBuilder<'a, 'b, 'g, R: TypeResolver> {
 }
 
 impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
-    pub fn update<B, O>(self, build: B) -> O
+    pub fn update<B, O>(self, build: B) -> ChainResult<O>
     where
         B: FnOnce(
             &mut OutputBuilderForUpdate<'a, 'b, 'g, R>,
             NoFactsUpdated<()>,
-        ) -> FactsFullyUpdated<O>,
+        ) -> ChainResult<FactsFullyUpdated<O>>,
     {
         let mut builder = OutputBuilderForUpdate {
             streams: self.streams,
@@ -270,9 +284,9 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
             is_output_main_stream: self.is_output_main_stream,
             facts: self.facts,
         };
-        let output = build(&mut builder, NoFactsUpdated(()));
+        let output = build(&mut builder, NoFactsUpdated(()))?;
         builder.build();
-        output.unwrap()
+        Ok(output.unwrap())
     }
 
     pub fn pass_through<B, O>(self, build: B) -> O
@@ -424,13 +438,17 @@ where
     facts.break_order_at_ids(&datum_ids);
 }
 
-pub fn assert_undirected_order_starts_with<R: TypeResolver>(
+pub fn check_undirected_order_starts_with<R, TRACE>(
     expected_order: &[DatumId],
     actual_order: &[Directed<DatumId>],
     record_definition: &RecordDefinitionBuilder<R>,
-    filter_name: &FullyQualifiedName,
     more_info: &str,
-) {
+    trace: TRACE,
+) -> ChainResult<()>
+where
+    R: TypeResolver,
+    TRACE: Fn() -> Trace<'static>,
+{
     assert!(expected_order.iter().all_unique());
 
     let is_ok = if actual_order.len() >= expected_order.len() {
@@ -451,19 +469,27 @@ pub fn assert_undirected_order_starts_with<R: TypeResolver>(
     };
 
     if !is_ok {
-        let expected = expected_order
-            .iter()
-            .map(|d| record_definition[*d].name())
-            .join(", ");
-        let actual = actual_order
-            .iter()
-            .map(|d| d.as_ref().map(|d| record_definition[*d].name()))
-            .join(", ");
-        panic!(
-            "Filter {} ({}) expected order to ensure data is ordered by [{}], but order is [{}]",
-            filter_name, more_info, expected, actual
-        );
+        let expected = "[".to_string()
+            + &expected_order
+                .iter()
+                .map(|d| record_definition[*d].name())
+                .join(", ")
+            + "]";
+        let actual = "[".to_string()
+            + &actual_order
+                .iter()
+                .map(|d| d.as_ref().map(|d| record_definition[*d].name()))
+                .join(", ")
+            + "]";
+        return Err(ChainError::ExpectedMinimalOrder {
+            more_info: more_info.to_owned(),
+            expected,
+            actual,
+            trace: trace(),
+        });
     }
+
+    Ok(())
 }
 
 pub fn assert_directed_order_starts_with<R: TypeResolver>(

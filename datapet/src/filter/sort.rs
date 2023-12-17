@@ -1,6 +1,7 @@
-use crate::{prelude::*, support::cmp::fields_cmp, trace_element};
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+use crate::{prelude::*, support::cmp::fields_cmp, trace_element};
 
 const SORT_TRACE_NAME: &str = "sort";
 
@@ -38,6 +39,7 @@ impl Sort {
                 .collect::<Vec<&str>>(),
             || trace.sub(trace_element!(SORT_TRACE_NAME)).to_owned(),
         )?;
+
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
@@ -146,6 +148,7 @@ impl SubSort {
                 .collect::<Vec<&str>>(),
             || trace.sub(trace_element!(SUB_SORT_TRACE_NAME)).to_owned(),
         )?;
+
         let mut streams = StreamsBuilder::new(&name, &inputs);
         let path_sub_stream =
             streams

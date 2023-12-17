@@ -1,7 +1,8 @@
-use crate::prelude::*;
 use datapet_support::AnchorId;
 use serde::Deserialize;
 use truc::record::{definition::DatumDefinitionOverride, type_resolver::TypeResolver};
+
+use crate::prelude::*;
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -44,8 +45,8 @@ impl Anchor {
                         allow_uninit: Some(true),
                     },
                 );
-                facts_proof.order_facts_updated().distinct_facts_updated()
-            });
+                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+            })?;
 
         let outputs = streams.build();
 

@@ -1,10 +1,14 @@
-use crate::{
-    graph::builder::assert_undirected_order_starts_with,
-    prelude::*,
-    support::eq::{fields_eq, fields_eq_ab},
-};
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+use crate::{
+    graph::builder::check_undirected_order_starts_with,
+    prelude::*,
+    support::eq::{fields_eq, fields_eq_ab},
+    trace_element,
+};
+
+const GROUP_TRACE_NAME: &str = "group";
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -31,8 +35,14 @@ impl Group {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: GroupParams,
-        _trace: Trace,
+        trace: Trace,
     ) -> ChainResult<Group> {
+        graph.check_stream_fields(
+            &inputs[0],
+            &params.fields.iter().copied().collect::<Vec<&str>>(),
+            || trace.sub(trace_element!(GROUP_TRACE_NAME)).to_owned(),
+        )?;
+
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("group", graph);
 
@@ -62,13 +72,13 @@ impl Group {
                             }
                         }
 
-                        assert_undirected_order_starts_with(
+                        check_undirected_order_starts_with(
                             &group_by_datum_ids,
                             output_stream.facts().order(),
                             &*output_stream_def,
-                            &name,
                             "main stream",
-                        );
+                            || trace.sub(trace_element!(GROUP_TRACE_NAME)).to_owned(),
+                        )?;
 
                         for datum in &group_data {
                             group_stream_def.copy_datum(datum);
@@ -98,11 +108,11 @@ impl Group {
                     output_stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
                     output_stream.set_distinct_fact_ids(group_by_datum_ids);
 
-                    facts_proof
+                    Ok(facts_proof
                         .order_facts_updated()
                         .distinct_facts_updated()
-                        .with_output(group_stream)
-                });
+                        .with_output(group_stream))
+                })?;
 
         let outputs = streams.build();
 
@@ -222,6 +232,8 @@ pub fn group<R: TypeResolver + Copy>(
     Group::new(graph, name, inputs, params, trace)
 }
 
+const SUB_GROUP_TRACE_NAME: &str = "sub_group";
+
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct SubGroupParams<'a> {
@@ -249,8 +261,15 @@ impl SubGroup {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SubGroupParams,
-        _trace: Trace,
+        trace: Trace,
     ) -> ChainResult<SubGroup> {
+        graph.check_sub_stream_fields(
+            &inputs[0],
+            &params.path_fields.iter().copied().collect::<Vec<&str>>(),
+            &params.fields.iter().copied().collect::<Vec<&str>>(),
+            || trace.sub(trace_element!(SUB_GROUP_TRACE_NAME)).to_owned(),
+        )?;
+
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("group", graph);
 
@@ -299,13 +318,17 @@ impl SubGroup {
                                             }
                                         }
 
-                                        assert_undirected_order_starts_with(
+                                        check_undirected_order_starts_with(
                                             &group_by_datum_ids,
                                             sub_output_stream.facts().order(),
                                             &output_stream_def,
-                                            &name,
                                             "main sub stream",
-                                        );
+                                            || {
+                                                trace
+                                                    .sub(trace_element!(GROUP_TRACE_NAME))
+                                                    .to_owned()
+                                            },
+                                        )?;
 
                                         for datum in &group_data {
                                             group_stream_def.copy_datum(datum);
@@ -338,6 +361,8 @@ impl SubGroup {
                                     output_stream
                                         .break_order_fact_at_ids(group_datum_ids.iter().cloned());
                                     output_stream.set_distinct_fact_ids(group_by_datum_ids);
+
+                                    Ok(())
                                 },
                             )
                         },
@@ -352,6 +377,7 @@ impl SubGroup {
                                 group_variant_id = sub_output_stream.variant_id(),
                             );
                             path_stream.replace_vec_datum(field, record, sub_output_stream);
+                            Ok(())
                         },
                         |field: &str, output_stream, sub_output_stream| {
                             let module_name = graph
@@ -364,15 +390,16 @@ impl SubGroup {
                                 group_variant_id = sub_output_stream.variant_id(),
                             );
                             output_stream.replace_vec_datum(field, record, sub_output_stream);
+                            Ok(())
                         },
                         graph,
-                    );
+                    )?;
 
-                    facts_proof
+                    Ok(facts_proof
                         .order_facts_updated()
                         .distinct_facts_updated()
-                        .with_output(path_streams)
-                });
+                        .with_output(path_streams))
+                })?;
 
         let outputs = streams.build();
 

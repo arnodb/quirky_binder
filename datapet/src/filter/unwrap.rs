@@ -1,6 +1,7 @@
-use crate::prelude::*;
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+use crate::prelude::*;
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -68,8 +69,8 @@ impl Unwrap {
                     output_stream_def.remove_datum(datum_id);
                     output_stream_def.add_dynamic_datum(field, type_name);
                 }
-                facts_proof.order_facts_updated().distinct_facts_updated()
-            });
+                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+            })?;
 
         let outputs = streams.build();
 

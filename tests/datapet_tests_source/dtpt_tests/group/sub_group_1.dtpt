@@ -1,0 +1,65 @@
+use datapet::{
+    filter::{
+        function::{
+            produce::function_produce,
+            terminate::function_terminate,
+            update::function_update,
+        },
+        group::{group, sub_group},
+        sort::{sort, sub_sort},
+    },
+};
+
+{
+  (
+      function_produce(
+        fields: [("num", "u8"), ("lsb2", "u8"), ("lsb4", "u8")],
+        body: r#"{
+            use rand::Rng;
+            use rand_chacha::rand_core::SeedableRng;
+
+            let mut rng = rand_chacha::ChaCha8Rng::from_entropy();
+            println!("Seed: {:02x?}", rng.get_seed());
+
+            for _ in 0..1024 {
+                let num: u8 = rng.gen();
+
+                let record = new_record(num, num & 0x03, num & 0x0f);
+                output.send(Some(record))?;
+            }
+            output.send(None)?;
+            Ok(())
+        }"#,
+      )
+    - sort(fields: ["lsb2"])
+    - group(group_field: "group", fields: ["num", "lsb4"])
+    - sub_sort(path_fields: ["group"], fields: ["lsb4"])
+    - sub_group(path_fields: ["group"], group_field: "sub_group", fields: ["num"])
+    - function_terminate(
+        body: r#"
+            use std::collections::BTreeSet;
+
+            let mut read = 0;
+            let mut seen2 = BTreeSet::<u8>::new();
+            while let Some(group_record) = input.next()? {
+                let lsb2 = *group_record.lsb2();
+                assert!(!seen2.contains(&lsb2), "Already seen lsb2 {}", lsb2);
+                seen2.insert(lsb2);
+                let mut seen4 = BTreeSet::<u8>::new();
+                for sub_group_record in group_record.group().iter() {
+                    let lsb4 = *sub_group_record.lsb4();
+                    assert!(!seen4.contains(&lsb4), "Already seen lsb2 {} lsb4 {}", lsb2, lsb4);
+                    seen4.insert(lsb4);
+                    for record in sub_group_record.sub_group().iter() {
+                        assert_eq!(lsb2, record.num() & 0x03, "lsb2");
+                        assert_eq!(lsb4, record.num() & 0x0f, "lsb4");
+                        read += 1;
+                    }
+                }
+            }
+            assert_eq!(1024, read);
+            Ok(())
+"#,
+      )
+  )
+}

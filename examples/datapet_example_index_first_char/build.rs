@@ -3,9 +3,9 @@ extern crate getset;
 #[macro_use]
 extern crate quote;
 
-use datapet::dtpt;
-use datapet::prelude::*;
 use std::path::Path;
+
+use datapet::{dtpt, prelude::*};
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
 
 #[derive(Getters)]
@@ -39,8 +39,8 @@ impl Tokenize {
                 output_stream_def.remove_datum(datum_id);
                 output_stream_def.add_datum::<Box<str>, _>("word");
                 output_stream_def.add_datum::<char, _>("first_char");
-                facts_proof.order_facts_updated().distinct_facts_updated()
-            });
+                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+            })?;
 
         let outputs = streams.build();
 
