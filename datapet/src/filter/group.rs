@@ -1,5 +1,7 @@
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
+use truc::record::{definition::DatumId, type_resolver::TypeResolver};
 
 use crate::{
     graph::builder::check_undirected_order_starts_with,
@@ -50,7 +52,7 @@ impl Group {
             streams
                 .output_from_input(0, true, graph)
                 .update(|output_stream, facts_proof| {
-                    let group_stream = output_stream.new_named_sub_stream("group", graph);
+                    let mut group_stream = output_stream.new_named_sub_stream("group", graph);
                     let variant_id = output_stream.input_variant_id();
 
                     let (group_by_datum_ids, group_datum_ids) = {
@@ -80,16 +82,34 @@ impl Group {
                             || trace.sub(trace_element!(GROUP_TRACE_NAME)).to_owned(),
                         )?;
 
+                        let mut map = BTreeMap::<DatumId, DatumId>::new();
                         for datum in &group_data {
-                            group_stream_def.copy_datum(datum);
+                            let new_id = group_stream_def.copy_datum(datum);
+                            map.insert(datum.id(), new_id);
                         }
                         for datum_id in &group_datum_ids {
                             output_stream_def.remove_datum(*datum_id);
                         }
 
+                        let group_order = output_stream.facts().order()[group_by_datum_ids.len()..]
+                            .iter()
+                            .map(|d| d.map(|d| map[&d]))
+                            .collect::<Vec<_>>();
+                        group_stream.facts_mut().set_order(group_order);
+                        let group_distinct = output_stream
+                            .facts()
+                            .distinct()
+                            .iter()
+                            .filter_map(|d| map.get(d).copied())
+                            .collect::<Vec<_>>();
+                        group_stream.facts_mut().set_distinct(group_distinct);
+
                         (group_by_datum_ids, group_datum_ids)
                     };
-                    let group_stream = group_stream.close_record_variant();
+
+                    let group_stream = group_stream.close_record_variant(
+                        facts_proof.order_facts_updated().distinct_facts_updated(),
+                    );
 
                     let module_name = graph
                         .chain_customizer()
@@ -285,8 +305,8 @@ impl SubGroup {
                             output_stream.update_sub_stream(
                                 sub_input_stream,
                                 graph,
-                                |output_stream, sub_output_stream| {
-                                    let group_stream =
+                                |output_stream, sub_output_stream, facts_proof| {
+                                    let mut group_stream =
                                         output_stream.new_named_sub_stream("group", graph);
                                     let variant_id = sub_output_stream.input_variant_id();
 
@@ -330,17 +350,35 @@ impl SubGroup {
                                             },
                                         )?;
 
+                                        let mut map = BTreeMap::<DatumId, DatumId>::new();
                                         for datum in &group_data {
-                                            group_stream_def.copy_datum(datum);
+                                            let new_id = group_stream_def.copy_datum(datum);
+                                            map.insert(datum.id(), new_id);
                                         }
                                         for datum_id in &group_datum_ids {
                                             output_stream_def.remove_datum(*datum_id);
                                         }
 
+                                        let group_order = sub_output_stream.facts().order()
+                                            [group_by_datum_ids.len()..]
+                                            .iter()
+                                            .map(|d| d.map(|d| map[&d]))
+                                            .collect::<Vec<_>>();
+                                        group_stream.facts_mut().set_order(group_order);
+                                        let group_distinct = sub_output_stream
+                                            .facts()
+                                            .distinct()
+                                            .iter()
+                                            .filter_map(|d| map.get(d).copied())
+                                            .collect::<Vec<_>>();
+                                        group_stream.facts_mut().set_distinct(group_distinct);
+
                                         (group_by_datum_ids, group_datum_ids)
                                     };
 
-                                    let group_stream = group_stream.close_record_variant();
+                                    let group_stream = group_stream.close_record_variant(
+                                        facts_proof.order_facts_updated().distinct_facts_updated(),
+                                    );
 
                                     let module_name = graph
                                         .chain_customizer()
@@ -358,15 +396,15 @@ impl SubGroup {
 
                                     created_group_stream = Some(group_stream);
 
-                                    output_stream
+                                    sub_output_stream
                                         .break_order_fact_at_ids(group_datum_ids.iter().cloned());
-                                    output_stream.set_distinct_fact_ids(group_by_datum_ids);
+                                    sub_output_stream.set_distinct_fact_ids(group_by_datum_ids);
 
-                                    Ok(())
+                                    Ok(facts_proof.order_facts_updated().distinct_facts_updated())
                                 },
                             )
                         },
-                        |field: &str, path_stream, sub_output_stream| {
+                        |field: &str, path_stream, sub_output_stream, facts_proof| {
                             let module_name = graph
                                 .chain_customizer()
                                 .streams_module_name
@@ -377,7 +415,7 @@ impl SubGroup {
                                 group_variant_id = sub_output_stream.variant_id(),
                             );
                             path_stream.replace_vec_datum(field, record, sub_output_stream);
-                            Ok(())
+                            Ok(facts_proof.order_facts_updated().distinct_facts_updated())
                         },
                         |field: &str, output_stream, sub_output_stream| {
                             let module_name = graph

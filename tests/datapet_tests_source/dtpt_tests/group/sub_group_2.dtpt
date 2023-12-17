@@ -32,11 +32,9 @@ use datapet::{
             Ok(())
         }"#,
       )
-    - sort(fields: ["lsb2"])
+    - sort(fields: ["lsb2", "lsb4", "lsb6"])
     - group(group_field: "group", fields: ["num", "lsb4", "lsb6"])
-    - sub_sort(path_fields: ["group"], fields: ["lsb4"])
     - sub_group(path_fields: ["group"], group_field: "sub_group", fields: ["num", "lsb6"])
-    - sub_sort(path_fields: ["group", "sub_group"], fields: ["lsb6"])
     - sub_group(path_fields: ["group", "sub_group"], group_field: "sub_sub_group", fields: ["num"])
     - debug()
     - function_terminate(

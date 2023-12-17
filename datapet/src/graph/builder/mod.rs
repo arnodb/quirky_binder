@@ -314,6 +314,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct NoFactsUpdated<O>(O);
 
 impl<O> NoFactsUpdated<O> {

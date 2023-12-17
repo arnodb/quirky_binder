@@ -9,6 +9,7 @@ use super::{
     add_vec_datum_to_record_definition, break_distinct_fact_for, break_distinct_fact_for_ids,
     break_order_fact_at, break_order_fact_at_ids, replace_vec_datum_in_record_definition,
     set_distinct_fact, set_distinct_fact_all_fields, set_distinct_fact_ids, set_order_fact,
+    FactsFullyUpdated, NoFactsUpdated,
 };
 use crate::{
     prelude::*,
@@ -70,7 +71,11 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
         build: B,
     ) -> ChainResult<NodeSubStream>
     where
-        B: FnOnce(&mut Self, &mut SubStreamBuilderForUpdate<'g, R>) -> ChainResult<()>,
+        B: FnOnce(
+            &mut Self,
+            &mut SubStreamBuilderForUpdate<'g, R>,
+            NoFactsUpdated<()>,
+        ) -> ChainResult<FactsFullyUpdated<()>>,
     {
         let record_definition = graph
             .get_stream(sub_stream.record_type())
@@ -83,8 +88,8 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
             sub_streams,
             facts,
         };
-        build(self, &mut builder)?;
-        Ok(builder.close_record_variant())
+        let facts = build(self, &mut builder, NoFactsUpdated(()))?;
+        Ok(builder.close_record_variant(facts))
     }
 
     pub fn update_path<UpdateLeafSubStream, UpdatePathStream, UpdateRootStream>(
@@ -100,8 +105,12 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
             NodeSubStream,
             &mut OutputBuilderForUpdate<'c, 'd, 'g, R>,
         ) -> ChainResult<NodeSubStream>,
-        UpdatePathStream:
-            Fn(&str, &mut SubStreamBuilderForUpdate<'g, R>, NodeSubStream) -> ChainResult<()>,
+        UpdatePathStream: Fn(
+            &str,
+            &mut SubStreamBuilderForUpdate<'g, R>,
+            NodeSubStream,
+            NoFactsUpdated<()>,
+        ) -> ChainResult<FactsFullyUpdated<()>>,
         UpdateRootStream: for<'c, 'd> FnOnce(
             &str,
             &mut OutputBuilderForUpdate<'c, 'd, 'g, R>,
@@ -191,9 +200,13 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
                 let updated_stream = self.update_sub_stream(
                     field_details.stream.clone(),
                     graph,
-                    |_, path_stream| {
-                        update_path_stream(field_details.field, path_stream, sub_stream)?;
-                        Ok(())
+                    |_, path_stream, facts_proof| {
+                        update_path_stream(
+                            field_details.field,
+                            path_stream,
+                            sub_stream,
+                            facts_proof,
+                        )
                     },
                 )?;
 
@@ -319,7 +332,7 @@ pub struct PathUpdateElement {
     pub sub_output_stream: NodeSubStream,
 }
 
-#[derive(Getters, CopyGetters)]
+#[derive(Getters, CopyGetters, MutGetters)]
 pub struct SubStreamBuilderForUpdate<'g, R: TypeResolver> {
     #[getset(get = "pub")]
     record_type: StreamRecordType,
@@ -327,7 +340,7 @@ pub struct SubStreamBuilderForUpdate<'g, R: TypeResolver> {
     record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
     input_variant_id: Option<RecordVariantId>,
     sub_streams: BTreeMap<DatumId, NodeSubStream>,
-    #[getset(get = "pub")]
+    #[getset(get = "pub", get_mut = "pub")]
     facts: StreamFacts,
 }
 
@@ -368,7 +381,21 @@ impl<'g, R: TypeResolver> SubStreamBuilderForUpdate<'g, R> {
         }
     }
 
-    pub fn close_record_variant(self) -> NodeSubStream {
+    pub fn break_order_fact_at_ids<I>(&mut self, datum_ids: I)
+    where
+        I: IntoIterator<Item = DatumId>,
+    {
+        break_order_fact_at_ids(&mut self.facts, datum_ids);
+    }
+
+    pub fn set_distinct_fact_ids<I>(&mut self, distinct_datum_ids: I)
+    where
+        I: IntoIterator<Item = DatumId>,
+    {
+        set_distinct_fact_ids(&mut self.facts, distinct_datum_ids);
+    }
+
+    pub fn close_record_variant(self, _facts: FactsFullyUpdated<()>) -> NodeSubStream {
         let variant_id = self.record_definition.borrow_mut().close_record_variant();
         NodeSubStream::new(self.record_type, variant_id, self.sub_streams, self.facts)
     }

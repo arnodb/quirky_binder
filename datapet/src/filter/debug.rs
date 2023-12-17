@@ -1,4 +1,4 @@
-use truc::record::{definition::DatumId, type_resolver::TypeResolver};
+use truc::record::{definition::DatumDefinition, type_resolver::TypeResolver};
 
 use crate::prelude::*;
 
@@ -34,7 +34,7 @@ impl Debug {
                 }
                 fn debug_sub_stream<R: TypeResolver + Copy>(
                     depth: usize,
-                    datum_id: DatumId,
+                    datum: &DatumDefinition,
                     sub_stream: &NodeSubStream,
                     graph: &GraphBuilder<R>,
                 ) {
@@ -43,7 +43,7 @@ impl Debug {
                         .unwrap_or_else(|| panic!(r#"stream "{}""#, sub_stream.record_type()))
                         .borrow();
                     indent(depth);
-                    eprintln!("--- Datum {}:", datum_id);
+                    eprintln!("--- Datum {}:", datum.name());
                     for d in def.get_current_data() {
                         indent(depth);
                         eprintln!("    {:?}", def.get_datum_definition(d).expect("datum"));
@@ -51,11 +51,21 @@ impl Debug {
                     indent(depth);
                     eprintln!("    {:?}", sub_stream.facts());
                     for (&datum_id, sub_stream) in sub_stream.sub_streams().iter() {
-                        debug_sub_stream(depth + 1, datum_id, sub_stream, graph);
+                        debug_sub_stream(
+                            depth + 1,
+                            def.get_datum_definition(datum_id).expect("datum"),
+                            sub_stream,
+                            graph,
+                        );
                     }
                 }
                 for (&datum_id, sub_stream) in builder.sub_streams().iter() {
-                    debug_sub_stream(1, datum_id, sub_stream, graph);
+                    debug_sub_stream(
+                        1,
+                        def.get_datum_definition(datum_id).expect("datum"),
+                        sub_stream,
+                        graph,
+                    );
                 }
                 facts_proof.order_facts_updated().distinct_facts_updated()
             });
