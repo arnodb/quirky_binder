@@ -16,6 +16,7 @@ impl Accumulate {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
+        _trace: Trace,
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
@@ -69,6 +70,7 @@ pub fn accumulate<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: (),
+    trace: Trace,
 ) -> ChainResult<Accumulate> {
-    Accumulate::new(graph, name, inputs, params)
+    Accumulate::new(graph, name, inputs, params, trace)
 }

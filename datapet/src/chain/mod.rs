@@ -1,8 +1,9 @@
 use crate::prelude::*;
 use codegen::{Module, Scope};
+use datapet_lang::location::Location;
 use itertools::Itertools;
 use proc_macro2::TokenStream;
-use std::{collections::HashMap, ops::Deref};
+use std::{borrow::Cow, collections::HashMap, fmt::Display, ops::Deref};
 
 use self::error::ChainError;
 
@@ -640,4 +641,78 @@ impl Drop for ImportScope {
     fn drop(&mut self) {
         assert!(self.used);
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Trace<'a> {
+    elements: Vec<TraceElement<'a>>,
+}
+
+impl<'a> Trace<'a> {
+    pub fn root() -> Self {
+        Trace {
+            elements: Vec::new(),
+        }
+    }
+
+    pub fn sub(&self, element: TraceElement<'a>) -> Self {
+        Self {
+            elements: Some(element)
+                .into_iter()
+                .chain(self.elements.iter().cloned())
+                .collect(),
+        }
+    }
+
+    pub fn to_owned(&self) -> Trace<'static> {
+        Trace {
+            elements: self.elements.iter().map(TraceElement::to_owned).collect(),
+        }
+    }
+}
+
+impl<'a> Display for Trace<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for (index, element) in self.elements.iter().enumerate() {
+            f.write_fmt(format_args!("{:4}: {}", index, element))?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, new)]
+pub struct TraceElement<'a> {
+    source: Cow<'a, str>,
+    name: Cow<'a, str>,
+    location: Location,
+}
+
+impl<'a> TraceElement<'a> {
+    pub fn to_owned(&self) -> TraceElement<'static> {
+        TraceElement {
+            source: self.source.clone().into_owned().into(),
+            name: self.name.clone().into_owned().into(),
+            location: self.location,
+        }
+    }
+}
+
+impl<'a> Display for TraceElement<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "{}\n             at {}:{}:{}\n",
+            self.name, self.source, self.location.line, self.location.col
+        ))
+    }
+}
+
+#[macro_export]
+macro_rules! trace_element {
+    ($name:expr) => {
+        TraceElement::new(
+            std::file!().into(),
+            ($name).into(),
+            datapet_lang::location::Location::new(std::line!() as usize, std::column!() as usize),
+        )
+    };
 }

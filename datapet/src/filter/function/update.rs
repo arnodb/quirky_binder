@@ -25,6 +25,7 @@ impl FunctionUpdate {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: FunctionUpdateParams,
+        _trace: Trace,
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
@@ -71,6 +72,7 @@ pub fn function_update<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: FunctionUpdateParams,
+    trace: Trace,
 ) -> ChainResult<FunctionUpdate> {
-    FunctionUpdate::new(graph, name, inputs, params)
+    FunctionUpdate::new(graph, name, inputs, params, trace)
 }

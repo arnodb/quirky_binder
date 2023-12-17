@@ -111,7 +111,9 @@ use datapet::{
         &type_resolver,
         ChainCustomizer::default(),
     ))
-    .unwrap();
+    .unwrap_or_else(|err| {
+        panic!("{}", err);
+    });
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
     graph.generate(Path::new(&out_dir)).unwrap();

@@ -27,6 +27,7 @@ impl Unwrap {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: UnwrapParams,
+        _trace: Trace,
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
@@ -172,6 +173,7 @@ pub fn unwrap<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: UnwrapParams,
+    trace: Trace,
 ) -> ChainResult<Unwrap> {
-    Unwrap::new(graph, name, inputs, params)
+    Unwrap::new(graph, name, inputs, params, trace)
 }

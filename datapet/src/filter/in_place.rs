@@ -21,6 +21,7 @@ impl InPlaceFilter {
         inputs: [NodeStream; 1],
         break_order_fact_at: &[&str],
         break_distinct_fact_for: Option<&[&str]>,
+        _trace: Trace,
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
@@ -162,6 +163,7 @@ pub mod string {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: InplaceStringParams,
+        trace: Trace,
     ) -> ChainResult<ToLowercase> {
         Ok(ToLowercase {
             in_place: InPlaceFilter::new(
@@ -170,6 +172,7 @@ pub mod string {
                 inputs,
                 &params.fields,
                 Some(&params.fields),
+                trace,
             )?,
             fields: params
                 .fields
@@ -229,6 +232,7 @@ pub mod string {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: InplaceStringParams,
+        trace: Trace,
     ) -> ChainResult<ReverseChars> {
         Ok(ReverseChars {
             in_place: InPlaceFilter::new(
@@ -237,6 +241,7 @@ pub mod string {
                 inputs,
                 /* TODO nice to have: change order direction */ &params.fields,
                 None,
+                trace,
             )?,
             fields: params
                 .fields

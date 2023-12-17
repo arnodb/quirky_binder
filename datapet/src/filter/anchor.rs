@@ -25,6 +25,7 @@ impl Anchor {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: AnchorParams,
+        _trace: Trace,
     ) -> ChainResult<Self> {
         let anchor_table_id = graph.new_anchor_table();
 
@@ -108,6 +109,7 @@ pub fn anchor<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: AnchorParams,
+    trace: Trace,
 ) -> ChainResult<Anchor> {
-    Anchor::new(graph, name, inputs, params)
+    Anchor::new(graph, name, inputs, params, trace)
 }

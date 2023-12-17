@@ -142,7 +142,7 @@ fn dtpt_1(input: proc_macro::TokenStream, datapet_crate: &Ident) -> proc_macro::
 
     match def {
         Definition::Inline { dtpt } => {
-            let result = parse_and_generate_module(&dtpt, datapet_crate, &mut error_emitter);
+            let result = parse_and_generate_module(&dtpt, None, datapet_crate, &mut error_emitter);
             error_emitter.handle_codegen_result(result).into()
         }
         Definition::IncludeGlob { src, pattern, test } => {

@@ -14,6 +14,7 @@ truc_runtime = { git = "https://github.com/arnodb/truc.git" }
 
 [build-dependencies]
 datapet = { path = "../../datapet" }
+datapet_lang = { path = "../../datapet_lang" }
 handlebars = "4"
 serde = { version = "1", features = ["derive"] }
 truc = { git = "https://github.com/arnodb/truc.git" }

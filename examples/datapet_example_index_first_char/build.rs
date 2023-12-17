@@ -23,6 +23,7 @@ impl Tokenize {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
+        _trace: Trace,
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
@@ -87,8 +88,9 @@ pub fn tokenize<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: (),
+    trace: Trace,
 ) -> ChainResult<Tokenize> {
-    Tokenize::new(graph, name, inputs, params)
+    Tokenize::new(graph, name, inputs, params, trace)
 }
 
 fn main() {
@@ -164,7 +166,9 @@ use super::tokenize;
         &type_resolver,
         ChainCustomizer::default(),
     ))
-    .unwrap();
+    .unwrap_or_else(|err| {
+        panic!("{}", err);
+    });
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
     graph.generate(Path::new(&out_dir)).unwrap();

@@ -21,5 +21,7 @@ pub fn generate_tests(out_dir: &Path) {
         };
         GraphBuilder::new(&type_resolver, customizer)
     })
-    .unwrap();
+    .unwrap_or_else(|err| {
+        panic!("{}", err);
+    });
 }

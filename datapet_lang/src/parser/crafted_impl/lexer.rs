@@ -102,11 +102,12 @@ where
     }
 
     pub fn input_slice(&self, start: &'a str, end: &'a str) -> &'a str {
+        let input_start = self.input.as_ptr() as usize;
+        let input_end = input_start + self.input.len();
         let start = start.as_ptr() as usize;
         let end = end.as_ptr() as usize + end.len();
-        let input = self.input.as_ptr() as usize;
-        if start >= input && end <= input + self.input.len() {
-            &self.input[(start - input)..(end - input)]
+        if start >= input_start && end <= input_end {
+            &self.input[(start - input_start)..(end - input_start)]
         } else {
             panic!("slices out of range");
         }

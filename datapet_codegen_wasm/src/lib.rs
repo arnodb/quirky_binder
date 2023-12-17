@@ -112,12 +112,18 @@ impl Into<JsValue> for WasmError {
         serde_wasm_bindgen::to_value(&self).expect("js value")
     }
 }
+const SOURCE_FILE: &str = "input";
 
 #[wasm_bindgen]
 pub fn dtpt(input: &str) -> Result<String, WasmError> {
     utils::set_panic_hook();
     let mut error_emitter = WasmErrorEmitter { errors: Vec::new() };
-    let result = parse_and_generate_module(input, &format_ident!("datapet"), &mut error_emitter);
+    let result = parse_and_generate_module(
+        input,
+        Some(SOURCE_FILE),
+        &format_ident!("datapet"),
+        &mut error_emitter,
+    );
     let tokens = error_emitter.handle_codegen_result(result)?;
     Ok(tokens.to_string())
 }

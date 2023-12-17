@@ -1,3 +1,4 @@
+use datapet_lang::location::{Location, Span};
 use gen::{codegen_parse_module, generate_module};
 use itertools::Itertools;
 use proc_macro2::{Ident, TokenStream};
@@ -22,6 +23,7 @@ pub trait ErrorEmitter {
 
 struct DtptErrorEmitter<'a> {
     src: &'a str,
+    source_file: Option<&'a str>,
     error_emitter: &'a mut dyn ErrorEmitter,
 }
 
@@ -34,14 +36,28 @@ impl<'a> DtptErrorEmitter<'a> {
     fn error(&mut self) -> Result<(), CodegenError> {
         self.error_emitter.error()
     }
+
+    fn source_file(&self) -> Option<&'a str> {
+        self.source_file
+    }
+
+    fn part_to_location(&self, part: &'a str) -> Location {
+        let span = Span::span_of_str(self.src, part);
+        Location::from_source_and_span(self.src, span)
+    }
 }
 
 pub fn parse_and_generate_module(
     src: &str,
+    source_file: Option<&str>,
     datapet_crate: &Ident,
     error_emitter: &mut dyn ErrorEmitter,
 ) -> Result<TokenStream, CodegenError> {
-    let mut dtpt_error_emitter = DtptErrorEmitter { src, error_emitter };
+    let mut dtpt_error_emitter = DtptErrorEmitter {
+        src,
+        source_file,
+        error_emitter,
+    };
     let module = codegen_parse_module(src, &mut dtpt_error_emitter)?;
     generate_module(&module, datapet_crate, &mut dtpt_error_emitter)
 }
@@ -269,7 +285,12 @@ pub fn parse_and_generate_glob_modules(
 
         let src =
             std::fs::read_to_string(&file).map_err(|err| CodegenError::Error(err.to_string()))?;
-        match parse_and_generate_module(&src, datapet_crate, error_emitter) {
+        match parse_and_generate_module(
+            &src,
+            Some(&file.to_string_lossy()),
+            datapet_crate,
+            error_emitter,
+        ) {
             Ok(code) => {
                 tree.add(&module_components, 0, code);
             }

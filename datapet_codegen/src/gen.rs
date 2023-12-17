@@ -3,6 +3,7 @@ use datapet_lang::{
         ConnectedFilter, Graph, GraphDefinition, Module, ModuleItem, StreamLine, StreamLineInput,
         StreamLineOutput, UseDeclaration,
     },
+    location::Location,
     parser::parse_module,
 };
 use inflector::Inflector;
@@ -33,9 +34,9 @@ fn dtpt_use_declaration(use_declaration: &UseDeclaration) -> TokenStream {
     }
 }
 
-fn dtpt_graph_definition(
-    graph_definition: &GraphDefinition,
-    error_emitter: &mut DtptErrorEmitter,
+fn dtpt_graph_definition<'a>(
+    graph_definition: &'a GraphDefinition,
+    error_emitter: &mut DtptErrorEmitter<'a>,
 ) -> TokenStream {
     let name = format_ident!("{}", graph_definition.signature.name);
     let input_count = graph_definition
@@ -67,8 +68,11 @@ fn dtpt_graph_definition(
             #(#hb_params)*
         }
     };
-    let (body, ordered_var_names, main_stream, mut named_streams) =
-        dtpt_stream_lines(&graph_definition.stream_lines, error_emitter);
+    let (body, ordered_var_names, main_stream, mut named_streams) = dtpt_stream_lines(
+        graph_definition.signature.name,
+        &graph_definition.stream_lines,
+        error_emitter,
+    );
     let outputs = match graph_definition.signature.outputs.as_ref() {
         None => {
             if let Some(anchor) = main_stream.as_ref().map(|(_, anchor)| anchor) {
@@ -126,6 +130,7 @@ fn dtpt_graph_definition(
             name: FullyQualifiedName,
             inputs: [NodeStream; #input_count],
             #params_type_name { #(#params,)* }: #params_type_name,
+            trace: Trace,
         ) -> ChainResult<NodeCluster<#input_count, #output_count>> {
 
             #setup_handlebars
@@ -144,10 +149,15 @@ fn dtpt_graph_definition(
     }
 }
 
-fn dtpt_graph(graph: &Graph, id: usize, error_emitter: &mut DtptErrorEmitter) -> TokenStream {
-    let name = format_ident!("dtpt_main_{}", id);
+fn dtpt_graph<'a>(
+    graph: &'a Graph<'a>,
+    id: usize,
+    error_emitter: &mut DtptErrorEmitter<'a>,
+) -> TokenStream {
+    let name_str = format!("dtpt_main_{}", id);
+    let name = format_ident!("{}", name_str);
     let (body, ordered_var_names, main_stream, named_streams) =
-        dtpt_stream_lines(&graph.stream_lines, error_emitter);
+        dtpt_stream_lines(&name_str, &graph.stream_lines, error_emitter);
     named_streams.check_all_streams_connected(error_emitter);
     if let Some((_, anchor)) = main_stream {
         error_emitter.emit_error(anchor, "main stream cannot be connected".into());
@@ -156,6 +166,7 @@ fn dtpt_graph(graph: &Graph, id: usize, error_emitter: &mut DtptErrorEmitter) ->
         pub fn #name<R: TypeResolver + Copy>(
             graph: &mut GraphBuilder<R>,
             name: FullyQualifiedName,
+            trace: Trace,
         ) -> ChainResult<NodeCluster<0, 0>> {
             let handlebars = Handlebars::new();
             let handlebars_data = BTreeMap::<&str, &str>::new();
@@ -255,8 +266,9 @@ impl<'a> NamedStreamState<'a> {
 }
 
 fn dtpt_stream_lines<'a>(
+    caller: &str,
     stream_lines: &'a [StreamLine<'a>],
-    error_emitter: &mut DtptErrorEmitter,
+    error_emitter: &mut DtptErrorEmitter<'a>,
 ) -> (
     TokenStream,
     Vec<Ident>,
@@ -387,6 +399,15 @@ fn dtpt_stream_lines<'a>(
                         named_streams.new_stream(extra_output, tokens, error_emitter);
                         new_named_streams.insert((*extra_output).to_owned());
                     }
+                    let source = error_emitter.source_file().map_or_else(
+                        || quote! { std::file!() },
+                        |source_file| quote! { #source_file },
+                    );
+                    let filter_location = {
+                        let Location { line, col } =
+                            error_emitter.part_to_location(filter.filter.name);
+                        quote! { datapet_lang::location::Location::new(#line, #col) }
+                    };
                     body.push(quote! {
                         let #var_name = {
                             #ron_params
@@ -395,6 +416,7 @@ fn dtpt_stream_lines<'a>(
                                 name.sub(stringify!(#var_name)),
                                 [#(#inputs,)*],
                                 graph.params().from_ron_str(&ron_params_str).expect("params"),
+                                trace.sub(TraceElement::new(#source.into(), #caller.into(), #filter_location)),
                             )
                         }?;
                     });
@@ -466,10 +488,10 @@ fn dtpt_stream_lines<'a>(
     )
 }
 
-pub(crate) fn generate_module(
-    module: &Module,
+pub(crate) fn generate_module<'a>(
+    module: &'a Module<'a>,
     datapet_crate: &Ident,
-    error_emitter: &mut DtptErrorEmitter,
+    error_emitter: &mut DtptErrorEmitter<'a>,
 ) -> Result<TokenStream, CodegenError> {
     let mut graph_id = 0;
     let content = TokenStream::from_iter(module.items.iter().map(|item| match item {
@@ -516,8 +538,10 @@ pub(crate) fn generate_module(
 
                 let root = FullyQualifiedName::default();
 
+                let trace = Trace::root();
+
                 let entry_nodes: Vec<Box<dyn DynNode>> = vec![
-                    #(Box::new(__dtpt_private::#main_names(&mut graph, root)?),)*
+                    #(Box::new(__dtpt_private::#main_names(&mut graph, root, trace)?),)*
                 ];
                 Ok(graph.build(entry_nodes))
             }

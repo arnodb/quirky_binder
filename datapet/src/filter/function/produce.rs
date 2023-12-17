@@ -29,6 +29,7 @@ impl FunctionProduce {
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
         params: FunctionProduceParams,
+        _trace: Trace,
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_main_stream(graph);
@@ -126,6 +127,7 @@ pub fn function_produce<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 0],
     params: FunctionProduceParams,
+    trace: Trace,
 ) -> ChainResult<FunctionProduce> {
-    FunctionProduce::new(graph, name, inputs, params)
+    FunctionProduce::new(graph, name, inputs, params, trace)
 }

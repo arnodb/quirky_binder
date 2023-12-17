@@ -32,6 +32,7 @@ impl Join {
         name: FullyQualifiedName,
         inputs: [NodeStream; 2],
         params: JoinParams,
+        _trace: Trace,
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
@@ -240,6 +241,7 @@ pub fn join<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 2],
     params: JoinParams,
+    trace: Trace,
 ) -> ChainResult<Join> {
-    Join::new(graph, name, inputs, params)
+    Join::new(graph, name, inputs, params, trace)
 }

@@ -1,5 +1,7 @@
 pub use crate::{
-    chain::{error::ChainError, Chain, ChainCustomizer, ChainResult, ImportScope},
+    chain::{
+        error::ChainError, Chain, ChainCustomizer, ChainResult, ImportScope, Trace, TraceElement,
+    },
     graph::{
         builder::{update::PathUpdateElement, GraphBuilder, StreamsBuilder},
         error::GraphGenerationError,

@@ -16,6 +16,7 @@ impl Dedup {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
+        _trace: Trace,
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
@@ -77,6 +78,7 @@ pub fn dedup<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: (),
+    trace: Trace,
 ) -> ChainResult<Dedup> {
-    Dedup::new(graph, name, inputs, params)
+    Dedup::new(graph, name, inputs, params, trace)
 }

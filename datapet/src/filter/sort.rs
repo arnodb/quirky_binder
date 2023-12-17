@@ -1,6 +1,8 @@
-use crate::{prelude::*, support::cmp::fields_cmp};
+use crate::{prelude::*, support::cmp::fields_cmp, trace_element};
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+const SORT_TRACE_NAME: &str = "sort";
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -25,7 +27,17 @@ impl Sort {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SortParams,
+        trace: Trace,
     ) -> ChainResult<Self> {
+        graph.check_stream_fields(
+            &inputs[0],
+            &params
+                .fields
+                .iter()
+                .map(|f| **f.as_ref())
+                .collect::<Vec<&str>>(),
+            || trace.sub(trace_element!(SORT_TRACE_NAME)).to_owned(),
+        )?;
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
@@ -89,9 +101,12 @@ pub fn sort<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SortParams,
+    trace: Trace,
 ) -> ChainResult<Sort> {
-    Sort::new(graph, name, inputs, params)
+    Sort::new(graph, name, inputs, params, trace)
 }
+
+const SUB_SORT_TRACE_NAME: &str = "sub_sort";
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -119,7 +134,18 @@ impl SubSort {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SubSortParams,
+        trace: Trace,
     ) -> ChainResult<Self> {
+        graph.check_sub_stream_fields(
+            &inputs[0],
+            &params.path_fields.iter().copied().collect::<Vec<&str>>(),
+            &params
+                .fields
+                .iter()
+                .map(|f| **f.as_ref())
+                .collect::<Vec<&str>>(),
+            || trace.sub(trace_element!(SUB_SORT_TRACE_NAME)).to_owned(),
+        )?;
         let mut streams = StreamsBuilder::new(&name, &inputs);
         let path_sub_stream =
             streams
@@ -226,6 +252,7 @@ pub fn sub_sort<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubSortParams,
+    trace: Trace,
 ) -> ChainResult<SubSort> {
-    SubSort::new(graph, name, inputs, params)
+    SubSort::new(graph, name, inputs, params, trace)
 }

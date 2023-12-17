@@ -31,6 +31,7 @@ impl Group {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: GroupParams,
+        _trace: Trace,
     ) -> ChainResult<Group> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("group", graph);
@@ -216,8 +217,9 @@ pub fn group<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: GroupParams,
+    trace: Trace,
 ) -> ChainResult<Group> {
-    Group::new(graph, name, inputs, params)
+    Group::new(graph, name, inputs, params, trace)
 }
 
 #[derive(Deserialize, Debug)]
@@ -247,6 +249,7 @@ impl SubGroup {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SubGroupParams,
+        _trace: Trace,
     ) -> ChainResult<SubGroup> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("group", graph);
@@ -561,6 +564,7 @@ pub fn sub_group<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubGroupParams,
+    trace: Trace,
 ) -> ChainResult<SubGroup> {
-    SubGroup::new(graph, name, inputs, params)
+    SubGroup::new(graph, name, inputs, params, trace)
 }
