@@ -21,6 +21,7 @@ pub struct OutputBuilderForPassThrough<'a, 'b, 'g, R: TypeResolver + Copy> {
     #[getset(get_copy = "pub")]
     pub(super) record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
     pub(super) input_variant_id: RecordVariantId,
+    #[getset(get = "pub")]
     pub(super) sub_streams: BTreeMap<DatumId, NodeSubStream>,
     pub(super) source: NodeStreamSource,
     pub(super) is_output_main_stream: bool,

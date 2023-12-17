@@ -1,5 +1,6 @@
 use datapet::{
     filter::{
+        debug::debug,
         function::{
             produce::function_produce,
             terminate::function_terminate,
@@ -35,6 +36,7 @@ use datapet::{
     - group(group_field: "group", fields: ["num", "lsb4"])
     - sub_sort(path_fields: ["group"], fields: ["lsb4"])
     - sub_group(path_fields: ["group"], group_field: "sub_group", fields: ["num"])
+    - debug()
     - function_terminate(
         body: r#"
             use std::collections::BTreeSet;
