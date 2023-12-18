@@ -21,4 +21,6 @@ pub enum ChainError {
         actual: String,
         trace: Trace<'static>,
     },
+    #[error("{msg}\nstack backtrace:\n{trace}")]
+    Other { msg: String, trace: Trace<'static> },
 }

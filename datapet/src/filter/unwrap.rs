@@ -1,7 +1,9 @@
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
-use crate::prelude::*;
+use crate::{prelude::*, trace_element};
+
+const UNWRAP_TRACE_NAME: &str = "unwrap";
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -28,7 +30,7 @@ impl Unwrap {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: UnwrapParams,
-        _trace: Trace,
+        trace: Trace,
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
@@ -40,7 +42,10 @@ impl Unwrap {
                 for &field in &**params.fields {
                     let datum = output_stream_def
                         .get_variant_datum_definition_by_name(input_variant_id, field)
-                        .unwrap_or_else(|| panic!(r#"datum "{}""#, field));
+                        .ok_or_else(|| ChainError::FieldNotFound {
+                            field: (*field).to_owned(),
+                            trace: trace.sub(trace_element!(UNWRAP_TRACE_NAME)).to_owned(),
+                        })?;
                     let datum_id = datum.id();
                     let optional_type_name = datum.type_name().to_string();
                     let type_name = {
@@ -56,10 +61,13 @@ impl Unwrap {
                         match t {
                             Some(t) => t,
                             None => {
-                                panic!(
-                                    "field `{}` is not an option: {}",
-                                    field, optional_type_name
-                                );
+                                return Err(ChainError::Other {
+                                    msg: format!(
+                                        "field `{}` is not an option: {}",
+                                        field, optional_type_name
+                                    ),
+                                    trace: trace.sub(trace_element!(UNWRAP_TRACE_NAME)).to_owned(),
+                                });
                             }
                         }
                     };
