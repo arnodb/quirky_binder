@@ -14,4 +14,11 @@ pub enum ChainError {
         actual: String,
         trace: Trace<'static>,
     },
+    #[error("Expected {more_info} with distinct {expected} but found {actual}\nstack backtrace:\n{trace}")]
+    ExpectedDistinct {
+        more_info: String,
+        expected: String,
+        actual: String,
+        trace: Trace<'static>,
+    },
 }

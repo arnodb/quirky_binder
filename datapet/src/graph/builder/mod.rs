@@ -493,13 +493,17 @@ where
     Ok(())
 }
 
-pub fn assert_directed_order_starts_with<R: TypeResolver>(
+pub fn check_directed_order_starts_with<R, TRACE>(
     expected_order: &[DatumId],
     actual_order: &[Directed<DatumId>],
     record_definition: &RecordDefinitionBuilder<R>,
-    filter_name: &FullyQualifiedName,
     more_info: &str,
-) {
+    trace: TRACE,
+) -> ChainResult<()>
+where
+    R: TypeResolver,
+    TRACE: Fn() -> Trace<'static>,
+{
     assert!(expected_order.iter().all_unique());
 
     let expected_directed_order = expected_order
@@ -516,19 +520,27 @@ pub fn assert_directed_order_starts_with<R: TypeResolver>(
     };
 
     if !is_ok {
-        let expected = expected_directed_order
-            .iter()
-            .map(|d| d.as_ref().map(|d| record_definition[*d].name()))
-            .join(", ");
-        let actual = actual_order
-            .iter()
-            .map(|d| d.as_ref().map(|d| record_definition[*d].name()))
-            .join(", ");
-        panic!(
-            "Filter {} ({}) expected order to ensure data is ordered by [{}], but order is [{}]",
-            filter_name, more_info, expected, actual
-        );
+        let expected = "[".to_string()
+            + &expected_directed_order
+                .iter()
+                .map(|d| d.as_ref().map(|d| record_definition[*d].name()))
+                .join(", ")
+            + "]";
+        let actual = "[".to_string()
+            + &actual_order
+                .iter()
+                .map(|d| d.as_ref().map(|d| record_definition[*d].name()))
+                .join(", ")
+            + "]";
+        return Err(ChainError::ExpectedMinimalOrder {
+            more_info: more_info.to_owned(),
+            expected,
+            actual,
+            trace: trace(),
+        });
     }
+
+    Ok(())
 }
 
 pub fn set_distinct_fact<R: TypeResolver>(
@@ -595,13 +607,17 @@ where
     }
 }
 
-pub fn assert_distinct_eq<R: TypeResolver>(
+pub fn check_distinct_eq<R, TRACE>(
     expected_distinct: &[DatumId],
     actual_distinct: &[DatumId],
     record_definition: &RecordDefinitionBuilder<R>,
-    filter_name: &FullyQualifiedName,
     more_info: &str,
-) {
+    trace: TRACE,
+) -> ChainResult<()>
+where
+    R: TypeResolver,
+    TRACE: Fn() -> Trace<'static>,
+{
     assert!(expected_distinct.iter().all_unique());
 
     let is_ok = {
@@ -615,17 +631,25 @@ pub fn assert_distinct_eq<R: TypeResolver>(
     };
 
     if !is_ok {
-        let expected = expected_distinct
-            .iter()
-            .map(|d| record_definition[*d].name())
-            .join(", ");
-        let actual = actual_distinct
-            .iter()
-            .map(|d| record_definition[*d].name())
-            .join(", ");
-        panic!(
-            "Fitler {} ({}) expected distinct to be [{}], but is [{}]",
-            filter_name, more_info, expected, actual
-        );
+        let expected = "[".to_string()
+            + &expected_distinct
+                .iter()
+                .map(|d| record_definition[*d].name())
+                .join(", ")
+            + "]";
+        let actual = "[".to_string()
+            + &actual_distinct
+                .iter()
+                .map(|d| record_definition[*d].name())
+                .join(", ")
+            + "]";
+        return Err(ChainError::ExpectedDistinct {
+            more_info: more_info.to_owned(),
+            expected,
+            actual,
+            trace: trace(),
+        });
     }
+
+    Ok(())
 }

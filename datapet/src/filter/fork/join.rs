@@ -2,10 +2,13 @@ use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
 use crate::{
-    graph::builder::{assert_directed_order_starts_with, assert_distinct_eq},
+    graph::builder::{check_directed_order_starts_with, check_distinct_eq},
     prelude::*,
     support::cmp::fields_cmp_ab,
+    trace_element,
 };
+
+const JOIN_TRACE_NAME: &str = "join";
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -33,7 +36,7 @@ impl Join {
         name: FullyQualifiedName,
         inputs: [NodeStream; 2],
         params: JoinParams,
-        _trace: Trace,
+        trace: Trace,
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
@@ -59,20 +62,20 @@ impl Join {
                             }
                         }
 
-                        assert_directed_order_starts_with(
+                        check_directed_order_starts_with(
                             &expected_fact_fields,
                             input.facts().order(),
                             &input_stream_def,
-                            &name,
                             stream_info,
-                        );
-                        assert_distinct_eq(
+                            || trace.sub(trace_element!(JOIN_TRACE_NAME)).to_owned(),
+                        )?;
+                        check_distinct_eq(
                             &expected_fact_fields,
                             input.facts().distinct(),
                             &input_stream_def,
-                            &name,
                             stream_info,
-                        );
+                            || trace.sub(trace_element!(JOIN_TRACE_NAME)).to_owned(),
+                        )?;
                     }
 
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
@@ -148,8 +151,6 @@ impl DynNode for Join {
         let output_def = chain.stream_definition_fragments(self.outputs.single());
 
         let secondary_unpacked_record = secondary_input_def.unpacked_record();
-        let record_and_unpacked_out = output_def.record_and_unpacked_out();
-        let unpacked_record_in = output_def.unpacked_record_in();
 
         let cmp = fields_cmp_ab(
             &primary_input_def.record(),
@@ -158,18 +159,43 @@ impl DynNode for Join {
             &self.secondary_fields,
         );
 
-        let (joined_fields, joined_fields_defaults) = {
-            let names = self
-                .joined_fields
-                .iter()
-                .map(|name| format_ident!("{}", name))
-                .collect::<Vec<_>>();
-            (
-                quote!(#(#names),*),
-                // Left join.
-                // TODO: support inner join.
-                quote!(#(#names: Default::default()),*),
-            )
+        let has_joined_fields = !self.joined_fields.is_empty();
+        let build_output = if has_joined_fields {
+            let record_and_unpacked_out = output_def.record_and_unpacked_out();
+            let unpacked_record_in = output_def.unpacked_record_in();
+
+            let (joined_fields, joined_fields_defaults) = {
+                let names = self
+                    .joined_fields
+                    .iter()
+                    .map(|name| format_ident!("{}", name))
+                    .collect::<Vec<_>>();
+                (
+                    quote!(#(#names,)*),
+                    // Left join.
+                    // TODO: support inner join.
+                    quote!(#(#names: Default::default()),*),
+                )
+            };
+
+            quote! {
+                if equal {
+                    let secondary_record = secondary_record.take().expect("secondary_record");
+                    let #secondary_unpacked_record{ #joined_fields .. } = secondary_record.unpack();
+                    let #record_and_unpacked_out { record } = #record_and_unpacked_out::from((primary_record, #unpacked_record_in { #joined_fields }));
+                    tx.send(Some(record))?;
+                } else {
+                    let #record_and_unpacked_out { record } = #record_and_unpacked_out::from((primary_record, #unpacked_record_in { #joined_fields_defaults }));
+                    tx.send(Some(record))?;
+                }
+            }
+        } else {
+            quote! {
+                if equal {
+                    secondary_record.take().expect("secondary_record");
+                }
+                tx.send(Some(primary_record))?;
+            }
         };
 
         let thread_body = quote! {
@@ -208,15 +234,7 @@ impl DynNode for Join {
                             secondary_finished = true;
                         }
                     };
-                    if equal {
-                        let secondary_record = secondary_record.take().expect("secondary_record");
-                        let #secondary_unpacked_record{ #joined_fields, .. } = secondary_record.unpack();
-                        let #record_and_unpacked_out { record } = #record_and_unpacked_out::from((primary_record, #unpacked_record_in { #joined_fields }));
-                        tx.send(Some(record))?;
-                    } else {
-                        let #record_and_unpacked_out { record } = #record_and_unpacked_out::from((primary_record, #unpacked_record_in { #joined_fields_defaults }));
-                        tx.send(Some(record))?;
-                    }
+                    #build_output
                 }
 
                 if !secondary_finished {
