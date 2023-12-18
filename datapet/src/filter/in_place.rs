@@ -1,9 +1,10 @@
-use crate::prelude::*;
 use proc_macro2::TokenStream;
 use truc::record::{
     definition::{RecordDefinition, RecordVariant},
     type_resolver::TypeResolver,
 };
+
+use crate::prelude::*;
 
 #[derive(Getters)]
 struct InPlaceFilter {
@@ -95,18 +96,25 @@ impl InPlaceFilter {
                 .map(|datum| format_ident!("{}_mut", datum.name()));
             let fields = data.iter().map(|datum| format_ident!("{}", datum.name()));
             quote! {
-                #(*record.#mut_fields() = record.#fields()#transform.into();)*
+                #[allow(clippy::useless_conversion)]
+                {
+                    #(
+                        *record.#mut_fields() = record.#fields()#transform.into();
+                    )*
+                }
             }
         });
     }
 }
 
 pub mod string {
-    use super::InPlaceFilter;
-    use crate::prelude::*;
-    use serde::Deserialize;
     use std::ops::Deref;
+
+    use serde::Deserialize;
     use truc::record::type_resolver::TypeResolver;
+
+    use super::InPlaceFilter;
+    use crate::{prelude::*, trace_element};
 
     #[derive(Deserialize, Debug)]
     #[serde(deny_unknown_fields)]
@@ -114,6 +122,8 @@ pub mod string {
         #[serde(borrow)]
         fields: FieldsParam<'a>,
     }
+
+    const TO_LOWERCASE_TRACE_NAME: &str = "to_lowercase";
 
     pub struct ToLowercase {
         in_place: InPlaceFilter,
@@ -165,6 +175,15 @@ pub mod string {
         params: InplaceStringParams,
         trace: Trace,
     ) -> ChainResult<ToLowercase> {
+        graph.check_stream_fields(
+            &inputs[0],
+            &params.fields.iter().copied().collect::<Vec<&str>>(),
+            || {
+                trace
+                    .sub(trace_element!(TO_LOWERCASE_TRACE_NAME))
+                    .to_owned()
+            },
+        )?;
         Ok(ToLowercase {
             in_place: InPlaceFilter::new(
                 graph,
@@ -183,6 +202,8 @@ pub mod string {
                 .into_boxed_slice(),
         })
     }
+
+    const REVERSE_CHARS_TRACE_NAME: &str = "reverse_chars";
 
     pub struct ReverseChars {
         in_place: InPlaceFilter,
@@ -234,6 +255,15 @@ pub mod string {
         params: InplaceStringParams,
         trace: Trace,
     ) -> ChainResult<ReverseChars> {
+        graph.check_stream_fields(
+            &inputs[0],
+            &params.fields.iter().copied().collect::<Vec<&str>>(),
+            || {
+                trace
+                    .sub(trace_element!(REVERSE_CHARS_TRACE_NAME))
+                    .to_owned()
+            },
+        )?;
         Ok(ReverseChars {
             in_place: InPlaceFilter::new(
                 graph,
