@@ -9,7 +9,6 @@ members = [
     "tests/datapet_tests",
     "tests/datapet_tests_source",
     "examples/datapet_example_index_first_char",
-    "examples/datapet_example_sub_sort_sub_group",
     "examples/datapet_example_tree",
     "examples/datapet_example_wordlist",
 ]
