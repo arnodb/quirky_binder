@@ -2,9 +2,21 @@ use super::Trace;
 
 #[derive(Error, Debug)]
 pub enum ChainError {
+    #[error("Stream {stream} not found\nstack backtrace:\n{trace}")]
+    StreamNotFound {
+        stream: String,
+        trace: Trace<'static>,
+    },
     #[error("Field {field} not found\nstack backtrace:\n{trace}")]
     FieldNotFound {
         field: String,
+        trace: Trace<'static>,
+    },
+    #[error("Invalid field name {name}\nstack backtrace:\n{trace}")]
+    InvalidFieldName { name: String, trace: Trace<'static> },
+    #[error("Invalid field type {r#type_name}\nstack backtrace:\n{trace}")]
+    InvalidFieldType {
+        type_name: String,
         trace: Trace<'static>,
     },
     #[error("Expected {more_info} with minimal order {expected} but found {actual}\nstack backtrace:\n{trace}")]

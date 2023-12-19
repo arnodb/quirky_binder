@@ -5,7 +5,7 @@ use crate::{
     graph::builder::{check_directed_order_starts_with, check_distinct_eq},
     prelude::*,
     support::cmp::fields_cmp_ab,
-    trace_element,
+    trace_filter,
 };
 
 const JOIN_TRACE_NAME: &str = "join";
@@ -40,13 +40,23 @@ impl Join {
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
+        let valid_primary_fields =
+            params
+                .primary_fields
+                .validate_on_stream(&inputs[0], graph, || trace_filter!(trace, JOIN_TRACE_NAME))?;
+
+        let valid_secondary_fields =
+            params
+                .secondary_fields
+                .validate_on_stream(&inputs[1], graph, || trace_filter!(trace, JOIN_TRACE_NAME))?;
+
         let joined_fields =
             streams
                 .output_from_input(0, true, graph)
                 .update(|output_stream, facts_proof| {
                     for (stream_info, input, fields) in [
-                        ("primary stream", &inputs[0], &params.primary_fields),
-                        ("secondary stream", &inputs[1], &params.secondary_fields),
+                        ("primary stream", &inputs[0], &valid_primary_fields),
+                        ("secondary stream", &inputs[1], &valid_secondary_fields),
                     ] {
                         let input_stream_def = graph
                             .get_stream(input.record_type())
@@ -67,14 +77,14 @@ impl Join {
                             input.facts().order(),
                             &input_stream_def,
                             stream_info,
-                            || trace.sub(trace_element!(JOIN_TRACE_NAME)).to_owned(),
+                            || trace_filter!(trace, JOIN_TRACE_NAME),
                         )?;
                         check_distinct_eq(
                             &expected_fact_fields,
                             input.facts().distinct(),
                             &input_stream_def,
                             stream_info,
-                            || trace.sub(trace_element!(JOIN_TRACE_NAME)).to_owned(),
+                            || trace_filter!(trace, JOIN_TRACE_NAME),
                         )?;
                     }
 
@@ -89,8 +99,7 @@ impl Join {
                         .data()
                         .filter_map(|d| {
                             let datum = &secondary_stream_def[d];
-                            if !params
-                                .secondary_fields
+                            if !valid_secondary_fields
                                 .iter()
                                 .any(|field| *field == datum.name())
                             {
@@ -115,13 +124,11 @@ impl Join {
             name,
             inputs,
             outputs,
-            primary_fields: params
-                .primary_fields
+            primary_fields: valid_primary_fields
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
-            secondary_fields: params
-                .secondary_fields
+            secondary_fields: valid_secondary_fields
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),

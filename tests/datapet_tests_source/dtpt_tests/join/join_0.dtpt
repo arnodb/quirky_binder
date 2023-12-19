@@ -40,7 +40,7 @@ use datapet::{
 
   (
       function_produce(
-        fields: [("num", "i8")],
+        fields: [("other_num", "i8")],
         body: r#"{
             use std::collections::BTreeSet;
 
@@ -61,8 +61,8 @@ use datapet::{
             output.send(None)?;
             Ok(())
         }"#,
-        order_fields: Some(["num"]),
-        distinct_fields: Some(["num"]),
+        order_fields: Some(["other_num"]),
+        distinct_fields: Some(["other_num"]),
       )
     -> stream_2
   )
@@ -70,7 +70,7 @@ use datapet::{
   ( < stream_1
     - [stream_2] join(
       primary_fields: ["num"],
-      secondary_fields: ["num"],
+      secondary_fields: ["other_num"],
     )
     - function_terminate(
         body: r#"

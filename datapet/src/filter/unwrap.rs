@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
-use crate::{prelude::*, trace_element};
+use crate::{prelude::*, trace_filter};
 
 const UNWRAP_TRACE_NAME: &str = "unwrap";
 
@@ -32,6 +32,10 @@ impl Unwrap {
         params: UnwrapParams,
         trace: Trace,
     ) -> ChainResult<Self> {
+        let valid_fields = params.fields.validate_on_stream(&inputs[0], graph, || {
+            trace_filter!(trace, UNWRAP_TRACE_NAME)
+        })?;
+
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
         streams
@@ -39,12 +43,12 @@ impl Unwrap {
             .update(|output_stream, facts_proof| {
                 let input_variant_id = output_stream.input_variant_id();
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                for &field in &**params.fields {
+                for &field in &**valid_fields {
                     let datum = output_stream_def
                         .get_variant_datum_definition_by_name(input_variant_id, field)
                         .ok_or_else(|| ChainError::FieldNotFound {
                             field: (*field).to_owned(),
-                            trace: trace.sub(trace_element!(UNWRAP_TRACE_NAME)).to_owned(),
+                            trace: trace_filter!(trace, UNWRAP_TRACE_NAME),
                         })?;
                     let datum_id = datum.id();
                     let optional_type_name = datum.type_name().to_string();
@@ -66,7 +70,7 @@ impl Unwrap {
                                         "field `{}` is not an option: {}",
                                         field, optional_type_name
                                     ),
-                                    trace: trace.sub(trace_element!(UNWRAP_TRACE_NAME)).to_owned(),
+                                    trace: trace_filter!(trace, UNWRAP_TRACE_NAME),
                                 });
                             }
                         }
@@ -86,8 +90,7 @@ impl Unwrap {
             name,
             inputs,
             outputs,
-            fields: params
-                .fields
+            fields: valid_fields
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),

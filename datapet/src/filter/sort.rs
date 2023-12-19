@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
-use crate::{prelude::*, support::cmp::fields_cmp, trace_element};
+use crate::{prelude::*, support::cmp::fields_cmp, trace_filter};
 
 const SORT_TRACE_NAME: &str = "sort";
 
@@ -30,21 +30,15 @@ impl Sort {
         params: SortParams,
         trace: Trace,
     ) -> ChainResult<Self> {
-        graph.check_stream_fields(
-            &inputs[0],
-            &params
-                .fields
-                .iter()
-                .map(|f| **f.as_ref())
-                .collect::<Vec<&str>>(),
-            || trace.sub(trace_element!(SORT_TRACE_NAME)).to_owned(),
-        )?;
+        let valid_fields = params
+            .fields
+            .validate_on_stream(&inputs[0], graph, || trace_filter!(trace, SORT_TRACE_NAME))?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
             .pass_through(|builder, facts_proof| {
-                builder.set_order_fact(&params.fields);
+                builder.set_order_fact(&valid_fields);
                 facts_proof.order_facts_updated().distinct_facts_updated()
             });
         let outputs = streams.build();
@@ -52,8 +46,7 @@ impl Sort {
             name,
             inputs,
             outputs,
-            fields: params
-                .fields
+            fields: valid_fields
                 .iter()
                 .map(|field| field.as_ref().map(ToString::to_string))
                 .collect::<Vec<_>>(),
@@ -138,16 +131,15 @@ impl SubSort {
         params: SubSortParams,
         trace: Trace,
     ) -> ChainResult<Self> {
-        graph.check_sub_stream_fields(
-            &inputs[0],
-            &params.path_fields.iter().copied().collect::<Vec<&str>>(),
-            &params
-                .fields
-                .iter()
-                .map(|f| **f.as_ref())
-                .collect::<Vec<&str>>(),
-            || trace.sub(trace_element!(SUB_SORT_TRACE_NAME)).to_owned(),
-        )?;
+        let (valid_path_fields, path_def) =
+            params
+                .path_fields
+                .validate_path_on_stream(&inputs[0], graph, || {
+                    trace_filter!(trace, SUB_SORT_TRACE_NAME)
+                })?;
+        let valid_fields = params.fields.validate_on_record_definition(&path_def, || {
+            trace_filter!(trace, SUB_SORT_TRACE_NAME)
+        })?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         let path_sub_stream =
@@ -155,14 +147,12 @@ impl SubSort {
                 .output_from_input(0, true, graph)
                 .pass_through(|output_stream, facts_proof| {
                     let path_sub_stream = output_stream.pass_through_path(
-                        &params.path_fields,
+                        &valid_path_fields,
                         |sub_input_stream, output_stream| {
                             output_stream.pass_through_sub_stream(
                                 sub_input_stream,
                                 graph,
-                                |sub_output_stream| {
-                                    sub_output_stream.set_order_fact(&params.fields)
-                                },
+                                |sub_output_stream| sub_output_stream.set_order_fact(&valid_fields),
                             )
                         },
                         graph,
@@ -179,14 +169,12 @@ impl SubSort {
             name,
             inputs,
             outputs,
-            path_fields: params
-                .path_fields
+            path_fields: valid_path_fields
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
             path_sub_stream,
-            fields: params
-                .fields
+            fields: valid_fields
                 .iter()
                 .map(|field| field.as_ref().map(ToString::to_string))
                 .collect::<Vec<_>>(),

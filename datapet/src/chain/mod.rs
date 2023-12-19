@@ -1,11 +1,12 @@
-use crate::prelude::*;
+use std::{borrow::Cow, collections::HashMap, fmt::Display, ops::Deref};
+
 use codegen::{Module, Scope};
 use datapet_lang::location::Location;
 use itertools::Itertools;
 use proc_macro2::TokenStream;
-use std::{borrow::Cow, collections::HashMap, fmt::Display, ops::Deref};
 
 use self::error::ChainError;
+use crate::prelude::*;
 
 pub mod error;
 
@@ -714,5 +715,12 @@ macro_rules! trace_element {
             ($name).into(),
             datapet_lang::location::Location::new(std::line!() as usize, std::column!() as usize),
         )
+    };
+}
+
+#[macro_export]
+macro_rules! trace_filter {
+    ($trace:ident, $name:expr) => {
+        $trace.sub($crate::trace_element!($name)).to_owned()
     };
 }

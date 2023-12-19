@@ -59,68 +59,6 @@ impl<R: TypeResolver + Copy> GraphBuilder<R> {
         self.record_definitions.get(record_type)
     }
 
-    pub fn check_stream_fields<TRACE>(
-        &self,
-        stream: &NodeStream,
-        fields: &[&str],
-        trace: TRACE,
-    ) -> ChainResult<()>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
-        let def = self.get_stream(stream.record_type()).expect("def").borrow();
-        for field in fields {
-            def.get_current_datum_definition_by_name(field)
-                .ok_or_else(|| ChainError::FieldNotFound {
-                    field: (*field).to_owned(),
-                    trace: trace(),
-                })?;
-        }
-        Ok(())
-    }
-
-    pub fn check_sub_stream_fields<TRACE>(
-        &self,
-        stream: &NodeStream,
-        path_fields: &[&str],
-        fields: &[&str],
-        trace: TRACE,
-    ) -> ChainResult<()>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
-        let (mut s, mut def) = {
-            let def = self.get_stream(stream.record_type()).expect("def").borrow();
-            let datum = def
-                .get_current_datum_definition_by_name(path_fields[0])
-                .ok_or_else(|| ChainError::FieldNotFound {
-                    field: path_fields[0].to_owned(),
-                    trace: trace(),
-                })?;
-            let s = &stream.sub_streams()[&datum.id()];
-            let def = self.get_stream(s.record_type()).expect("def").borrow();
-            (s, def)
-        };
-        for field in &path_fields[1..] {
-            let datum = def
-                .get_current_datum_definition_by_name(field)
-                .ok_or_else(|| ChainError::FieldNotFound {
-                    field: (*field).to_owned(),
-                    trace: trace(),
-                })?;
-            s = &s.sub_streams()[&datum.id()];
-            def = self.get_stream(s.record_type()).expect("def").borrow();
-        }
-        for field in fields {
-            def.get_current_datum_definition_by_name(field)
-                .ok_or_else(|| ChainError::FieldNotFound {
-                    field: (*field).to_owned(),
-                    trace: trace(),
-                })?;
-        }
-        Ok(())
-    }
-
     pub fn build(self, entry_nodes: Vec<Box<dyn DynNode>>) -> Graph {
         Graph {
             chain_customizer: self.chain_customizer,

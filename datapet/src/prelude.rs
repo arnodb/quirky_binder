@@ -13,5 +13,9 @@ pub use crate::{
         NodeStream, NodeStreamSource, NodeSubStream, NoneNodeStream, RecordDefinitionFragments,
         SingleNodeStream, StreamFacts, StreamRecordType,
     },
-    support::{cmp::Directed, name::FullyQualifiedName},
+    support::{
+        cmp::Directed,
+        name::FullyQualifiedName,
+        valid::{ValidFieldName, ValidFieldType},
+    },
 };

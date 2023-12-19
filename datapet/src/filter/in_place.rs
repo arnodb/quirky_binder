@@ -114,7 +114,7 @@ pub mod string {
     use truc::record::type_resolver::TypeResolver;
 
     use super::InPlaceFilter;
-    use crate::{prelude::*, trace_element};
+    use crate::{prelude::*, trace_filter};
 
     #[derive(Deserialize, Debug)]
     #[serde(deny_unknown_fields)]
@@ -175,26 +175,19 @@ pub mod string {
         params: InplaceStringParams,
         trace: Trace,
     ) -> ChainResult<ToLowercase> {
-        graph.check_stream_fields(
-            &inputs[0],
-            &params.fields.iter().copied().collect::<Vec<&str>>(),
-            || {
-                trace
-                    .sub(trace_element!(TO_LOWERCASE_TRACE_NAME))
-                    .to_owned()
-            },
-        )?;
+        let valid_fields = params.fields.validate_on_stream(&inputs[0], graph, || {
+            trace_filter!(trace, TO_LOWERCASE_TRACE_NAME)
+        })?;
         Ok(ToLowercase {
             in_place: InPlaceFilter::new(
                 graph,
                 name,
                 inputs,
-                &params.fields,
-                Some(&params.fields),
+                &valid_fields,
+                Some(&valid_fields),
                 trace,
             )?,
-            fields: params
-                .fields
+            fields: valid_fields
                 .iter()
                 .map(Deref::deref)
                 .map(Into::into)
@@ -255,26 +248,19 @@ pub mod string {
         params: InplaceStringParams,
         trace: Trace,
     ) -> ChainResult<ReverseChars> {
-        graph.check_stream_fields(
-            &inputs[0],
-            &params.fields.iter().copied().collect::<Vec<&str>>(),
-            || {
-                trace
-                    .sub(trace_element!(REVERSE_CHARS_TRACE_NAME))
-                    .to_owned()
-            },
-        )?;
+        let valid_fields = params.fields.validate_on_stream(&inputs[0], graph, || {
+            trace_filter!(trace, REVERSE_CHARS_TRACE_NAME)
+        })?;
         Ok(ReverseChars {
             in_place: InPlaceFilter::new(
                 graph,
                 name,
                 inputs,
-                /* TODO nice to have: change order direction */ &params.fields,
+                /* TODO nice to have: change order direction */ &valid_fields,
                 None,
                 trace,
             )?,
-            fields: params
-                .fields
+            fields: valid_fields
                 .iter()
                 .map(Deref::deref)
                 .map(Into::into)

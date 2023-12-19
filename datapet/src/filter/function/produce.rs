@@ -2,7 +2,9 @@ use proc_macro2::TokenStream;
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
-use crate::prelude::*;
+use crate::{prelude::*, trace_filter};
+
+const FUNCTION_PRODUCE_TRACE_NAME: &str = "function_produce";
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -20,7 +22,7 @@ pub struct FunctionProduce {
     inputs: [NodeStream; 0],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    fields: Vec<(String, String)>,
+    fields: Vec<(ValidFieldName, ValidFieldType)>,
     body: String,
 }
 
@@ -30,8 +32,32 @@ impl FunctionProduce {
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
         params: FunctionProduceParams,
-        _trace: Trace,
+        trace: Trace,
     ) -> ChainResult<Self> {
+        let valid_fields = params
+            .fields
+            .validate(|| trace_filter!(trace, FUNCTION_PRODUCE_TRACE_NAME))?;
+
+        let valid_order_fields = params
+            .order_fields
+            .map(|order_fields| {
+                order_fields.validate(
+                    |name| valid_fields.iter().any(|vf| vf.0.name() == name),
+                    || trace_filter!(trace, FUNCTION_PRODUCE_TRACE_NAME),
+                )
+            })
+            .transpose()?;
+
+        let valid_distinct_fields = params
+            .distinct_fields
+            .map(|distinct_fields| {
+                distinct_fields.validate(
+                    |name| valid_fields.iter().any(|vf| vf.0.name() == name),
+                    || trace_filter!(trace, FUNCTION_PRODUCE_TRACE_NAME),
+                )
+            })
+            .transpose()?;
+
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_main_stream(graph);
 
@@ -40,14 +66,14 @@ impl FunctionProduce {
             .update(|output_stream, facts_proof| {
                 {
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                    for (name, r#type) in params.fields.iter() {
-                        output_stream_def.add_dynamic_datum(*name, r#type);
+                    for (name, r#type) in valid_fields.iter() {
+                        output_stream_def.add_dynamic_datum(name.name(), r#type.type_name());
                     }
                 }
-                if let Some(order_fields) = params.order_fields.as_ref() {
+                if let Some(order_fields) = valid_order_fields.as_ref() {
                     output_stream.set_order_fact(order_fields);
                 }
-                if let Some(distinct_fields) = params.distinct_fields.as_ref() {
+                if let Some(distinct_fields) = valid_distinct_fields.as_ref() {
                     output_stream.set_distinct_fact(distinct_fields);
                 }
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
@@ -59,11 +85,7 @@ impl FunctionProduce {
             name,
             inputs,
             outputs,
-            fields: params
-                .fields
-                .iter()
-                .map(|(name, r#type)| ((*name).to_owned(), (*r#type).to_owned()))
-                .collect(),
+            fields: valid_fields,
             body: params.body.to_owned(),
         })
     }
@@ -93,12 +115,12 @@ impl DynNode for FunctionProduce {
             let names = self
                 .fields
                 .iter()
-                .map(|(name, _)| format_ident!("{}", name))
+                .map(|(name, _)| name.ident())
                 .collect::<Vec<_>>();
             let types = self
                 .fields
                 .iter()
-                .map(|(_, r#type)| syn::parse_str::<syn::Type>(r#type).expect("field type"))
+                .map(|(_, r#type)| r#type.r#type())
                 .collect::<Vec<_>>();
             (quote!(#(#names: #types),*), quote!(#(#names),*))
         };

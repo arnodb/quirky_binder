@@ -7,7 +7,7 @@ use crate::{
     graph::builder::check_undirected_order_starts_with,
     prelude::*,
     support::eq::{fields_eq, fields_eq_ab},
-    trace_element,
+    trace_filter,
 };
 
 const GROUP_TRACE_NAME: &str = "group";
@@ -39,11 +39,9 @@ impl Group {
         params: GroupParams,
         trace: Trace,
     ) -> ChainResult<Group> {
-        graph.check_stream_fields(
-            &inputs[0],
-            &params.fields.iter().copied().collect::<Vec<&str>>(),
-            || trace.sub(trace_element!(GROUP_TRACE_NAME)).to_owned(),
-        )?;
+        let valid_fields = params
+            .fields
+            .validate_on_stream(&inputs[0], graph, || trace_filter!(trace, GROUP_TRACE_NAME))?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("group", graph);
@@ -61,12 +59,12 @@ impl Group {
 
                         let variant = &output_stream_def[variant_id];
                         let mut group_by_datum_ids =
-                            Vec::with_capacity(variant.data_len() - params.fields.len());
-                        let mut group_data = Vec::with_capacity(params.fields.len());
-                        let mut group_datum_ids = Vec::with_capacity(params.fields.len());
+                            Vec::with_capacity(variant.data_len() - valid_fields.len());
+                        let mut group_data = Vec::with_capacity(valid_fields.len());
+                        let mut group_datum_ids = Vec::with_capacity(valid_fields.len());
                         for datum_id in variant.data() {
                             let datum = &output_stream_def[datum_id];
-                            if params.fields.iter().any(|field| *field == datum.name()) {
+                            if valid_fields.iter().any(|field| *field == datum.name()) {
                                 group_data.push(datum);
                                 group_datum_ids.push(datum.id());
                             } else {
@@ -79,7 +77,7 @@ impl Group {
                             output_stream.facts().order(),
                             &*output_stream_def,
                             "main stream",
-                            || trace.sub(trace_element!(GROUP_TRACE_NAME)).to_owned(),
+                            || trace_filter!(trace, GROUP_TRACE_NAME),
                         )?;
 
                         let mut map = BTreeMap::<DatumId, DatumId>::new();
@@ -142,8 +140,7 @@ impl Group {
             outputs,
             group_field: params.group_field.to_string(),
             group_stream,
-            fields: params
-                .fields
+            fields: valid_fields
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
@@ -283,12 +280,16 @@ impl SubGroup {
         params: SubGroupParams,
         trace: Trace,
     ) -> ChainResult<SubGroup> {
-        graph.check_sub_stream_fields(
-            &inputs[0],
-            &params.path_fields.iter().copied().collect::<Vec<&str>>(),
-            &params.fields.iter().copied().collect::<Vec<&str>>(),
-            || trace.sub(trace_element!(SUB_GROUP_TRACE_NAME)).to_owned(),
-        )?;
+        let (valid_path_fields, path_def) =
+            params
+                .path_fields
+                .validate_path_on_stream(&inputs[0], graph, || {
+                    trace_filter!(trace, SUB_GROUP_TRACE_NAME)
+                })?;
+        let valid_fields = params.fields.validate_on_record_definition(&path_def, || {
+            trace_filter!(trace, SUB_GROUP_TRACE_NAME)
+        })?;
+        drop(path_def);
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("group", graph);
@@ -300,7 +301,7 @@ impl SubGroup {
                 .output_from_input(0, true, graph)
                 .update(|output_stream, facts_proof| {
                     let path_streams = output_stream.update_path(
-                        &params.path_fields,
+                        &valid_path_fields,
                         |sub_input_stream, output_stream| {
                             output_stream.update_sub_stream(
                                 sub_input_stream,
@@ -318,16 +319,14 @@ impl SubGroup {
 
                                         let variant = &output_stream_def[variant_id];
                                         let mut group_by_datum_ids = Vec::with_capacity(
-                                            variant.data_len() - params.fields.len(),
+                                            variant.data_len() - valid_fields.len(),
                                         );
-                                        let mut group_data =
-                                            Vec::with_capacity(params.fields.len());
+                                        let mut group_data = Vec::with_capacity(valid_fields.len());
                                         let mut group_datum_ids =
-                                            Vec::with_capacity(params.fields.len());
+                                            Vec::with_capacity(valid_fields.len());
                                         for datum_id in variant.data() {
                                             let datum = &output_stream_def[datum_id];
-                                            if params
-                                                .fields
+                                            if valid_fields
                                                 .iter()
                                                 .any(|field| *field == datum.name())
                                             {
@@ -343,11 +342,7 @@ impl SubGroup {
                                             sub_output_stream.facts().order(),
                                             &output_stream_def,
                                             "main sub stream",
-                                            || {
-                                                trace
-                                                    .sub(trace_element!(GROUP_TRACE_NAME))
-                                                    .to_owned()
-                                            },
+                                            || trace_filter!(trace, SUB_GROUP_TRACE_NAME),
                                         )?;
 
                                         let mut map = BTreeMap::<DatumId, DatumId>::new();
@@ -448,8 +443,7 @@ impl SubGroup {
             path_streams,
             group_field: params.group_field.to_string(),
             group_stream: created_group_stream.expect("group stream"),
-            fields: params
-                .fields
+            fields: valid_fields
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
