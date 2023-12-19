@@ -2,7 +2,9 @@ use datapet_support::AnchorId;
 use serde::Deserialize;
 use truc::record::{definition::DatumDefinitionOverride, type_resolver::TypeResolver};
 
-use crate::prelude::*;
+use crate::{prelude::*, trace_filter};
+
+const ANCHOR_TRACE_NAME: &str = "anchor";
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -17,7 +19,7 @@ pub struct Anchor {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    anchor_field: String,
+    anchor_field: ValidFieldName,
 }
 
 impl Anchor {
@@ -26,8 +28,15 @@ impl Anchor {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: AnchorParams,
-        _trace: Trace,
+        trace: Trace,
     ) -> ChainResult<Self> {
+        let valid_anchor_field = ValidFieldName::try_from(params.anchor_field).map_err(|_| {
+            ChainError::InvalidFieldName {
+                name: (params.anchor_field).to_owned(),
+                trace: trace_filter!(trace, ANCHOR_TRACE_NAME),
+            }
+        })?;
+
         let anchor_table_id = graph.new_anchor_table();
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
@@ -37,7 +46,7 @@ impl Anchor {
             .update(|output_stream, facts_proof| {
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
                 output_stream_def.add_datum_override::<AnchorId<0>, _>(
-                    params.anchor_field,
+                    valid_anchor_field.name(),
                     DatumDefinitionOverride {
                         type_name: Some(format!("datapet_support::AnchorId<{}>", anchor_table_id)),
                         size: None,
@@ -54,7 +63,7 @@ impl Anchor {
             name,
             inputs,
             outputs,
-            anchor_field: params.anchor_field.to_string(),
+            anchor_field: valid_anchor_field,
         })
     }
 }
@@ -78,7 +87,7 @@ impl DynNode for Anchor {
         let output_record = def_output.record();
         let output_unpacked_record_in = def_output.unpacked_record_in();
 
-        let anchor_field = format_ident!("{}", self.anchor_field);
+        let anchor_field = self.anchor_field.ident();
 
         let inline_body = quote! {
             let mut seq: usize = 0;
