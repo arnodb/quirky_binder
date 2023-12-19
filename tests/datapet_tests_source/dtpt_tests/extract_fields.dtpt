@@ -1,0 +1,43 @@
+use datapet::{
+    filter::{
+        fork::extract_fields::extract_fields,
+        function::{
+            produce::function_produce,
+            terminate::function_terminate,
+        },
+    },
+};
+
+{
+  (
+      function_produce(
+        fields: [("value", "String")],
+        body: r#"{
+            let record = new_record("some value".to_string());
+            output.send(Some(record))?;
+            output.send(None)?;
+            Ok(())
+        }"#,
+      )
+    - extract_fields(fields: ["value"]) [extracted]
+    - function_terminate(
+        body: r#"
+            let record = input.next()?.unwrap();
+            assert_eq!(record.value(), "some value", "main");
+            assert!(input.next()?.is_none());
+            Ok(())
+"#,
+      )
+  )
+
+  ( < extracted
+    - function_terminate(
+        body: r#"
+            let record = input.next()?.unwrap();
+            assert_eq!(record.value(), "some value", "extracted");
+            assert!(input.next()?.is_none());
+            Ok(())
+"#,
+      )
+  )
+}

@@ -1,10 +1,10 @@
 use datapet::{
     filter::{
+        fork::join::join,
         function::{
             produce::function_produce,
             terminate::function_terminate,
         },
-        fork::join::join,
     },
 };
 

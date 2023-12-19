@@ -1,7 +1,9 @@
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
-use crate::prelude::*;
+use crate::{prelude::*, trace_filter};
+
+const EXTRACT_FIELDS_TRACE_NAME: &str = "extract_fields";
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -25,8 +27,12 @@ impl ExtractFields {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: ExtractFieldsParams,
-        _trace: Trace,
+        trace: Trace,
     ) -> ChainResult<Self> {
+        let valid_fields = params.fields.validate_on_stream(&inputs[0], graph, || {
+            trace_filter!(trace, EXTRACT_FIELDS_TRACE_NAME)
+        })?;
+
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("extracted", graph);
 
@@ -45,7 +51,7 @@ impl ExtractFields {
             |output_extracted_stream, facts_proof| {
                 let mut output_extracted_stream_def =
                     output_extracted_stream.record_definition().borrow_mut();
-                for field in params.fields.iter() {
+                for field in valid_fields.iter() {
                     output_extracted_stream_def.copy_datum(
                         output_stream_def
                             .borrow()
