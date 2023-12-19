@@ -1,13 +1,15 @@
 use fallible_iterator::FallibleIterator;
 
+use super::collections::CollectionsIteratorFnHelper;
+
 /// Dedups items in memory and stream them.
 #[derive(new)]
-pub struct Dedup<I: FallibleIterator<Item = R, Error = E>, R, E, C>
+pub struct Dedup<I: FallibleIterator<Item = R, Error = E>, R, E, EqFn>
 where
-    C: Fn(&R, &R) -> bool,
+    EqFn: Fn(&R, &R) -> bool,
 {
     input: I,
-    eq: C,
+    eq: EqFn,
     #[new(default)]
     buffer: Option<R>,
     #[new(default)]
@@ -36,6 +38,66 @@ where
             self.end_of_input = true;
         }
         Ok(self.buffer.take())
+    }
+}
+
+#[derive(new)]
+pub struct SubDedup<
+    Input: FallibleIterator<Item = Record, Error = Error>,
+    Record,
+    Error,
+    CollectionsIteratorFn,
+    SubRecord,
+    EqFn,
+> where
+    CollectionsIteratorFn: for<'r> CollectionsIteratorFnHelper<'r, Record, Vec<SubRecord>>,
+    EqFn: Fn(&SubRecord, &SubRecord) -> bool,
+{
+    input: Input,
+    collections_iterator_fn: CollectionsIteratorFn,
+    eq: EqFn,
+    _sub_record: std::marker::PhantomData<SubRecord>,
+}
+
+impl<
+        Input: FallibleIterator<Item = Record, Error = Error>,
+        Record,
+        Error,
+        CollectionsIteratorFn,
+        SubRecord,
+        EqFn,
+    > FallibleIterator for SubDedup<Input, Record, Error, CollectionsIteratorFn, SubRecord, EqFn>
+where
+    CollectionsIteratorFn: for<'r> CollectionsIteratorFnHelper<'r, Record, Vec<SubRecord>>,
+    EqFn: Fn(&SubRecord, &SubRecord) -> bool,
+{
+    type Item = Record;
+    type Error = Error;
+
+    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
+        Ok(self.input.next()?.map(|mut rec| {
+            for collection in self.collections_iterator_fn.call(&mut rec) {
+                let slice: &mut [SubRecord] = collection.as_mut();
+                if slice.len() <= 1 {
+                    continue;
+                }
+                let mut pos = 0;
+                for i in 1..slice.len() {
+                    if !(self.eq)(&slice[pos], &slice[i]) {
+                        if pos + 1 != i {
+                            slice.swap(pos + 1, i);
+                        }
+                        pos += 1;
+                    } else {
+                        continue;
+                    }
+                }
+                if pos + 1 != collection.len() {
+                    collection.truncate(pos + 1)
+                }
+            }
+            rec
+        }))
     }
 }
 

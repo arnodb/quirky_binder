@@ -1,3 +1,10 @@
+use std::{cell::RefCell, collections::BTreeMap};
+
+use truc::record::{
+    definition::{DatumDefinition, DatumId, RecordDefinitionBuilder, RecordVariantId},
+    type_resolver::TypeResolver,
+};
+
 use super::{
     break_distinct_fact_for, break_distinct_fact_for_ids, break_order_fact_at,
     break_order_fact_at_ids, set_distinct_fact, set_distinct_fact_all_fields,
@@ -6,11 +13,6 @@ use super::{
 use crate::{
     prelude::*,
     stream::{NodeSubStream, StreamFacts},
-};
-use std::{cell::RefCell, collections::BTreeMap};
-use truc::record::{
-    definition::{DatumDefinition, DatumId, RecordDefinitionBuilder, RecordVariantId},
-    type_resolver::TypeResolver,
 };
 
 #[derive(Getters, CopyGetters)]
@@ -239,5 +241,9 @@ impl<'g, R: TypeResolver> SubStreamBuilderForPassThrough<'g, R> {
             order_fields,
             &*self.record_definition.borrow(),
         );
+    }
+
+    pub fn set_distinct_fact_all_fields(&mut self) {
+        set_distinct_fact_all_fields(&mut self.facts, &*self.record_definition.borrow());
     }
 }
