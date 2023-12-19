@@ -1,7 +1,10 @@
-use crate::prelude::*;
 use proc_macro2::TokenStream;
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+use crate::{prelude::*, trace_filter};
+
+const FUNCTION_TERMINATE_TRACE_NAME: &str = "function_terminate";
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -16,7 +19,7 @@ pub struct FunctionTerminate {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 0],
-    body: String,
+    body: TokenStream,
 }
 
 impl FunctionTerminate {
@@ -25,13 +28,23 @@ impl FunctionTerminate {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: FunctionTerminateParams,
-        _trace: Trace,
+        trace: Trace,
     ) -> ChainResult<Self> {
+        let valid_body =
+            params
+                .body
+                .parse::<TokenStream>()
+                .map_err(|err| ChainError::InvalidTokenStream {
+                    name: "body".to_owned(),
+                    msg: err.to_string(),
+                    trace: trace_filter!(trace, FUNCTION_TERMINATE_TRACE_NAME),
+                })?;
+
         Ok(Self {
             name,
             inputs,
             outputs: [],
-            body: params.body.to_owned(),
+            body: valid_body,
         })
     }
 }
@@ -62,7 +75,7 @@ impl DynNode for FunctionTerminate {
             true,
         );
 
-        let body: TokenStream = self.body.parse().expect("function body");
+        let body = &self.body;
 
         let thread_body = quote! {
             #input

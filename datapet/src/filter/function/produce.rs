@@ -23,7 +23,7 @@ pub struct FunctionProduce {
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     fields: Vec<(ValidFieldName, ValidFieldType)>,
-    body: String,
+    body: TokenStream,
 }
 
 impl FunctionProduce {
@@ -58,6 +58,16 @@ impl FunctionProduce {
             })
             .transpose()?;
 
+        let valid_body =
+            params
+                .body
+                .parse::<TokenStream>()
+                .map_err(|err| ChainError::InvalidTokenStream {
+                    name: "body".to_owned(),
+                    msg: err.to_string(),
+                    trace: trace_filter!(trace, FUNCTION_PRODUCE_TRACE_NAME),
+                })?;
+
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_main_stream(graph);
 
@@ -86,7 +96,7 @@ impl FunctionProduce {
             inputs,
             outputs,
             fields: valid_fields,
-            body: params.body.to_owned(),
+            body: valid_body,
         })
     }
 }
@@ -125,7 +135,7 @@ impl DynNode for FunctionProduce {
             (quote!(#(#names: #types),*), quote!(#(#names),*))
         };
 
-        let body: TokenStream = self.body.parse().expect("function body");
+        let body = &self.body;
 
         let thread_body = quote! {
             let output = thread_control.output_0.take().expect("output 0");

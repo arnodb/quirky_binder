@@ -19,6 +19,12 @@ pub enum ChainError {
         type_name: String,
         trace: Trace<'static>,
     },
+    #[error("Invalid token stream {name}: {msg}\nstack backtrace:\n{trace}")]
+    InvalidTokenStream {
+        name: String,
+        msg: String,
+        trace: Trace<'static>,
+    },
     #[error("Expected {more_info} with minimal order {expected} but found {actual}\nstack backtrace:\n{trace}")]
     ExpectedMinimalOrder {
         more_info: String,

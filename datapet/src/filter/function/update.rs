@@ -1,7 +1,10 @@
-use crate::prelude::*;
 use proc_macro2::TokenStream;
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+use crate::{prelude::*, trace_filter};
+
+const FUNCTION_UPDATE_TRACE_NAME: &str = "function_update";
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -16,7 +19,7 @@ pub struct FunctionUpdate {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    body: String,
+    body: TokenStream,
 }
 
 impl FunctionUpdate {
@@ -25,8 +28,18 @@ impl FunctionUpdate {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: FunctionUpdateParams,
-        _trace: Trace,
+        trace: Trace,
     ) -> ChainResult<Self> {
+        let valid_body =
+            params
+                .body
+                .parse::<TokenStream>()
+                .map_err(|err| ChainError::InvalidTokenStream {
+                    name: "body".to_owned(),
+                    msg: err.to_string(),
+                    trace: trace_filter!(trace, FUNCTION_UPDATE_TRACE_NAME),
+                })?;
+
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
@@ -38,7 +51,7 @@ impl FunctionUpdate {
             name,
             inputs,
             outputs,
-            body: params.body.to_owned(),
+            body: valid_body,
         })
     }
 }
@@ -57,9 +70,9 @@ impl DynNode for FunctionUpdate {
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
-        let body: TokenStream = self.body.parse().expect("function body");
+        let body = &self.body;
 
-        chain.implement_inline_node(self, self.inputs.single(), self.outputs.single(), &body);
+        chain.implement_inline_node(self, self.inputs.single(), self.outputs.single(), body);
     }
 
     fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
