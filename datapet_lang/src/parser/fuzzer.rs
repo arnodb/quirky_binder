@@ -209,53 +209,67 @@ where
     .gen(rng, buffer)
 }
 
+//
+// XXX 'r', '#' and '"' were removed from all these sets to avoid generating invalid raw strings "r#...".
+//
+
 const ALL_CHARACTERS: &str = concat!(
-    "\u{20}!\"#$%&'()*+,-./",
+    //"\u{20}!\"#$%&'()*+,-./",
+    "\u{20}!$%&'()*+,-./",
     "0123456789",
     ":;<=>?@",
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
     "[\\]^_`",
-    "abcdefghijklmnopqrstuvwxyz",
+    //"abcdefghijklmnopqrstuvwxyz",
+    "abcdefghijklmnopqstuvwxyz",
     "{|}~"
 );
 
 const NO_SPECIAL_CHARACTERS: &str = concat!(
-    "\u{20}!#$%&*+,-./",
+    //"\u{20}!#$%&*+,-./",
+    "\u{20}!$%&*+,-./",
     "0123456789",
     ":;<=>?@",
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
     "\\^_`",
-    "abcdefghijklmnopqrstuvwxyz",
+    //"abcdefghijklmnopqrstuvwxyz",
+    "abcdefghijklmnopqstuvwxyz",
     "|~"
 );
 
 const NO_QUOTE_BACKSLASH: &str = concat!(
-    "\u{20}!#$%&'()*+,-./",
+    //"\u{20}!#$%&'()*+,-./",
+    "\u{20}!$%&'()*+,-./",
     "0123456789",
     ":;<=>?@",
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
     "[]^_`",
-    "abcdefghijklmnopqrstuvwxyz",
+    //"abcdefghijklmnopqrstuvwxyz",
+    "abcdefghijklmnopqstuvwxyz",
     "{|}~"
 );
 
 const NO_APOSTROPHE_BACKSLASH: &str = concat!(
-    "\u{20}!\"#$%&()*+,-./",
+    //"\u{20}!\"#$%&()*+,-./",
+    "\u{20}!$%&()*+,-./",
     "0123456789",
     ":;<=>?@",
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
     "[]^_`",
-    "abcdefghijklmnopqrstuvwxyz",
+    //"abcdefghijklmnopqrstuvwxyz",
+    "abcdefghijklmnopqstuvwxyz",
     "{|}~"
 );
 
 const NO_QUOTE_APOSTROPHE_BRACKETS: &str = concat!(
-    "\u{20}!#$%&*+,-./",
+    //"\u{20}!#$%&*+,-./",
+    "\u{20}!$%&*+,-./",
     "0123456789",
     ":;<=>?@",
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
     "\\^_`",
-    "abcdefghijklmnopqrstuvwxyz",
+    //"abcdefghijklmnopqrstuvwxyz",
+    "abcdefghijklmnopqstuvwxyz",
     "|~"
 );
 
@@ -417,7 +431,7 @@ where
     buffer.push_slice(&id);
     // Make sure we didn't push a keyword
     match id.as_str() {
-        "as" | "use" => {
+        "as" | "pub" | "use" => {
             let anarchy = rng.anarchy();
             if !anarchy {
                 buffer.push('_');

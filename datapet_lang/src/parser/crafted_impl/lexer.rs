@@ -36,7 +36,7 @@ pub enum Token<'a> {
     Pub(&'a str),
     #[regex(r#"'(\\.|[^\\'])*'"#)]
     QuotedChar(&'a str),
-    #[regex(r#""(\\.|[^\\"])*""#)]
+    #[regex(r###""|r#*""###, Token::parse_quoted_string)]
     QuotedString(&'a str),
     #[token(r";")]
     SemiColon(&'a str),
@@ -82,6 +82,59 @@ impl<'a> Token<'a> {
             Self::Char(span) => span,
             Self::UnrecognizedToken(span) => span,
         }
+    }
+
+    fn parse_quoted_string(lexer: &mut logos::Lexer<'a, Self>) -> Option<&'a str> {
+        let slice = lexer.slice();
+        let found_end = match slice.chars().next() {
+            Some('"') => {
+                let rem = lexer.remainder();
+                let mut end = 0;
+                let found_end = loop {
+                    let mut rem_chars = rem[end..].chars();
+                    match rem_chars.next() {
+                        Some('\\') => {
+                            if let Some(escaped) = rem_chars.next() {
+                                end += 1 + escaped.len_utf8();
+                            } else {
+                                end += 1;
+                                break false;
+                            }
+                        }
+                        Some('"') => {
+                            end += 1;
+                            break true;
+                        }
+                        Some(c) => {
+                            end += c.len_utf8();
+                        }
+                        None => {
+                            break false;
+                        }
+                    }
+                };
+                // Bump anyway (unclosed string)
+                lexer.bump(end);
+                found_end
+            }
+            Some('r') => {
+                // Adaptation of implementation by matklad:
+                // https://github.com/matklad/fall/blob/527ab331f82b8394949041bab668742868c0c282/lang/rust/syntax/src/rust.fall#L1294-L1324
+                // Who needs more then 25 hashes anyway? :)
+                let q_hashes = concat!('"', "######", "######", "######", "######", "######");
+                let closing = &q_hashes[..lexer.slice().len() - 1]; // skip initial 'r'
+
+                let end = lexer.remainder().find(closing);
+                if let Some(end) = end {
+                    lexer.bump(end + closing.len());
+                } else {
+                    lexer.bump(lexer.remainder().len());
+                }
+                end.is_some()
+            }
+            _ => false,
+        };
+        found_end.then(|| lexer.slice())
     }
 }
 
@@ -150,7 +203,22 @@ mod tests {
     #[case(r#""\"""#, vec![(Ok(Token::QuotedString(r#""\"""#)), 0..4)])]
     #[case(r#""\K\\""#, vec![(Ok(Token::QuotedString(r#""\K\\""#)), 0..6)])]
     #[case(r#""\K\\")"#, vec![(Ok(Token::QuotedString(r#""\K\\""#)), 0..6), (Ok(Token::CloseBracket(")")), 6..7)])]
+    #[case(r#""foo"#, vec![(Err(()), 0..4)])]
     fn test_quoted_string(#[case] input: &str, #[case] expected: Vec<(Result<Token, ()>, Span)>) {
+        let tokens = Token::lexer(input)
+            .spanned()
+            .collect::<Vec<(Result<Token, _>, Span)>>();
+        assert_eq!(tokens, expected);
+    }
+
+    #[rstest]
+    #[case(r###"r#"foo"#"###, vec![(Ok(Token::QuotedString(r###"r#"foo"#"###)), 0..8)])]
+    #[case(r#####"r###"foo"###"#####, vec![(Ok(Token::QuotedString(r#####"r###"foo"###"#####)), 0..12)])]
+    #[case(r###"r#"foo""###, vec![(Err(()), 0..7)])]
+    fn test_quoted_raw_string(
+        #[case] input: &str,
+        #[case] expected: Vec<(Result<Token, ()>, Span)>,
+    ) {
         let tokens = Token::lexer(input)
             .spanned()
             .collect::<Vec<(Result<Token, _>, Span)>>();
