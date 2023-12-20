@@ -1,7 +1,7 @@
-use datapet::dtpt;
-use datapet::prelude::*;
-use datapet_support::AnchorId;
 use std::path::Path;
+
+use datapet::{dtpt, prelude::*};
+use datapet_support::AnchorId;
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
 
 fn main() {
@@ -51,47 +51,81 @@ use datapet::{
         ci_anchor_field: "ci_anchor",
         ci_refs_field: "ci_refs",
       ) [s2, s3, s4]
-    - function_terminate#term_1(
+    - [s2, s3, s4] function_terminate#dot(
         body: r#"
-            while let Some(record) = input.next()? {
-                println!("term_1 {} (id = {:?})", record.token(), record.anchor());
-            }
-            Ok(())
-"#,
-      )
-  )
-
-  ( < s2
-    - function_terminate#term_2(
-        body: r#"
-            while let Some(record) = input.next()? {
-                println!("term_2 {} (id = {:?})", record.token(), record.anchor());
-            }
-            Ok(())
-"#,
-      )
-  )
-
-  ( < s3
-    - function_terminate#term_3(
-        body: r#"
-            while let Some(record) = input.next()? {
-                println!("term_3 {} (ci id = {:?}) == {}", record.token(), record.ci_anchor(), record.ci_refs().len());
-                for r in record.ci_refs().iter() {
-                    println!("    {:?}", r.anchor());
+            println!("digraph wordlist \{{");
+            let mut input_0 = Some(input_0);
+            let mut input_1 = Some(input_1);
+            let mut input_2 = Some(input_2);
+            let mut input_3 = Some(input_3);
+            while input_0.is_some() || input_1.is_some() || input_2.is_some() || input_3.is_some() {
+                let mut read = 0;
+                if let Some(input) = &input_0 {
+                    let mut closed = false;
+                    for record in input.try_iter() {
+                        if let Some(record) = record {
+                            println!("word_{} [label=\"{}\"]", record.anchor(), record.token());
+                            read += 1;
+                        } else {
+                            closed = true;
+                        }
+                    }
+                    if closed {
+                        input_0 = None;
+                    }
+                }
+                if let Some(input) = &input_1 {
+                    let mut closed = false;
+                    for record in input.try_iter() {
+                        if let Some(record) = record {
+                            println!("rev_word_{} [label=\"{}\"]", record.anchor(), record.token());
+                            println!("word_{} -> rev_word_{}", record.anchor(), record.anchor());
+                            read += 1;
+                        } else {
+                            closed = true;
+                        }
+                    }
+                    if closed {
+                        input_1 = None;
+                    }
+                }
+                if let Some(input) = &input_2 {
+                    let mut closed = false;
+                    for record in input.try_iter() {
+                        if let Some(record) = record {
+                            println!("ci_word_{} [label=\"{}\"]", record.ci_anchor(), record.token());
+                            for ref_record in record.ci_refs() {
+                                println!("word_{} -> ci_word_{}", ref_record.anchor(), record.ci_anchor());
+                            }
+                            read += 1;
+                        } else {
+                            closed = true;
+                        }
+                    }
+                    if closed {
+                        input_2 = None;
+                    }
+                }
+                if let Some(input) = &input_3 {
+                    let mut closed = false;
+                    for record in input.try_iter() {
+                        if let Some(record) = record {
+                            println!("rev_ci_word_{} [label=\"{}\"]", record.ci_anchor(), record.token());
+                            println!("ci_word_{} -> rev_ci_word_{}", record.ci_anchor(), record.ci_anchor());
+                            read += 1;
+                        } else {
+                            closed = true;
+                        }
+                    }
+                    if closed {
+                        input_3 = None;
+                    }
+                }
+                if read == 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(42));
                 }
             }
-            Ok(())
-"#,
-      )
-  )
-
-  ( < s4
-    - function_terminate#term_4(
-        body: r#"
-            while let Some(record) = input.next()? {
-                println!("term_4 {} (ci id = {:?})", record.token(), record.ci_anchor());
-            }
+            println!("}}");
             Ok(())
 "#,
       )

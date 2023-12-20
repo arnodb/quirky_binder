@@ -4,6 +4,8 @@
 #[macro_use]
 extern crate assert_matches;
 #[macro_use]
+extern crate derive_more;
+#[macro_use]
 extern crate derive_new;
 #[macro_use]
 extern crate lazy_static;
@@ -43,5 +45,5 @@ impl<T> From<SendError<T>> for DatapetError {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, new)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Display, Deref, new)]
 pub struct AnchorId<const TABLE_ID: usize>(usize);

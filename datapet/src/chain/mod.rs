@@ -180,7 +180,7 @@ impl<'a> Chain<'a> {
         })
     }
 
-    pub fn get_thread_id_and_module_by_source(
+    pub fn get_thread_by_source(
         &mut self,
         input: &NodeStream,
         new_thread_name: &FullyQualifiedName,
@@ -508,7 +508,7 @@ impl<'a> Chain<'a> {
     ) {
         let name = node.name();
 
-        let thread = self.get_thread_id_and_module_by_source(input, name, Some(output));
+        let thread = self.get_thread_by_source(input, name, Some(output));
 
         let record = self.stream_definition_fragments(output).record();
 

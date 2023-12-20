@@ -13,20 +13,20 @@ pub struct FunctionTerminateParams<'a> {
 }
 
 #[derive(Getters)]
-pub struct FunctionTerminate {
+pub struct FunctionTerminate<const N: usize> {
     name: FullyQualifiedName,
     #[getset(get = "pub")]
-    inputs: [NodeStream; 1],
+    inputs: [NodeStream; N],
     #[getset(get = "pub")]
     outputs: [NodeStream; 0],
     body: TokenStream,
 }
 
-impl FunctionTerminate {
+impl<const N: usize> FunctionTerminate<N> {
     fn new<R: TypeResolver + Copy>(
         _graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
-        inputs: [NodeStream; 1],
+        inputs: [NodeStream; N],
         params: FunctionTerminateParams,
         trace: Trace,
     ) -> ChainResult<Self> {
@@ -49,7 +49,7 @@ impl FunctionTerminate {
     }
 }
 
-impl DynNode for FunctionTerminate {
+impl<const N: usize> DynNode for FunctionTerminate<N> {
     fn name(&self) -> &FullyQualifiedName {
         &self.name
     }
@@ -63,30 +63,51 @@ impl DynNode for FunctionTerminate {
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let thread = chain.get_thread_id_and_module_by_source(
-            self.inputs.single(),
-            &self.name,
-            self.outputs.none(),
-        );
+        let (thread_id, inputs) = if self.inputs.len() == 1 {
+            let thread =
+                chain.get_thread_by_source(&self.inputs[0], &self.name, self.outputs.none());
 
-        let input = thread.format_input(
-            self.inputs.single().source(),
-            graph.chain_customizer(),
-            true,
-        );
+            let input =
+                thread.format_input(self.inputs[0].source(), graph.chain_customizer(), true);
+
+            (thread.thread_id, vec![input])
+        } else {
+            let thread_id = chain.pipe_inputs(&self.name, &self.inputs, &self.outputs);
+
+            let inputs = (0..self.inputs.len())
+                .map(|input_index| {
+                    let input = format_ident!("input_{}", input_index);
+                    let expect = format!("input {}", input_index);
+                    quote! { let #input = thread_control.#input.take().expect(#expect); }
+                })
+                .collect::<Vec<_>>();
+
+            (thread_id, inputs)
+        };
+
+        let drop_thread_control = if inputs.is_empty() {
+            Some(quote! { drop(thread_control); })
+        } else {
+            None
+        };
 
         let body = &self.body;
 
         let thread_body = quote! {
-            #input
+            #(
+                #inputs
+            )*
+
+            #drop_thread_control
+
             move || {
                 #body
             }
         };
 
-        chain.implement_node_thread(self, thread.thread_id, &thread_body);
+        chain.implement_node_thread(self, thread_id, &thread_body);
 
-        chain.set_thread_main(thread.thread_id, self.name.clone());
+        chain.set_thread_main(thread_id, self.name.clone());
     }
 
     fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
@@ -94,12 +115,12 @@ impl DynNode for FunctionTerminate {
     }
 }
 
-pub fn function_terminate<R: TypeResolver + Copy>(
+pub fn function_terminate<const N: usize, R: TypeResolver + Copy>(
     graph: &mut GraphBuilder<R>,
     name: FullyQualifiedName,
-    inputs: [NodeStream; 1],
+    inputs: [NodeStream; N],
     params: FunctionTerminateParams,
     trace: Trace,
-) -> ChainResult<FunctionTerminate> {
+) -> ChainResult<FunctionTerminate<N>> {
     FunctionTerminate::new(graph, name, inputs, params, trace)
 }
