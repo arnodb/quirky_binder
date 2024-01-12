@@ -37,6 +37,12 @@ jobs:
         name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | bash
 
+      - id: pin_dependencies
+        name: Pin dependencies
+        if: ${{ matrix.rust == '1.65.0' }}
+        run: |
+          ./scripts/msrv_pin_dependencies.sh
+
       - id: rustfmt
         name: Rust format
         if: ${{ matrix.rust == 'stable' }}
