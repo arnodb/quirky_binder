@@ -10,6 +10,7 @@ fallible-iterator = "0.2"
 more-asserts = "0.3"
 rand = "0.8"
 rand_chacha = "0.3"
+serde = "1"
 static_assertions = "1"
 truc_runtime = { git = "https://github.com/arnodb/truc.git" }
 

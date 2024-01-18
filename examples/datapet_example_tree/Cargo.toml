@@ -7,6 +7,7 @@ rust-version = "1.65.0"
 [dependencies]
 datapet_support = { path = "../../datapet_support" }
 fallible-iterator = "0.2"
+serde = "1"
 static_assertions = "1"
 truc_runtime = { git = "https://github.com/arnodb/truc.git" }
 walkdir = "2"

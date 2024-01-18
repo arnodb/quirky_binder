@@ -1,3 +1,16 @@
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs::File,
+    path::Path,
+};
+
+use codegen::Scope;
+use itertools::{EitherOrBoth, Itertools};
+use truc::{
+    generator::{config::GeneratorConfig, fragment::serde::SerdeImplGenerator},
+    record::definition::{DatumId, RecordDefinition},
+};
+
 use crate::{
     drawing::{
         format_svg,
@@ -6,14 +19,6 @@ use crate::{
     },
     prelude::*,
 };
-use codegen::Scope;
-use itertools::{EitherOrBoth, Itertools};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    fs::File,
-    path::Path,
-};
-use truc::record::definition::{DatumId, RecordDefinition};
 
 pub mod builder;
 pub mod error;
@@ -47,7 +52,12 @@ impl Graph {
                     .skip(1)
                     .fold(module, |m, n| m.get_or_new_module(n).vis("pub"))
                     .scope();
-                module.raw(&truc::generator::generate(definition));
+                module.raw(&truc::generator::generate(
+                    definition,
+                    &GeneratorConfig {
+                        custom_fragment_generators: vec![Box::new(SerdeImplGenerator)],
+                    },
+                ));
             }
             write!(file, "{}", scope.to_string()).unwrap();
         }

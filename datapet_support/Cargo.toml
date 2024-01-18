@@ -5,10 +5,13 @@ edition = "2021"
 rust-version = "1.65.0"
 
 [dependencies]
+bincode = "1"
 derive_more = "0.99"
 derive-new = "0.5"
 fallible-iterator = "0.2"
 lazy_static = "1"
+serde = { version = "1", features = ["derive"] }
+tempfile = "3"
 thiserror = "1"
 
 [dev-dependencies]

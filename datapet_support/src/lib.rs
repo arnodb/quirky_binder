@@ -13,9 +13,12 @@ extern crate lazy_static;
 extern crate thiserror;
 
 pub mod chain;
+pub mod data;
 pub mod iterator;
 
 use std::sync::mpsc::{RecvError, SendError};
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Error, Debug)]
 pub enum DatapetError {
@@ -25,6 +28,8 @@ pub enum DatapetError {
     PipeRead,
     #[error("Pipe write error")]
     PipeWrite,
+    #[error("Bincode error {0}")]
+    Bincode(#[from] bincode::Error),
 }
 
 impl DatapetError {
@@ -45,5 +50,7 @@ impl<T> From<SendError<T>> for DatapetError {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Display, Deref, new)]
+#[derive(
+    Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Display, Deref, new, Serialize, Deserialize,
+)]
 pub struct AnchorId<const TABLE_ID: usize>(usize);
