@@ -20,7 +20,7 @@ use datapet::{
             let mut rng = rand_chacha::ChaCha8Rng::from_entropy();
             println!("Seed: {:02x?}", rng.get_seed());
 
-            for _ in 0..1024 {
+            for _ in 0..(1024 * 1024) {
                 let num: i8 = rng.gen();
 
                 let record = new_record(num);
@@ -55,7 +55,7 @@ use datapet::{
                 prev_num = Some(*record.num());
                 read += 1;
             }
-            assert_eq!(1024, read);
+            assert_eq!(1024 * 1024, read);
             Ok(())
 "#,
       )
