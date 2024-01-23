@@ -21,18 +21,22 @@ pub struct ToLowercase;
 impl TransformSpec for ToLowercase {
     fn update_facts<R: TypeResolver + Copy>(
         &self,
-        output_stream: &mut OutputBuilderForPassThrough<R>,
+        output_stream: &mut OutputBuilderForUpdate<R>,
         update_fields: &[ValidFieldName],
+        _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
     ) -> FactsFullyUpdated<()> {
-        let fields = update_fields;
-        output_stream.break_order_fact_at(fields.iter().map(ValidFieldName::name));
-        output_stream.break_distinct_fact_for(fields.iter().map(ValidFieldName::name));
+        output_stream.break_order_fact_at(update_fields.iter().map(ValidFieldName::name));
+        output_stream.break_distinct_fact_for(update_fields.iter().map(ValidFieldName::name));
         facts_proof.order_facts_updated().distinct_facts_updated()
     }
 
-    fn update_field(&self, src: TokenStream) -> TokenStream {
+    fn update_field(&self, _name: &str, src: TokenStream) -> TokenStream {
         quote! { #src.to_lowercase().into() }
+    }
+
+    fn type_update_field(&self, _name: &str, _src: TokenStream) -> TokenStream {
+        unimplemented!()
     }
 }
 
@@ -50,6 +54,7 @@ pub fn to_lowercase<R: TypeResolver + Copy>(
         inputs,
         TransformParams {
             update_fields: params.fields,
+            ..Default::default()
         },
         trace,
         TO_LOWERCASE_TRACE_NAME,
@@ -63,18 +68,22 @@ pub struct ReverseChars;
 impl TransformSpec for ReverseChars {
     fn update_facts<R: TypeResolver + Copy>(
         &self,
-        output_stream: &mut OutputBuilderForPassThrough<R>,
+        output_stream: &mut OutputBuilderForUpdate<R>,
         update_fields: &[ValidFieldName],
+        _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
     ) -> FactsFullyUpdated<()> {
-        let fields = update_fields;
         // TODO nice to have: change order direction
-        output_stream.break_order_fact_at(fields.iter().map(ValidFieldName::name));
+        output_stream.break_order_fact_at(update_fields.iter().map(ValidFieldName::name));
         facts_proof.order_facts_updated().distinct_facts_updated()
     }
 
-    fn update_field(&self, src: TokenStream) -> TokenStream {
+    fn update_field(&self, _name: &str, src: TokenStream) -> TokenStream {
         quote! { #src.chars().rev().collect::<String>().into() }
+    }
+
+    fn type_update_field(&self, _name: &str, _src: TokenStream) -> TokenStream {
+        unimplemented!()
     }
 }
 
@@ -92,6 +101,7 @@ pub fn reverse_chars<R: TypeResolver + Copy>(
         inputs,
         TransformParams {
             update_fields: params.fields,
+            ..Default::default()
         },
         trace,
         REVERSE_CHARS_TRACE_NAME,

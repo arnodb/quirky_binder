@@ -1,6 +1,8 @@
+use proc_macro2::TokenStream;
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
+use truc::record::{definition::DatumDefinition, type_resolver::TypeResolver};
 
+use super::transform::{Transform, TransformParams, TransformSpec};
 use crate::{prelude::*, trace_filter};
 
 const UNWRAP_TRACE_NAME: &str = "unwrap";
@@ -13,165 +15,92 @@ pub struct UnwrapParams<'a> {
     skip_nones: bool,
 }
 
-#[derive(Getters)]
 pub struct Unwrap {
-    name: FullyQualifiedName,
-    #[getset(get = "pub")]
-    inputs: [NodeStream; 1],
-    #[getset(get = "pub")]
-    outputs: [NodeStream; 1],
-    fields: Vec<ValidFieldName>,
-    skip_nones: bool,
+    none_strategy: NoneStrategy,
 }
 
-impl Unwrap {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
-        name: FullyQualifiedName,
-        inputs: [NodeStream; 1],
-        params: UnwrapParams,
+enum NoneStrategy {
+    Skip,
+    Fail { error_type: syn::Ident },
+}
+
+impl TransformSpec for Unwrap {
+    fn validate_type_update_field(
+        &self,
+        name: ValidFieldName,
+        datum: &DatumDefinition,
         trace: Trace,
-    ) -> ChainResult<Self> {
-        let valid_fields = params.fields.validate_on_stream(&inputs[0], graph, || {
-            trace_filter!(trace, UNWRAP_TRACE_NAME)
-        })?;
-
-        let mut streams = StreamsBuilder::new(&name, &inputs);
-
-        streams
-            .output_from_input(0, true, graph)
-            .update(|output_stream, facts_proof| {
-                let input_variant_id = output_stream.input_variant_id();
-                let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                for field in &valid_fields {
-                    let datum = output_stream_def
-                        .get_variant_datum_definition_by_name(input_variant_id, field.name())
-                        .unwrap_or_else(|| panic!(r#"datum "{}""#, field.name()));
-                    let datum_id = datum.id();
-                    let optional_type_name = datum.type_name().to_string();
-                    let type_name = {
-                        let s = optional_type_name.trim();
-                        let t = s.strip_prefix("Option").and_then(|t| {
-                            let t = t.trim();
-                            if t.starts_with('<') && t.ends_with('>') {
-                                Some(&t[1..t.len() - 1])
-                            } else {
-                                None
-                            }
-                        });
-                        match t {
-                            Some(t) => t,
-                            None => {
-                                return Err(ChainError::Other {
-                                    msg: format!(
-                                        "field `{}` is not an option: {}",
-                                        field.name(),
-                                        optional_type_name
-                                    ),
-                                    trace: trace_filter!(trace, UNWRAP_TRACE_NAME),
-                                });
-                            }
-                        }
-                    };
-                    // TODO Make truc support Option<T> replacement with T where the T value is stored
-                    // at the same offset so that records may remain identical, the enum discriminant
-                    // becoming a void space.
-                    output_stream_def.remove_datum(datum_id);
-                    output_stream_def.add_dynamic_datum(field.name(), type_name);
+    ) -> ChainResult<(ValidFieldName, ValidFieldType)> {
+        let optional_type_name = datum.type_name().to_string();
+        let type_name = {
+            let s = optional_type_name.trim();
+            let t = s.strip_prefix("Option").and_then(|t| {
+                let t = t.trim();
+                if t.starts_with('<') && t.ends_with('>') {
+                    Some(&t[1..t.len() - 1])
+                } else {
+                    None
                 }
-                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+            });
+            match t {
+                Some(t) => t,
+                None => {
+                    return Err(ChainError::Other {
+                        msg: format!(
+                            "field `{}` is not an option: {}",
+                            name.name(),
+                            optional_type_name
+                        ),
+                        trace: trace_filter!(trace, UNWRAP_TRACE_NAME),
+                    });
+                }
+            }
+        };
+        let valid_type =
+            ValidFieldType::try_from(type_name).map_err(|_| ChainError::InvalidFieldType {
+                type_name: type_name.to_owned(),
+                trace: trace_filter!(trace, UNWRAP_TRACE_NAME),
             })?;
-
-        let outputs = streams.build();
-
-        Ok(Self {
-            name,
-            inputs,
-            outputs,
-            fields: valid_fields,
-            skip_nones: params.skip_nones,
-        })
-    }
-}
-
-impl DynNode for Unwrap {
-    fn name(&self) -> &FullyQualifiedName {
-        &self.name
+        Ok((name, valid_type))
     }
 
-    fn inputs(&self) -> &[NodeStream] {
-        &self.inputs
+    fn update_facts<R: TypeResolver + Copy>(
+        &self,
+        _output_stream: &mut OutputBuilderForUpdate<R>,
+        _update_fields: &[ValidFieldName],
+        _type_update_fields: &[(ValidFieldName, ValidFieldType)],
+        facts_proof: NoFactsUpdated<()>,
+    ) -> FactsFullyUpdated<()> {
+        facts_proof.order_facts_updated().distinct_facts_updated()
     }
 
-    fn outputs(&self) -> &[NodeStream] {
-        &self.outputs
+    fn update_field(&self, _name: &str, _src: TokenStream) -> TokenStream {
+        unimplemented!()
     }
 
-    fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let def = chain.stream_definition_fragments(self.outputs.single());
-        let record = def.record();
-        let unpacked_record = def.unpacked_record();
-
-        let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
-        let variant = &record_definition[self.inputs.single().variant_id()];
-
-        let error_type = graph.chain_customizer().error_type.to_name();
-
-        let unwrap_fields = {
-            let unwraps = variant
-                .data()
-                .map(|d| {
-                    let datum = &record_definition[d];
-                    let name_ident = format_ident!("{}", datum.name());
-                    let error = if self.skip_nones {
-                        quote! {
-                            return Ok(None);
-                        }
-                    } else {
-                        let name = datum.name();
-                        quote! {
-                            return Err(#error_type::custom(
-                                format!("found None for field `{}`", #name)
-                            ));
-                        }
-                    };
-                    if self.fields.iter().any(|field| field.name() == datum.name()) {
-                        quote! {
-                            #name_ident: match unpacked.#name_ident {
-                                Some(value) => value,
-                                None => {
-                                    #error
-                                }
-                            }
-                        }
-                    } else {
-                        quote! {
-                            #name_ident: unpacked.#name_ident
-                        }
-                    }
-                })
-                .collect::<Vec<_>>();
-            quote!(#(#unwraps),*)
+    fn type_update_field(&self, name: &str, src: TokenStream) -> TokenStream {
+        let error = match &self.none_strategy {
+            NoneStrategy::Skip => {
+                quote! {
+                    return Ok(None);
+                }
+            }
+            NoneStrategy::Fail { error_type } => {
+                quote! {
+                    return Err(#error_type::custom(
+                        format!("found None for field `{}`", #name)
+                    ));
+                }
+            }
         };
-
-        let inline_body = quote! {
-            input.filter_map(|rec| {
-                let unpacked = rec.unpack();
-                let unwrapped = #record::from(#unpacked_record { #unwrap_fields });
-                Ok(Some(unwrapped))
-            })
-        };
-
-        chain.implement_inline_node(
-            self,
-            self.inputs.single(),
-            self.outputs.single(),
-            &inline_body,
-        );
-    }
-
-    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
-        Box::new(Some(self as &dyn DynNode).into_iter())
+        quote! {
+            match #src {
+                Some(value) => value,
+                None => {
+                    #error
+                }
+            }
+        }
     }
 }
 
@@ -181,6 +110,25 @@ pub fn unwrap<R: TypeResolver + Copy>(
     inputs: [NodeStream; 1],
     params: UnwrapParams,
     trace: Trace,
-) -> ChainResult<Unwrap> {
-    Unwrap::new(graph, name, inputs, params, trace)
+) -> ChainResult<Transform<Unwrap>> {
+    Transform::new(
+        Unwrap {
+            none_strategy: if params.skip_nones {
+                NoneStrategy::Skip
+            } else {
+                NoneStrategy::Fail {
+                    error_type: graph.chain_customizer().error_type.to_name(),
+                }
+            },
+        },
+        graph,
+        name,
+        inputs,
+        TransformParams {
+            type_update_fields: params.fields,
+            ..Default::default()
+        },
+        trace,
+        UNWRAP_TRACE_NAME,
+    )
 }

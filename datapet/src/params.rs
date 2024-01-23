@@ -19,6 +19,10 @@ use crate::{
 pub struct FieldsParam<'a>(#[serde(borrow)] Box<[&'a str]>);
 
 impl<'a> FieldsParam<'a> {
+    pub fn empty() -> Self {
+        Self(Default::default())
+    }
+
     pub fn validate<L, TRACE>(self, lookup: L, trace: TRACE) -> ChainResult<Vec<ValidFieldName>>
     where
         L: Fn(&ValidFieldName) -> bool,
