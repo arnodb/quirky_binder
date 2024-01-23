@@ -52,7 +52,7 @@ impl FunctionProduce {
             .distinct_fields
             .map(|distinct_fields| {
                 distinct_fields.validate(
-                    |name| valid_fields.iter().any(|vf| vf.0.name() == name),
+                    |name| valid_fields.iter().any(|vf| vf.0.name() == name.name()),
                     || trace_filter!(trace, FUNCTION_PRODUCE_TRACE_NAME),
                 )
             })

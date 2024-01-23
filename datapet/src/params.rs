@@ -1,7 +1,10 @@
 use std::{cell::Ref, iter::once};
 
 use serde::Deserialize;
-use truc::record::{definition::RecordDefinitionBuilder, type_resolver::TypeResolver};
+use truc::record::{
+    definition::{DatumDefinition, RecordDefinitionBuilder},
+    type_resolver::TypeResolver,
+};
 
 use crate::{
     chain::{error::ChainError, ChainResult, Trace},
@@ -18,7 +21,30 @@ pub struct FieldsParam<'a>(#[serde(borrow)] Box<[&'a str]>);
 impl<'a> FieldsParam<'a> {
     pub fn validate<L, TRACE>(self, lookup: L, trace: TRACE) -> ChainResult<Vec<ValidFieldName>>
     where
-        L: Fn(&str) -> bool,
+        L: Fn(&ValidFieldName) -> bool,
+        TRACE: Fn() -> Trace<'static> + Clone,
+    {
+        self.validate_ext(
+            {
+                let trace = trace.clone();
+                move |name| {
+                    if lookup(&name) {
+                        Ok(name)
+                    } else {
+                        Err(ChainError::FieldNotFound {
+                            field: name.name().to_owned(),
+                            trace: trace(),
+                        })
+                    }
+                }
+            },
+            trace,
+        )
+    }
+
+    pub fn validate_ext<L, O, TRACE>(self, lookup: L, trace: TRACE) -> ChainResult<Vec<O>>
+    where
+        L: Fn(ValidFieldName) -> ChainResult<O>,
         TRACE: Fn() -> Trace<'static>,
     {
         let valid_fields = self
@@ -29,13 +55,7 @@ impl<'a> FieldsParam<'a> {
                         name: (*name).to_owned(),
                         trace: trace(),
                     })?;
-                if !lookup(valid.name()) {
-                    return Err(ChainError::FieldNotFound {
-                        field: valid.name().to_owned(),
-                        trace: trace(),
-                    });
-                }
-                Ok(valid)
+                lookup(valid)
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(valid_fields)
@@ -48,10 +68,36 @@ impl<'a> FieldsParam<'a> {
     ) -> ChainResult<Vec<ValidFieldName>>
     where
         R: TypeResolver,
-        TRACE: Fn() -> Trace<'static>,
+        TRACE: Fn() -> Trace<'static> + Clone,
     {
-        self.validate(
-            |field| def.get_current_datum_definition_by_name(field).is_some(),
+        self.validate_on_record_definition_ext(def, |name, _datum| Ok(name), trace)
+    }
+
+    pub fn validate_on_record_definition_ext<R, M, O, TRACE>(
+        self,
+        def: &RecordDefinitionBuilder<R>,
+        try_map: M,
+        trace: TRACE,
+    ) -> ChainResult<Vec<O>>
+    where
+        R: TypeResolver,
+        M: Fn(ValidFieldName, &DatumDefinition) -> ChainResult<O>,
+        TRACE: Fn() -> Trace<'static> + Clone,
+    {
+        self.validate_ext(
+            {
+                let trace = trace.clone();
+                move |name| {
+                    if let Some(datum) = def.get_current_datum_definition_by_name(name.name()) {
+                        try_map(name, datum)
+                    } else {
+                        Err(ChainError::FieldNotFound {
+                            field: name.name().to_owned(),
+                            trace: trace(),
+                        })
+                    }
+                }
+            },
             trace,
         )
     }
@@ -64,7 +110,22 @@ impl<'a> FieldsParam<'a> {
     ) -> ChainResult<Vec<ValidFieldName>>
     where
         R: TypeResolver + Copy,
-        TRACE: Fn() -> Trace<'static>,
+        TRACE: Fn() -> Trace<'static> + Clone,
+    {
+        self.validate_on_stream_ext(stream, graph, |name, _datum| Ok(name), trace)
+    }
+
+    pub fn validate_on_stream_ext<R, M, O, TRACE>(
+        self,
+        stream: &NodeStream,
+        graph: &GraphBuilder<R>,
+        try_map: M,
+        trace: TRACE,
+    ) -> ChainResult<Vec<O>>
+    where
+        R: TypeResolver + Copy,
+        M: Fn(ValidFieldName, &DatumDefinition) -> ChainResult<O>,
+        TRACE: Fn() -> Trace<'static> + Clone,
     {
         let def = graph
             .get_stream(stream.record_type())
@@ -73,7 +134,7 @@ impl<'a> FieldsParam<'a> {
                 trace: trace(),
             })?
             .borrow();
-        self.validate_on_record_definition(&def, trace)
+        self.validate_on_record_definition_ext(&def, try_map, trace)
     }
 
     pub fn validate_path_on_stream<'g, R, TRACE>(
