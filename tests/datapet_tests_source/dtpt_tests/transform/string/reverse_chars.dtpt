@@ -4,26 +4,26 @@ use datapet::{
             produce::function_produce,
             terminate::function_terminate,
         },
-        in_place::string::to_lowercase,
+        transform::string::reverse_chars,
     },
 };
 
 {
   (
       function_produce(
-        fields: [("value", "Box<str>")],
+        fields: [("value", "String")],
         body: r#"{
-            let record = new_record("BoîTe".into());
+            let record = new_record("BoîTe".to_string());
             output.send(Some(record))?;
             output.send(None)?;
             Ok(())
         }"#,
       )
-    - to_lowercase(fields: ["value"])
+    - reverse_chars(fields: ["value"])
     - function_terminate(
         body: r#"
             let record = input.next()?.unwrap();
-            assert_eq!(record.value().as_ref(), "boîte");
+            assert_eq!(record.value().as_str(), "eTîoB");
             assert!(input.next()?.is_none());
             Ok(())
 "#,

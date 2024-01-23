@@ -3,7 +3,12 @@ pub use crate::{
         error::ChainError, Chain, ChainCustomizer, ChainResult, ImportScope, Trace, TraceElement,
     },
     graph::{
-        builder::{update::PathUpdateElement, GraphBuilder, StreamsBuilder},
+        builder::{
+            pass_through::{OutputBuilderForPassThrough, SubStreamBuilderForPassThrough},
+            update::{OutputBuilderForUpdate, PathUpdateElement, SubStreamBuilderForUpdate},
+            DistinctFactsUpdated, FactsFullyUpdated, GraphBuilder, NoFactsUpdated,
+            OrderFactsUpdated, StreamsBuilder,
+        },
         error::GraphGenerationError,
         node::{DynNode, NodeCluster},
         Graph,

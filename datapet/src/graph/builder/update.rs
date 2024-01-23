@@ -275,7 +275,11 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
         );
     }
 
-    pub fn break_order_fact_at(&mut self, fields: &[&str]) {
+    pub fn break_order_fact_at<I, F>(&mut self, fields: I)
+    where
+        I: IntoIterator<Item = F>,
+        F: AsRef<str>,
+    {
         break_order_fact_at(&mut self.facts, fields, &*self.record_definition.borrow());
     }
 
@@ -309,7 +313,11 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
         set_distinct_fact_all_fields(&mut self.facts, &*self.record_definition.borrow());
     }
 
-    pub fn break_distinct_fact_for(&mut self, fields: &[&str]) {
+    pub fn break_distinct_fact_for<I, F>(&mut self, fields: I)
+    where
+        I: IntoIterator<Item = F>,
+        F: AsRef<str>,
+    {
         break_distinct_fact_for(&mut self.facts, fields, &*self.record_definition.borrow());
     }
 

@@ -4,7 +4,7 @@ use datapet::{
             produce::function_produce,
             terminate::function_terminate,
         },
-        in_place::string::reverse_chars,
+        transform::string::reverse_chars,
     },
 };
 

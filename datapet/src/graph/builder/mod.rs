@@ -356,16 +356,19 @@ pub fn set_order_fact<R: TypeResolver, I, F>(
     facts.set_order(order);
 }
 
-pub fn break_order_fact_at<R: TypeResolver>(
+pub fn break_order_fact_at<R: TypeResolver, I, F>(
     facts: &mut StreamFacts,
-    fields: &[&str],
+    fields: I,
     record_definition: &RecordDefinitionBuilder<R>,
-) {
+) where
+    I: IntoIterator<Item = F>,
+    F: AsRef<str>,
+{
     break_order_fact_at_ids(
         facts,
-        fields.iter().map(|field| {
+        fields.into_iter().map(|field| {
             record_definition
-                .get_current_datum_definition_by_name(field)
+                .get_current_datum_definition_by_name(field.as_ref())
                 .expect("datum")
                 .id()
         }),
@@ -523,16 +526,19 @@ pub fn set_distinct_fact_all_fields<R: TypeResolver>(
     facts.set_distinct(distinct.collect());
 }
 
-pub fn break_distinct_fact_for<R: TypeResolver>(
+pub fn break_distinct_fact_for<R: TypeResolver, I, F>(
     facts: &mut StreamFacts,
-    fields: &[&str],
+    fields: I,
     record_definition: &RecordDefinitionBuilder<R>,
-) {
+) where
+    I: IntoIterator<Item = F>,
+    F: AsRef<str>,
+{
     break_distinct_fact_for_ids(
         facts,
-        fields.iter().map(|field| {
+        fields.into_iter().map(|field| {
             record_definition
-                .get_current_datum_definition_by_name(field)
+                .get_current_datum_definition_by_name(field.as_ref())
                 .expect("datum")
                 .id()
         }),

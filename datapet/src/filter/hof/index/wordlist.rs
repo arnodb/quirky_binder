@@ -7,8 +7,8 @@ use crate::{
         anchor::anchor,
         fork::extract_fields::extract_fields,
         group::group,
-        in_place::string::{reverse_chars, to_lowercase},
         sort::sort,
+        transform::string::{reverse_chars, to_lowercase},
     },
 };
 

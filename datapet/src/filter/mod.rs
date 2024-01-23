@@ -6,6 +6,6 @@ pub mod fork;
 pub mod function;
 pub mod group;
 pub mod hof;
-pub mod in_place;
 pub mod sort;
+pub mod transform;
 pub mod unwrap;

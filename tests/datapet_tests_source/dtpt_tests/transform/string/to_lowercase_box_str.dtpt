@@ -4,16 +4,16 @@ use datapet::{
             produce::function_produce,
             terminate::function_terminate,
         },
-        in_place::string::to_lowercase,
+        transform::string::to_lowercase,
     },
 };
 
 {
   (
       function_produce(
-        fields: [("value", "String")],
+        fields: [("value", "Box<str>")],
         body: r#"{
-            let record = new_record("BoîTe".to_string());
+            let record = new_record("BoîTe".into());
             output.send(Some(record))?;
             output.send(None)?;
             Ok(())
@@ -23,7 +23,7 @@ use datapet::{
     - function_terminate(
         body: r#"
             let record = input.next()?.unwrap();
-            assert_eq!(record.value().as_str(), "boîte");
+            assert_eq!(record.value().as_ref(), "boîte");
             assert!(input.next()?.is_none());
             Ok(())
 "#,
