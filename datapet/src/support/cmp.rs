@@ -1,9 +1,10 @@
-use itertools::zip_eq;
-use serde::Deserialize;
 use std::{
     fmt::{Debug, Display, Formatter},
     ops::Deref,
 };
+
+use itertools::zip_eq;
+use serde::Deserialize;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash, Deserialize, Debug)]
 #[serde(from = "MaybeTaggedDirected<T>")]
@@ -62,7 +63,7 @@ impl<T> Directed<T> {
 
     pub fn map<U, F>(self, f: F) -> Directed<U>
     where
-        F: Fn(T) -> U,
+        F: FnOnce(T) -> U,
     {
         match self {
             Directed::Ascending(t) => Directed::Ascending(f(t)),

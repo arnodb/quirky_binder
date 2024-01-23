@@ -101,7 +101,7 @@ pub struct SubDedup {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    path_fields: Vec<String>,
+    path_fields: Vec<ValidFieldName>,
     path_sub_stream: NodeSubStream,
 }
 
@@ -150,10 +150,7 @@ impl SubDedup {
             name,
             inputs,
             outputs,
-            path_fields: valid_path_fields
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>(),
+            path_fields: valid_path_fields,
             path_sub_stream,
         })
     }
@@ -183,11 +180,11 @@ impl DynNode for SubDedup {
         let sub_variant = &sub_record_definition[self.path_sub_stream.variant_id()];
 
         let flat_map = self.path_fields.iter().rev().fold(None, |tail, field| {
-            let access = format_ident!("{}_mut", field);
+            let mut_access = field.mut_ident();
             Some(if let Some(tail) = tail {
-                quote! {record.#access().iter_mut().flat_map(|record| #tail)}
+                quote! {record.#mut_access().iter_mut().flat_map(|record| #tail)}
             } else {
-                quote! {Some(record.#access()).into_iter()}
+                quote! {Some(record.#mut_access()).into_iter()}
             })
         });
 

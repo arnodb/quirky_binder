@@ -94,7 +94,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
 
     pub fn update_path<UpdateLeafSubStream, UpdatePathStream, UpdateRootStream>(
         &mut self,
-        path_fields: &[&str],
+        path_fields: &[ValidFieldName],
         update_leaf_sub_stream: UpdateLeafSubStream,
         update_path_stream: UpdatePathStream,
         update_root_stream: UpdateRootStream,
@@ -119,7 +119,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
     {
         struct PathFieldDetails<'a> {
             stream: NodeSubStream,
-            field: &'a str,
+            field: &'a ValidFieldName,
             datum_id: DatumId,
         }
 
@@ -129,16 +129,16 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
             let datum_id = self
                 .record_definition
                 .borrow()
-                .get_current_datum_definition_by_name(field)
+                .get_current_datum_definition_by_name(field.name())
                 .map(DatumDefinition::id);
             if let Some(datum_id) = datum_id {
                 let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
                 let sub_record_definition = graph
                     .get_stream(sub_stream.record_type())
                     .unwrap_or_else(|| panic!(r#"stream "{}""#, sub_stream.record_type()));
-                (*field, datum_id, sub_stream, sub_record_definition)
+                (field, datum_id, sub_stream, sub_record_definition)
             } else {
-                panic!("could not find datum `{}`", field);
+                panic!("could not find datum `{}`", field.name());
             }
         };
 
@@ -152,7 +152,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
             |(mut path_data, mut stream, record_definition), field| {
                 let datum_id = record_definition
                     .borrow()
-                    .get_current_datum_definition_by_name(field)
+                    .get_current_datum_definition_by_name(field.name())
                     .map(DatumDefinition::id);
                 if let Some(datum_id) = datum_id {
                     let sub_stream = stream
@@ -169,7 +169,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
                     });
                     (path_data, sub_stream, sub_record_definition)
                 } else {
-                    panic!("could not find datum `{}`", field);
+                    panic!("could not find datum `{}`", field.name());
                 }
             },
         );
@@ -192,7 +192,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
                     panic!("sub stream should have been removed");
                 }
                 path_update_streams.push(PathUpdateElement {
-                    field: field_details.field.to_owned(),
+                    field: field_details.field.clone(),
                     sub_input_stream: sub_input_stream.take().expect("sub_input_stream"),
                     sub_output_stream: sub_stream.clone(),
                 });
@@ -202,7 +202,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
                     graph,
                     |_, path_stream, facts_proof| {
                         update_path_stream(
-                            field_details.field,
+                            field_details.field.name(),
                             path_stream,
                             sub_stream,
                             facts_proof,
@@ -222,11 +222,11 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
                 panic!("sub stream should have been removed");
             }
             path_update_streams.push(PathUpdateElement {
-                field: root_field.to_owned(),
+                field: root_field.clone(),
                 sub_input_stream: sub_input_stream.take().expect("sub_input_stream"),
                 sub_output_stream: sub_stream.clone(),
             });
-            update_root_stream(root_field, self, sub_stream)?;
+            update_root_stream(root_field.name(), self, sub_stream)?;
         }
 
         // They were pushed in reverse order
@@ -263,7 +263,11 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
         }
     }
 
-    pub fn set_order_fact(&mut self, order_fields: &[Directed<&str>]) {
+    pub fn set_order_fact<I, F>(&mut self, order_fields: I)
+    where
+        I: IntoIterator<Item = Directed<F>>,
+        F: AsRef<str>,
+    {
         set_order_fact(
             &mut self.facts,
             order_fields,
@@ -282,7 +286,11 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
         break_order_fact_at_ids(&mut self.facts, datum_ids);
     }
 
-    pub fn set_distinct_fact(&mut self, distinct_fields: &[&str]) {
+    pub fn set_distinct_fact<I, F>(&mut self, distinct_fields: I)
+    where
+        I: IntoIterator<Item = F>,
+        F: AsRef<str>,
+    {
         set_distinct_fact(
             &mut self.facts,
             distinct_fields,
@@ -327,7 +335,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
 }
 
 pub struct PathUpdateElement {
-    pub field: String,
+    pub field: ValidFieldName,
     pub sub_input_stream: NodeSubStream,
     pub sub_output_stream: NodeSubStream,
 }

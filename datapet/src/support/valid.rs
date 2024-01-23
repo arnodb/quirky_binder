@@ -1,4 +1,4 @@
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ValidFieldName(String, syn::Ident);
 
 impl ValidFieldName {
@@ -8,6 +8,10 @@ impl ValidFieldName {
 
     pub fn ident(&self) -> &syn::Ident {
         &self.1
+    }
+
+    pub fn mut_ident(&self) -> syn::Ident {
+        format_ident!("{}_mut", self.name())
     }
 }
 

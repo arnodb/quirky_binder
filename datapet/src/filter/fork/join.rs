@@ -25,8 +25,8 @@ pub struct Join {
     inputs: [NodeStream; 2],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    primary_fields: Vec<String>,
-    secondary_fields: Vec<String>,
+    primary_fields: Vec<ValidFieldName>,
+    secondary_fields: Vec<ValidFieldName>,
     joined_fields: Vec<String>,
 }
 
@@ -67,7 +67,7 @@ impl Join {
                         let mut expected_fact_fields = Vec::with_capacity(fields.len());
                         for datum_id in variant.data() {
                             let datum = &input_stream_def[datum_id];
-                            if fields.iter().any(|field| *field == datum.name()) {
+                            if fields.iter().any(|field| field.name() == datum.name()) {
                                 expected_fact_fields.push(datum.id());
                             }
                         }
@@ -101,7 +101,7 @@ impl Join {
                             let datum = &secondary_stream_def[d];
                             if !valid_secondary_fields
                                 .iter()
-                                .any(|field| *field == datum.name())
+                                .any(|field| field.name() == datum.name())
                             {
                                 output_stream_def.copy_datum(datum);
                                 Some(datum.name().to_owned())
@@ -124,14 +124,8 @@ impl Join {
             name,
             inputs,
             outputs,
-            primary_fields: valid_primary_fields
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>(),
-            secondary_fields: valid_secondary_fields
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>(),
+            primary_fields: valid_primary_fields,
+            secondary_fields: valid_secondary_fields,
             joined_fields,
         })
     }
@@ -161,9 +155,9 @@ impl DynNode for Join {
 
         let cmp = fields_cmp_ab(
             &primary_input_def.record(),
-            &self.primary_fields,
+            self.primary_fields.iter().map(ValidFieldName::name),
             &secondary_input_def.record(),
-            &self.secondary_fields,
+            self.secondary_fields.iter().map(ValidFieldName::name),
         );
 
         let has_joined_fields = !self.joined_fields.is_empty();

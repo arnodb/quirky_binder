@@ -58,7 +58,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
 
     pub fn pass_through_path<PassThroughLeafSubStream>(
         &mut self,
-        path_fields: &[&str],
+        path_fields: &[ValidFieldName],
         pass_through_leaf_sub_stream: PassThroughLeafSubStream,
         graph: &'g GraphBuilder<R>,
     ) -> NodeSubStream
@@ -79,7 +79,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
             let datum_id = self
                 .record_definition
                 .borrow()
-                .get_current_datum_definition_by_name(field)
+                .get_current_datum_definition_by_name(field.name())
                 .map(DatumDefinition::id);
             if let Some(datum_id) = datum_id {
                 let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
@@ -88,7 +88,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
                     .unwrap_or_else(|| panic!(r#"stream "{}""#, sub_stream.record_type()));
                 (datum_id, sub_stream, sub_record_definition)
             } else {
-                panic!("could not find datum `{}`", field);
+                panic!("could not find datum `{}`", field.name());
             }
         };
 
@@ -102,7 +102,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
             |(mut path_data, mut stream, record_definition), field| {
                 let datum_id = record_definition
                     .borrow()
-                    .get_current_datum_definition_by_name(field)
+                    .get_current_datum_definition_by_name(field.name())
                     .map(DatumDefinition::id);
                 if let Some(datum_id) = datum_id {
                     let sub_stream = stream
@@ -115,7 +115,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
                     path_data.push(PathFieldDetails { stream, datum_id });
                     (path_data, sub_stream, sub_record_definition)
                 } else {
-                    panic!("could not find datum `{}`", field);
+                    panic!("could not find datum `{}`", field.name());
                 }
             },
         );
@@ -151,7 +151,11 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
         leaf_sub_output_stream
     }
 
-    pub fn set_order_fact(&mut self, order_fields: &[Directed<&str>]) {
+    pub fn set_order_fact<I, F>(&mut self, order_fields: I)
+    where
+        I: IntoIterator<Item = Directed<F>>,
+        F: AsRef<str>,
+    {
         set_order_fact(
             &mut self.facts,
             order_fields,
@@ -235,7 +239,11 @@ impl<'g, R: TypeResolver> SubStreamBuilderForPassThrough<'g, R> {
         )
     }
 
-    pub fn set_order_fact(&mut self, order_fields: &[Directed<&str>]) {
+    pub fn set_order_fact<I, F>(&mut self, order_fields: I)
+    where
+        I: IntoIterator<Item = Directed<F>>,
+        F: AsRef<str>,
+    {
         set_order_fact(
             &mut self.facts,
             order_fields,

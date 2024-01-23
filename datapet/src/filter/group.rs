@@ -26,9 +26,9 @@ pub struct Group {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    group_field: String,
+    group_field: ValidFieldName,
     group_stream: NodeSubStream,
-    fields: Vec<String>,
+    fields: Vec<ValidFieldName>,
 }
 
 impl Group {
@@ -42,6 +42,12 @@ impl Group {
         let valid_fields = params
             .fields
             .validate_on_stream(&inputs[0], graph, || trace_filter!(trace, GROUP_TRACE_NAME))?;
+        let valid_group_field = ValidFieldName::try_from(params.group_field).map_err(|_| {
+            ChainError::InvalidFieldName {
+                name: params.group_field.to_owned(),
+                trace: trace_filter!(trace, GROUP_TRACE_NAME),
+            }
+        })?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("group", graph);
@@ -64,7 +70,10 @@ impl Group {
                         let mut group_datum_ids = Vec::with_capacity(valid_fields.len());
                         for datum_id in variant.data() {
                             let datum = &output_stream_def[datum_id];
-                            if valid_fields.iter().any(|field| *field == datum.name()) {
+                            if valid_fields
+                                .iter()
+                                .any(|field| field.name() == datum.name())
+                            {
                                 group_data.push(datum);
                                 group_datum_ids.push(datum.id());
                             } else {
@@ -138,12 +147,9 @@ impl Group {
             name: name.clone(),
             inputs,
             outputs,
-            group_field: params.group_field.to_string(),
+            group_field: valid_group_field,
             group_stream,
-            fields: valid_fields
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>(),
+            fields: valid_fields,
         })
     }
 }
@@ -176,13 +182,13 @@ impl DynNode for Group {
             let names = self
                 .fields
                 .iter()
-                .map(|name| format_ident!("{}", name))
+                .map(ValidFieldName::ident)
                 .collect::<Vec<_>>();
             quote!(#(#names),*)
         };
 
-        let group_field = format_ident!("{}", self.group_field);
-        let mut_group_field = format_ident!("{}_mut", self.group_field);
+        let group_field = self.group_field.ident();
+        let mut_group_field = self.group_field.mut_ident();
 
         let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
         let variant = &record_definition[self.inputs.single().variant_id()];
@@ -191,8 +197,8 @@ impl DynNode for Group {
                 .data()
                 .filter_map(|d| {
                     let datum = &record_definition[d];
-                    if !self.fields.iter().any(|f| f == datum.name())
-                        && datum.name() != self.group_field
+                    if !self.fields.iter().any(|field| field.name() == datum.name())
+                        && datum.name() != self.group_field.name()
                     {
                         Some(datum.name())
                     } else {
@@ -267,9 +273,9 @@ pub struct SubGroup {
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     path_streams: Vec<PathUpdateElement>,
-    group_field: String,
+    group_field: ValidFieldName,
     group_stream: NodeSubStream,
-    fields: Vec<String>,
+    fields: Vec<ValidFieldName>,
 }
 
 impl SubGroup {
@@ -286,6 +292,12 @@ impl SubGroup {
                 .validate_path_on_stream(&inputs[0], graph, || {
                     trace_filter!(trace, SUB_GROUP_TRACE_NAME)
                 })?;
+        let valid_group_field = ValidFieldName::try_from(params.group_field).map_err(|_| {
+            ChainError::InvalidFieldName {
+                name: params.group_field.to_owned(),
+                trace: trace_filter!(trace, GROUP_TRACE_NAME),
+            }
+        })?;
         let valid_fields = params.fields.validate_on_record_definition(&path_def, || {
             trace_filter!(trace, SUB_GROUP_TRACE_NAME)
         })?;
@@ -328,7 +340,7 @@ impl SubGroup {
                                             let datum = &output_stream_def[datum_id];
                                             if valid_fields
                                                 .iter()
-                                                .any(|field| *field == datum.name())
+                                                .any(|field| field.name() == datum.name())
                                             {
                                                 group_data.push(datum);
                                                 group_datum_ids.push(datum.id());
@@ -441,12 +453,9 @@ impl SubGroup {
             inputs,
             outputs,
             path_streams,
-            group_field: params.group_field.to_string(),
+            group_field: valid_group_field,
             group_stream: created_group_stream.expect("group stream"),
-            fields: valid_fields
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>(),
+            fields: valid_fields,
         })
     }
 }
@@ -475,13 +484,13 @@ impl DynNode for SubGroup {
             let names = self
                 .fields
                 .iter()
-                .map(|name| format_ident!("{}", name))
+                .map(ValidFieldName::ident)
                 .collect::<Vec<_>>();
             quote!(#(#names),*)
         };
 
-        let group_field = format_ident!("{}", self.group_field);
-        let mut_group_field = format_ident!("{}_mut", self.group_field);
+        let group_field = self.group_field.ident();
+        let mut_group_field = self.group_field.mut_ident();
 
         let eq = {
             let path_stream = self.path_streams.last().expect("last path field");
@@ -498,8 +507,8 @@ impl DynNode for SubGroup {
                 &record,
                 variant.data().filter_map(|d| {
                     let datum = &leaf_record_definition[d];
-                    if !self.fields.iter().any(|f| f == datum.name())
-                        && datum.name() != self.group_field
+                    if !self.fields.iter().any(|f| f.name() == datum.name())
+                        && datum.name() != self.group_field.name()
                     {
                         Some(datum.name())
                     } else {
@@ -523,8 +532,8 @@ impl DynNode for SubGroup {
                 let unpacked_record_in = out_record_definition.unpacked_record_in();
                 let record_and_unpacked_out = out_record_definition.record_and_unpacked_out();
 
-                let access = format_ident!("{}", path_stream.field);
-                let access_mut = format_ident!("{}_mut", path_stream.field);
+                let access = path_stream.field.ident();
+                let mut_access = path_stream.field.mut_ident();
                 Some(if let Some((tail, sub_access)) = tail {
                     (
                         quote! {
@@ -543,7 +552,7 @@ impl DynNode for SubGroup {
                                     VecElementConversionResult::Converted(record)
                                 },
                             );
-                            *record.#access_mut() = converted;
+                            *record.#mut_access() = converted;
                         },
                         access,
                     )
@@ -577,7 +586,7 @@ impl DynNode for SubGroup {
                                     VecElementConversionResult::Converted(record)
                                 },
                             );
-                            *record.#access_mut() = converted;
+                            *record.#mut_access() = converted;
                         },
                         access,
                     )

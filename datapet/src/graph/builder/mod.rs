@@ -329,18 +329,21 @@ fn replace_vec_datum_in_record_definition<R: TypeResolver>(
     )
 }
 
-pub fn set_order_fact<R: TypeResolver>(
+pub fn set_order_fact<R: TypeResolver, I, F>(
     facts: &mut StreamFacts,
-    order_fields: &[Directed<&str>],
+    order_fields: I,
     record_definition: &RecordDefinitionBuilder<R>,
-) {
+) where
+    I: IntoIterator<Item = Directed<F>>,
+    F: AsRef<str>,
+{
     // Ensure uniqueness, but keep order
     let mut seen = BTreeSet::<DatumId>::new();
     let order = order_fields
-        .iter()
+        .into_iter()
         .filter_map(|field| {
             let datum_id = record_definition
-                .get_current_datum_definition_by_name(field)
+                .get_current_datum_definition_by_name((*field).as_ref())
                 .expect("datum")
                 .id();
             (!seen.contains(&datum_id)).then(|| {
@@ -481,16 +484,19 @@ where
     Ok(())
 }
 
-pub fn set_distinct_fact<R: TypeResolver>(
+pub fn set_distinct_fact<R: TypeResolver, I, F>(
     facts: &mut StreamFacts,
-    distinct_fields: &[&str],
+    distinct_fields: I,
     record_definition: &RecordDefinitionBuilder<R>,
-) {
+) where
+    I: IntoIterator<Item = F>,
+    F: AsRef<str>,
+{
     set_distinct_fact_ids(
         facts,
-        distinct_fields.iter().map(|field| {
+        distinct_fields.into_iter().map(|field| {
             let datum_id = record_definition
-                .get_current_datum_definition_by_name(field)
+                .get_current_datum_definition_by_name(field.as_ref())
                 .expect("datum")
                 .id();
             datum_id

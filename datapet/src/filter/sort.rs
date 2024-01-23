@@ -19,7 +19,7 @@ pub struct Sort {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    fields: Vec<Directed<String>>,
+    fields: Vec<Directed<ValidFieldName>>,
 }
 
 impl Sort {
@@ -38,7 +38,11 @@ impl Sort {
         streams
             .output_from_input(0, true, graph)
             .pass_through(|builder, facts_proof| {
-                builder.set_order_fact(&valid_fields);
+                builder.set_order_fact(
+                    valid_fields
+                        .iter()
+                        .map(|field| field.as_ref().map(ValidFieldName::name)),
+                );
                 facts_proof.order_facts_updated().distinct_facts_updated()
             });
         let outputs = streams.build();
@@ -46,10 +50,7 @@ impl Sort {
             name,
             inputs,
             outputs,
-            fields: valid_fields
-                .iter()
-                .map(|field| field.as_ref().map(ToString::to_string))
-                .collect::<Vec<_>>(),
+            fields: valid_fields,
         })
     }
 }
@@ -72,7 +73,12 @@ impl DynNode for Sort {
             .stream_definition_fragments(self.outputs.single())
             .record();
 
-        let cmp = fields_cmp(&record, self.fields.iter().map(Directed::as_ref));
+        let cmp = fields_cmp(
+            &record,
+            self.fields
+                .iter()
+                .map(|field| field.as_ref().map(ValidFieldName::name)),
+        );
 
         let inline_body = quote! {
             datapet_support::iterator::sort::Sort::new(input, #cmp)
@@ -118,9 +124,9 @@ pub struct SubSort {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    path_fields: Vec<String>,
+    path_fields: Vec<ValidFieldName>,
     path_sub_stream: NodeSubStream,
-    fields: Vec<Directed<String>>,
+    fields: Vec<Directed<ValidFieldName>>,
 }
 
 impl SubSort {
@@ -152,7 +158,13 @@ impl SubSort {
                             output_stream.pass_through_sub_stream(
                                 sub_input_stream,
                                 graph,
-                                |sub_output_stream| sub_output_stream.set_order_fact(&valid_fields),
+                                |sub_output_stream| {
+                                    sub_output_stream.set_order_fact(
+                                        valid_fields
+                                            .iter()
+                                            .map(|field| field.as_ref().map(ValidFieldName::name)),
+                                    )
+                                },
                             )
                         },
                         graph,
@@ -169,15 +181,9 @@ impl SubSort {
             name,
             inputs,
             outputs,
-            path_fields: valid_path_fields
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>(),
+            path_fields: valid_path_fields,
             path_sub_stream,
-            fields: valid_fields
-                .iter()
-                .map(|field| field.as_ref().map(ToString::to_string))
-                .collect::<Vec<_>>(),
+            fields: valid_fields,
         })
     }
 }
@@ -204,15 +210,20 @@ impl DynNode for SubSort {
             .record();
 
         let flat_map = self.path_fields.iter().rev().fold(None, |tail, field| {
-            let access = format_ident!("{}_mut", field);
+            let mut_access = field.mut_ident();
             Some(if let Some(tail) = tail {
-                quote! {record.#access().iter_mut().flat_map(|record| #tail)}
+                quote! {record.#mut_access().iter_mut().flat_map(|record| #tail)}
             } else {
-                quote! {Some(record.#access()).into_iter()}
+                quote! {Some(record.#mut_access()).into_iter()}
             })
         });
 
-        let cmp = fields_cmp(&sub_record, self.fields.iter().map(Directed::as_ref));
+        let cmp = fields_cmp(
+            &sub_record,
+            self.fields
+                .iter()
+                .map(|field| field.as_ref().map(ValidFieldName::name)),
+        );
 
         let inline_body = quote! {
             fn ci_fn(record: &mut #record) -> impl Iterator<Item = &mut Vec<#sub_record>> {

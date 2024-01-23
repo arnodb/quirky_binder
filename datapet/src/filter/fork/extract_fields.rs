@@ -57,9 +57,9 @@ impl ExtractFields {
                             .borrow()
                             .get_variant_datum_definition_by_name(
                                 inputs.single().variant_id(),
-                                field,
+                                field.name(),
                             )
-                            .unwrap_or_else(|| panic!(r#"datum "{}""#, field)),
+                            .unwrap_or_else(|| panic!(r#"datum "{}""#, field.name())),
                     );
                 }
                 // XXX That is actually not true, let's see what we can do later.

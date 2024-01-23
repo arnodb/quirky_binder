@@ -20,7 +20,7 @@ pub struct Unwrap {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    fields: Vec<String>,
+    fields: Vec<ValidFieldName>,
     skip_nones: bool,
 }
 
@@ -43,13 +43,10 @@ impl Unwrap {
             .update(|output_stream, facts_proof| {
                 let input_variant_id = output_stream.input_variant_id();
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                for &field in &**valid_fields {
+                for field in &valid_fields {
                     let datum = output_stream_def
-                        .get_variant_datum_definition_by_name(input_variant_id, field)
-                        .ok_or_else(|| ChainError::FieldNotFound {
-                            field: (*field).to_owned(),
-                            trace: trace_filter!(trace, UNWRAP_TRACE_NAME),
-                        })?;
+                        .get_variant_datum_definition_by_name(input_variant_id, field.name())
+                        .unwrap_or_else(|| panic!(r#"datum "{}""#, field.name()));
                     let datum_id = datum.id();
                     let optional_type_name = datum.type_name().to_string();
                     let type_name = {
@@ -68,7 +65,8 @@ impl Unwrap {
                                 return Err(ChainError::Other {
                                     msg: format!(
                                         "field `{}` is not an option: {}",
-                                        field, optional_type_name
+                                        field.name(),
+                                        optional_type_name
                                     ),
                                     trace: trace_filter!(trace, UNWRAP_TRACE_NAME),
                                 });
@@ -79,7 +77,7 @@ impl Unwrap {
                     // at the same offset so that records may remain identical, the enum discriminant
                     // becoming a void space.
                     output_stream_def.remove_datum(datum_id);
-                    output_stream_def.add_dynamic_datum(field, type_name);
+                    output_stream_def.add_dynamic_datum(field.name(), type_name);
                 }
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
@@ -90,10 +88,7 @@ impl Unwrap {
             name,
             inputs,
             outputs,
-            fields: valid_fields
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>(),
+            fields: valid_fields,
             skip_nones: params.skip_nones,
         })
     }
@@ -140,7 +135,7 @@ impl DynNode for Unwrap {
                             ));
                         }
                     };
-                    if self.fields.iter().any(|field| field == datum.name()) {
+                    if self.fields.iter().any(|field| field.name() == datum.name()) {
                         quote! {
                             #name_ident: match unpacked.#name_ident {
                                 Some(value) => value,

@@ -1,8 +1,5 @@
 use proc_macro2::TokenStream;
-use truc::record::{
-    definition::{RecordDefinition, RecordVariant},
-    type_resolver::TypeResolver,
-};
+use truc::record::type_resolver::TypeResolver;
 
 use crate::prelude::*;
 
@@ -42,17 +39,26 @@ impl InPlaceFilter {
         })
     }
 
-    fn gen_chain<B>(&self, node: &dyn DynNode, graph: &Graph, chain: &mut Chain, body: B)
-    where
-        B: FnOnce(&RecordDefinition, &RecordVariant) -> TokenStream,
+    fn gen_chain_simple<'f, F>(
+        &self,
+        node: &dyn DynNode,
+        chain: &mut Chain,
+        fields: F,
+        transform: TokenStream,
+    ) where
+        F: IntoIterator<Item = &'f ValidFieldName> + Clone,
     {
-        let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
-        let record_variant = &record_definition[self.inputs.single().variant_id()];
-        let body = body(record_definition, record_variant);
+        let mut_fields = fields.clone().into_iter().map(ValidFieldName::mut_ident);
+        let fields = fields.into_iter().map(ValidFieldName::ident);
 
         let inline_body = quote! {
             input.map(|mut record| {
-                #body
+                #[allow(clippy::useless_conversion)]
+                {
+                    #(
+                        *record.#mut_fields() = record.#fields()#transform.into();
+                    )*
+                }
                 Ok(record)
             })
         };
@@ -64,52 +70,9 @@ impl InPlaceFilter {
             &inline_body,
         );
     }
-
-    fn gen_chain_simple<'f, F>(
-        &self,
-        node: &dyn DynNode,
-        graph: &Graph,
-        chain: &mut Chain,
-        fields: F,
-        transform: TokenStream,
-    ) where
-        F: IntoIterator<Item = &'f str> + Clone,
-    {
-        self.gen_chain(node, graph, chain, |record_definition, variant| {
-            let data = variant
-                .data()
-                .filter_map(|d| {
-                    let datum = &record_definition[d];
-                    if fields
-                        .clone()
-                        .into_iter()
-                        .any(|field| field == datum.name())
-                    {
-                        Some(datum)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            let mut_fields = data
-                .iter()
-                .map(|datum| format_ident!("{}_mut", datum.name()));
-            let fields = data.iter().map(|datum| format_ident!("{}", datum.name()));
-            quote! {
-                #[allow(clippy::useless_conversion)]
-                {
-                    #(
-                        *record.#mut_fields() = record.#fields()#transform.into();
-                    )*
-                }
-            }
-        });
-    }
 }
 
 pub mod string {
-    use std::ops::Deref;
-
     use serde::Deserialize;
     use truc::record::type_resolver::TypeResolver;
 
@@ -127,7 +90,7 @@ pub mod string {
 
     pub struct ToLowercase {
         in_place: InPlaceFilter,
-        fields: Box<[Box<str>]>,
+        fields: Vec<ValidFieldName>,
     }
 
     impl ToLowercase {
@@ -153,14 +116,9 @@ pub mod string {
             &self.in_place.outputs
         }
 
-        fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-            self.in_place.gen_chain_simple(
-                self,
-                graph,
-                chain,
-                self.fields.iter().map(Box::as_ref),
-                quote! { .to_lowercase() },
-            );
+        fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
+            self.in_place
+                .gen_chain_simple(self, chain, &self.fields, quote! { .to_lowercase() });
         }
 
         fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
@@ -178,21 +136,20 @@ pub mod string {
         let valid_fields = params.fields.validate_on_stream(&inputs[0], graph, || {
             trace_filter!(trace, TO_LOWERCASE_TRACE_NAME)
         })?;
+        let fields_for_facts = valid_fields
+            .iter()
+            .map(ValidFieldName::name)
+            .collect::<Vec<_>>();
         Ok(ToLowercase {
             in_place: InPlaceFilter::new(
                 graph,
                 name,
                 inputs,
-                &valid_fields,
-                Some(&valid_fields),
+                &fields_for_facts,
+                Some(&fields_for_facts),
                 trace,
             )?,
-            fields: valid_fields
-                .iter()
-                .map(Deref::deref)
-                .map(Into::into)
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
+            fields: valid_fields,
         })
     }
 
@@ -200,7 +157,7 @@ pub mod string {
 
     pub struct ReverseChars {
         in_place: InPlaceFilter,
-        fields: Box<[Box<str>]>,
+        fields: Vec<ValidFieldName>,
     }
 
     impl ReverseChars {
@@ -226,12 +183,11 @@ pub mod string {
             &self.in_place.outputs
         }
 
-        fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
+        fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
             self.in_place.gen_chain_simple(
                 self,
-                graph,
                 chain,
-                self.fields.iter().map(Box::as_ref),
+                &self.fields,
                 quote! { .chars().rev().collect::<String>() },
             );
         }
@@ -251,21 +207,20 @@ pub mod string {
         let valid_fields = params.fields.validate_on_stream(&inputs[0], graph, || {
             trace_filter!(trace, REVERSE_CHARS_TRACE_NAME)
         })?;
+        let fields_for_facts = valid_fields
+            .iter()
+            .map(ValidFieldName::name)
+            .collect::<Vec<_>>();
         Ok(ReverseChars {
             in_place: InPlaceFilter::new(
                 graph,
                 name,
                 inputs,
-                /* TODO nice to have: change order direction */ &valid_fields,
+                /* TODO nice to have: change order direction */ &fields_for_facts,
                 None,
                 trace,
             )?,
-            fields: valid_fields
-                .iter()
-                .map(Deref::deref)
-                .map(Into::into)
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
+            fields: valid_fields,
         })
     }
 }

@@ -36,7 +36,7 @@ impl FunctionProduce {
     ) -> ChainResult<Self> {
         let valid_fields = params
             .fields
-            .validate(|| trace_filter!(trace, FUNCTION_PRODUCE_TRACE_NAME))?;
+            .validate_new(|| trace_filter!(trace, FUNCTION_PRODUCE_TRACE_NAME))?;
 
         let valid_order_fields = params
             .order_fields
@@ -81,10 +81,15 @@ impl FunctionProduce {
                     }
                 }
                 if let Some(order_fields) = valid_order_fields.as_ref() {
-                    output_stream.set_order_fact(order_fields);
+                    output_stream.set_order_fact(
+                        order_fields
+                            .iter()
+                            .map(|field| field.as_ref().map(ValidFieldName::name)),
+                    );
                 }
                 if let Some(distinct_fields) = valid_distinct_fields.as_ref() {
-                    output_stream.set_distinct_fact(distinct_fields);
+                    output_stream
+                        .set_distinct_fact(distinct_fields.iter().map(ValidFieldName::name));
                 }
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
