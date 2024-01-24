@@ -1,0 +1,39 @@
+use datapet::{
+    filter::{
+        function::{
+            produce::function_produce,
+            terminate::function_terminate,
+        },
+        group::group,
+        transform::string::sub_to_lowercase,
+    },
+};
+
+{
+  (
+      function_produce(
+        fields: [("value", "String")],
+        body: r#"{
+            let record = new_record("BoîTe".to_string());
+            output.send(Some(record))?;
+            output.send(None)?;
+            Ok(())
+        }"#,
+      )
+    - group(group_field: "group", fields: ["value"])
+    - sub_to_lowercase(path_fields: ["group"], fields: ["value"])
+    - function_terminate(
+        body: r#"
+            let record = input.next()?.unwrap();
+            assert_eq!(
+                record
+                    .group().first().unwrap()
+                    .value().as_str(),
+                "boîte"
+            );
+            assert!(input.next()?.is_none());
+            Ok(())
+"#,
+      )
+  )
+}

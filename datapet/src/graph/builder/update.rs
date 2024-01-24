@@ -397,6 +397,14 @@ impl<'g, R: TypeResolver> SubStreamBuilderForUpdate<'g, R> {
         }
     }
 
+    pub fn break_order_fact_at<I, F>(&mut self, fields: I)
+    where
+        I: IntoIterator<Item = F>,
+        F: AsRef<str>,
+    {
+        break_order_fact_at(&mut self.facts, fields, &*self.record_definition.borrow());
+    }
+
     pub fn break_order_fact_at_ids<I>(&mut self, datum_ids: I)
     where
         I: IntoIterator<Item = DatumId>,
@@ -409,6 +417,14 @@ impl<'g, R: TypeResolver> SubStreamBuilderForUpdate<'g, R> {
         I: IntoIterator<Item = DatumId>,
     {
         set_distinct_fact_ids(&mut self.facts, distinct_datum_ids);
+    }
+
+    pub fn break_distinct_fact_for<I, F>(&mut self, fields: I)
+    where
+        I: IntoIterator<Item = F>,
+        F: AsRef<str>,
+    {
+        break_distinct_fact_for(&mut self.facts, fields, &*self.record_definition.borrow());
     }
 
     pub fn close_record_variant(self, _facts: FactsFullyUpdated<()>) -> NodeSubStream {
