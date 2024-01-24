@@ -425,7 +425,6 @@ impl DynNode for SubGroup {
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let def = chain.stream_definition_fragments(self.outputs.single());
         let def_group = chain.sub_stream_definition_fragments(&self.group_stream);
 
         let group_record = def_group.record();
@@ -443,19 +442,18 @@ impl DynNode for SubGroup {
         let group_field = self.group_field.ident();
         let mut_group_field = self.group_field.mut_ident();
 
-        let eq = {
+        let (eq, update_body) = {
             let path_stream = self.path_streams.last().expect("last path field");
 
             let leaf_record_definition =
                 &graph.record_definitions()[path_stream.sub_input_stream.record_type()];
             let variant = &leaf_record_definition[path_stream.sub_input_stream.variant_id()];
 
-            let record = chain
-                .sub_stream_definition_fragments(&path_stream.sub_output_stream)
-                .record();
+            let out_record_definition =
+                chain.sub_stream_definition_fragments(&path_stream.sub_output_stream);
 
-            fields_eq(
-                &record,
+            let eq = fields_eq(
+                &out_record_definition.record(),
                 variant.data().filter_map(|d| {
                     let datum = &leaf_record_definition[d];
                     if !self.fields.iter().any(|f| f.name() == datum.name())
@@ -466,110 +464,49 @@ impl DynNode for SubGroup {
                         None
                     }
                 }),
-            )
+            );
+
+            let unpacked_record_in = out_record_definition.unpacked_record_in();
+            let record_and_unpacked_out = out_record_definition.record_and_unpacked_out();
+
+            let update_body = quote! {
+                |record, prev_record| {
+                    let #record_and_unpacked_out {
+                        mut record,
+                        #fields
+                    } = #record_and_unpacked_out::from((
+                        record, #unpacked_record_in { #group_field: Vec::new() },
+                    ));
+                    if let Some(prev_record) = prev_record {
+                        if (eq)(&record, prev_record) {
+                            // TODO optimize
+                            let group_record = #group_record::new(
+                                #group_unpacked_record { #fields }
+                            );
+                            prev_record.#mut_group_field().push(group_record);
+                            return VecElementConversionResult::Abandonned;
+                        }
+                    }
+                    let group_record = #group_record::new(
+                        #group_unpacked_record { #fields }
+                    );
+                    record.#mut_group_field().push(group_record);
+                    VecElementConversionResult::Converted(record)
+                }
+            };
+
+            (eq, update_body)
         };
 
-        let (group_loops, first_access) = self
-            .path_streams
-            .iter()
-            .rev()
-            .fold(None, |tail, path_stream| {
-                let out_record_definition =
-                    chain.sub_stream_definition_fragments(&path_stream.sub_output_stream);
-                let in_record_definition =
-                    chain.sub_stream_definition_fragments(&path_stream.sub_input_stream);
-                let input_record = in_record_definition.record();
-                let record = out_record_definition.record();
-                let unpacked_record_in = out_record_definition.unpacked_record_in();
-                let record_and_unpacked_out = out_record_definition.record_and_unpacked_out();
-
-                let access = path_stream.field.ident();
-                let mut_access = path_stream.field.mut_ident();
-                Some(if let Some((tail, sub_access)) = tail {
-                    (
-                        quote! {
-                            // TODO optimize this code in truc
-                            let converted = convert_vec_in_place::<#input_record, #record, _>(
-                                #access,
-                                |rec, _| {
-                                    let #record_and_unpacked_out {
-                                        mut record,
-                                        #sub_access,
-                                    } = #record_and_unpacked_out::from((
-                                        rec,
-                                        #unpacked_record_in { #sub_access: Vec::new() },
-                                    ));
-                                    #tail
-                                    VecElementConversionResult::Converted(record)
-                                },
-                            );
-                            *record.#mut_access() = converted;
-                        },
-                        access,
-                    )
-                } else {
-                    (
-                        quote! {
-                            // TODO optimize this code in truc
-                            let converted = convert_vec_in_place::<#input_record, #record, _>(
-                                #access,
-                                |rec, prev_rec| {
-                                    let #record_and_unpacked_out {
-                                        mut record,
-                                        #fields
-                                    } = #record_and_unpacked_out::from((
-                                        rec, #unpacked_record_in { #group_field: Vec::new() },
-                                    ));
-                                    if let Some(prev_rec) = prev_rec {
-                                        if (eq)(&record, prev_rec) {
-                                            // TODO optimize
-                                            let group_record = #group_record::new(
-                                                #group_unpacked_record { #fields }
-                                            );
-                                            prev_rec.#mut_group_field().push(group_record);
-                                            return VecElementConversionResult::Abandonned;
-                                        }
-                                    }
-                                    let group_record = #group_record::new(
-                                        #group_unpacked_record { #fields }
-                                    );
-                                    record.#mut_group_field().push(group_record);
-                                    VecElementConversionResult::Converted(record)
-                                },
-                            );
-                            *record.#mut_access() = converted;
-                        },
-                        access,
-                    )
-                })
-            })
-            .expect("group loops");
-
-        let unpacked_record_in = def.unpacked_record_in();
-        let record_and_unpacked_out = def.record_and_unpacked_out();
-
-        let inline_body = quote! {
-            use truc_runtime::convert::{convert_vec_in_place, VecElementConversionResult};
-
-            let eq = #eq;
-
-            input.map(move |rec| {
-                let #record_and_unpacked_out {
-                    mut record,
-                    #first_access,
-                } = #record_and_unpacked_out::from((
-                    rec, #unpacked_record_in { #first_access: Vec::new() },
-                ));
-                #group_loops
-                Ok(record)
-            })
-        };
-
-        chain.implement_inline_node(
+        chain.implement_path_update(
             self,
             self.inputs.single(),
             self.outputs.single(),
-            &inline_body,
+            &self.path_streams,
+            Some(&quote! {
+                let eq = #eq;
+            }),
+            &update_body,
         );
     }
 

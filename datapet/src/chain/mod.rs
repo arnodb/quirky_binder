@@ -567,6 +567,92 @@ impl<'a> Chain<'a> {
 
         scope.raw(&fn_def.to_string());
     }
+
+    pub fn implement_path_update(
+        &mut self,
+        node: &dyn DynNode,
+        input: &NodeStream,
+        output: &NodeStream,
+        path_streams: &[PathUpdateElement],
+        preamble: Option<&TokenStream>,
+        update_body: &TokenStream,
+    ) {
+        let (loops, first_access) = path_streams
+            .iter()
+            .rev()
+            .fold(None, |tail, path_stream| {
+                let out_record_definition =
+                    self.sub_stream_definition_fragments(&path_stream.sub_output_stream);
+                let in_record_definition =
+                    self.sub_stream_definition_fragments(&path_stream.sub_input_stream);
+                let input_record = in_record_definition.record();
+                let record = out_record_definition.record();
+                let unpacked_record_in = out_record_definition.unpacked_record_in();
+                let record_and_unpacked_out = out_record_definition.record_and_unpacked_out();
+
+                let access = path_stream.field.ident();
+                let mut_access = path_stream.field.mut_ident();
+                Some(if let Some((tail, sub_access)) = tail {
+                    (
+                        quote! {
+                            // TODO optimize this code in truc
+                            let converted = convert_vec_in_place::<#input_record, #record, _>(
+                                #access,
+                                |record, _| {
+                                    let #record_and_unpacked_out {
+                                        mut record,
+                                        #sub_access,
+                                    } = #record_and_unpacked_out::from((
+                                        record,
+                                        #unpacked_record_in { #sub_access: Vec::new() },
+                                    ));
+                                    #tail
+                                    VecElementConversionResult::Converted(record)
+                                },
+                            );
+                            *record.#mut_access() = converted;
+                        },
+                        access,
+                    )
+                } else {
+                    (
+                        quote! {
+                            // TODO optimize this code in truc
+                            let converted = convert_vec_in_place::<#input_record, #record, _>(
+                                #access,
+                                #update_body
+                            );
+                            *record.#mut_access() = converted;
+                        },
+                        access,
+                    )
+                })
+            })
+            .expect("loops");
+
+        let def = self.stream_definition_fragments(output);
+        let unpacked_record_in = def.unpacked_record_in();
+        let record_and_unpacked_out = def.record_and_unpacked_out();
+
+        let inline_body = quote! {
+            use truc_runtime::convert::{convert_vec_in_place, VecElementConversionResult};
+
+            #preamble
+
+            input.map(move |record| {
+                let #record_and_unpacked_out {
+                    mut record,
+                    #first_access,
+                } = #record_and_unpacked_out::from((
+                    record, #unpacked_record_in { #first_access: Vec::new() },
+                ));
+                #loops
+                Ok(record)
+            })
+        };
+
+        self.implement_inline_node(node, input, output, &inline_body);
+    }
 }
 
 pub const DEFAULT_CHAIN_ROOT_MODULE_NAME: [&str; 2] = ["crate", "chain"];

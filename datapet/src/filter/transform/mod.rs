@@ -461,8 +461,6 @@ impl<Spec: SubTransformSpec> DynNode for SubTransform<Spec> {
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let def = chain.stream_definition_fragments(self.outputs.single());
-
         let updates = {
             let mut_fields = self.update_fields.iter().map(ValidFieldName::mut_ident);
 
@@ -545,89 +543,21 @@ impl<Spec: SubTransformSpec> DynNode for SubTransform<Spec> {
             quote! { mut record }
         };
 
-        let (loops, first_access) = self
-            .path_streams
-            .iter()
-            .rev()
-            .fold(None, |tail, path_stream| {
-                let out_record_definition =
-                    chain.sub_stream_definition_fragments(&path_stream.sub_output_stream);
-                let in_record_definition =
-                    chain.sub_stream_definition_fragments(&path_stream.sub_input_stream);
-                let input_record = in_record_definition.record();
-                let record = out_record_definition.record();
-                let unpacked_record_in = out_record_definition.unpacked_record_in();
-                let record_and_unpacked_out = out_record_definition.record_and_unpacked_out();
-
-                let access = path_stream.field.ident();
-                let mut_access = path_stream.field.mut_ident();
-                Some(if let Some((tail, sub_access)) = tail {
-                    (
-                        quote! {
-                            // TODO optimize this code in truc
-                            let converted = convert_vec_in_place::<#input_record, #record, _>(
-                                #access,
-                                |rec, _| {
-                                    let #record_and_unpacked_out {
-                                        mut record,
-                                        #sub_access,
-                                    } = #record_and_unpacked_out::from((
-                                        rec,
-                                        #unpacked_record_in { #sub_access: Vec::new() },
-                                    ));
-                                    #tail
-                                    VecElementConversionResult::Converted(record)
-                                },
-                            );
-                            *record.#mut_access() = converted;
-                        },
-                        access,
-                    )
-                } else {
-                    (
-                        quote! {
-                            // TODO optimize this code in truc
-                            let converted = convert_vec_in_place::<#input_record, #record, _>(
-                                #access,
-                                |#record_param, _prev_record| {
-                                    #updates
-
-                                    #new_variant_body
-
-                                    VecElementConversionResult::Converted(record)
-                                },
-                            );
-                            *record.#mut_access() = converted;
-                        },
-                        access,
-                    )
-                })
-            })
-            .expect("loops");
-
-        let unpacked_record_in = def.unpacked_record_in();
-        let record_and_unpacked_out = def.record_and_unpacked_out();
-
-        let inline_body = quote! {
-            use truc_runtime::convert::{convert_vec_in_place, VecElementConversionResult};
-
-            input.map(move |rec| {
-                let #record_and_unpacked_out {
-                    mut record,
-                    #first_access,
-                } = #record_and_unpacked_out::from((
-                    rec, #unpacked_record_in { #first_access: Vec::new() },
-                ));
-                #loops
-                Ok(record)
-            })
-        };
-
-        chain.implement_inline_node(
+        chain.implement_path_update(
             self,
             self.inputs.single(),
             self.outputs.single(),
-            &inline_body,
+            &self.path_streams,
+            None,
+            &quote! {
+                |#record_param, _prev_record| {
+                    #updates
+
+                    #new_variant_body
+
+                    VecElementConversionResult::Converted(record)
+                }
+            },
         );
     }
 
