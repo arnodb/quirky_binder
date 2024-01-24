@@ -148,32 +148,17 @@ impl SubSort {
         })?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        let path_sub_stream =
-            streams
-                .output_from_input(0, true, graph)
-                .pass_through(|output_stream, facts_proof| {
-                    let path_sub_stream = output_stream.pass_through_path(
-                        &valid_path_fields,
-                        |sub_input_stream, output_stream| {
-                            output_stream.pass_through_sub_stream(
-                                sub_input_stream,
-                                graph,
-                                |sub_output_stream| {
-                                    sub_output_stream.set_order_fact(
-                                        valid_fields
-                                            .iter()
-                                            .map(|field| field.as_ref().map(ValidFieldName::name)),
-                                    )
-                                },
-                            )
-                        },
-                        graph,
-                    );
-                    facts_proof
-                        .order_facts_updated()
-                        .distinct_facts_updated()
-                        .with_output(path_sub_stream)
-                });
+        let path_sub_stream = streams.output_from_input(0, true, graph).pass_through_path(
+            graph,
+            &valid_path_fields,
+            |sub_output_stream| {
+                sub_output_stream.set_order_fact(
+                    valid_fields
+                        .iter()
+                        .map(|field| field.as_ref().map(ValidFieldName::name)),
+                )
+            },
+        );
 
         let outputs = streams.build();
 

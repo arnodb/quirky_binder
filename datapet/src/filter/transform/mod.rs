@@ -361,76 +361,32 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
         let mut new_variant = false;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        let path_streams =
-            streams
-                .output_from_input(0, true, graph)
-                .update(|output_stream, facts_proof| {
-                    let path_streams = output_stream.update_path(
-                        &valid_path_fields,
-                        |sub_input_stream, output_stream| {
-                            output_stream.update_sub_stream(
-                                sub_input_stream,
-                                graph,
-                                |_output_stream, sub_output_stream, facts_proof| {
-                                    {
-                                        let mut record_definition =
-                                            sub_output_stream.record_definition().borrow_mut();
+        let path_streams = streams.output_from_input(0, true, graph).update_path(
+            graph,
+            &valid_path_fields,
+            |_output_stream, sub_output_stream, facts_proof| {
+                {
+                    let mut record_definition = sub_output_stream.record_definition().borrow_mut();
 
-                                        for (f, t) in &valid_type_update_fields {
-                                            let datum_id = record_definition
-                                                .get_current_datum_definition_by_name(f.name())
-                                                .expect("datum")
-                                                .id();
-                                            record_definition.remove_datum(datum_id);
-                                            record_definition
-                                                .add_dynamic_datum(f.name(), t.type_name());
-                                            new_variant = true;
-                                        }
-                                    }
+                    for (f, t) in &valid_type_update_fields {
+                        let datum_id = record_definition
+                            .get_current_datum_definition_by_name(f.name())
+                            .expect("datum")
+                            .id();
+                        record_definition.remove_datum(datum_id);
+                        record_definition.add_dynamic_datum(f.name(), t.type_name());
+                        new_variant = true;
+                    }
+                }
 
-                                    Ok(spec.update_facts(
-                                        sub_output_stream,
-                                        &valid_update_fields,
-                                        &valid_type_update_fields,
-                                        facts_proof,
-                                    ))
-                                },
-                            )
-                        },
-                        |field: &str, path_stream, sub_output_stream, facts_proof| {
-                            let module_name = graph
-                                .chain_customizer()
-                                .streams_module_name
-                                .sub_n(&***sub_output_stream.record_type());
-                            let record = &format!(
-                                "{module_name}::Record{group_variant_id}",
-                                module_name = module_name,
-                                group_variant_id = sub_output_stream.variant_id(),
-                            );
-                            path_stream.replace_vec_datum(field, record, sub_output_stream);
-                            Ok(facts_proof.order_facts_updated().distinct_facts_updated())
-                        },
-                        |field: &str, output_stream, sub_output_stream| {
-                            let module_name = graph
-                                .chain_customizer()
-                                .streams_module_name
-                                .sub_n(&***sub_output_stream.record_type());
-                            let record = &format!(
-                                "{module_name}::Record{group_variant_id}",
-                                module_name = module_name,
-                                group_variant_id = sub_output_stream.variant_id(),
-                            );
-                            output_stream.replace_vec_datum(field, record, sub_output_stream);
-                            Ok(())
-                        },
-                        graph,
-                    )?;
-
-                    Ok(facts_proof
-                        .order_facts_updated()
-                        .distinct_facts_updated()
-                        .with_output(path_streams))
-                })?;
+                Ok(spec.update_facts(
+                    sub_output_stream,
+                    &valid_update_fields,
+                    &valid_type_update_fields,
+                    facts_proof,
+                ))
+            },
+        )?;
 
         let outputs = streams.build();
 

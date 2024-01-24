@@ -227,6 +227,61 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
         Ok(output.unwrap())
     }
 
+    pub fn update_path<B>(
+        self,
+        graph: &'g GraphBuilder<R>,
+        path_fields: &[ValidFieldName],
+        build: B,
+    ) -> ChainResult<Vec<PathUpdateElement>>
+    where
+        B: for<'c, 'd> FnOnce(
+            &mut OutputBuilderForUpdate<'c, 'd, 'g, R>,
+            &mut SubStreamBuilderForUpdate<'g, R>,
+            NoFactsUpdated<()>,
+        ) -> ChainResult<FactsFullyUpdated<()>>,
+    {
+        self.update(|output_stream, facts_proof| {
+            let path_streams = output_stream.update_path(
+                path_fields,
+                |sub_input_stream, output_stream| {
+                    output_stream.update_sub_stream(sub_input_stream, graph, build)
+                },
+                |field: &str, path_stream, sub_output_stream, facts_proof| {
+                    let module_name = graph
+                        .chain_customizer()
+                        .streams_module_name
+                        .sub_n(&***sub_output_stream.record_type());
+                    let record = &format!(
+                        "{module_name}::Record{group_variant_id}",
+                        module_name = module_name,
+                        group_variant_id = sub_output_stream.variant_id(),
+                    );
+                    path_stream.replace_vec_datum(field, record, sub_output_stream);
+                    Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+                },
+                |field: &str, output_stream, sub_output_stream| {
+                    let module_name = graph
+                        .chain_customizer()
+                        .streams_module_name
+                        .sub_n(&***sub_output_stream.record_type());
+                    let record = &format!(
+                        "{module_name}::Record{group_variant_id}",
+                        module_name = module_name,
+                        group_variant_id = sub_output_stream.variant_id(),
+                    );
+                    output_stream.replace_vec_datum(field, record, sub_output_stream);
+                    Ok(())
+                },
+                graph,
+            )?;
+
+            Ok(facts_proof
+                .order_facts_updated()
+                .distinct_facts_updated()
+                .with_output(path_streams))
+        })
+    }
+
     pub fn pass_through<B, O>(self, build: B) -> O
     where
         B: FnOnce(
@@ -249,6 +304,30 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
         let output = build(&mut builder, NoFactsUpdated(()));
         builder.build();
         output.unwrap()
+    }
+
+    pub fn pass_through_path<B>(
+        self,
+        graph: &'g GraphBuilder<R>,
+        path_fields: &[ValidFieldName],
+        build: B,
+    ) -> NodeSubStream
+    where
+        B: FnOnce(&mut SubStreamBuilderForPassThrough<'g, R>),
+    {
+        self.pass_through(|output_stream, facts_proof| {
+            let path_sub_stream = output_stream.pass_through_path(
+                path_fields,
+                |sub_input_stream, output_stream| {
+                    output_stream.pass_through_sub_stream(sub_input_stream, graph, build)
+                },
+                graph,
+            );
+            facts_proof
+                .order_facts_updated()
+                .distinct_facts_updated()
+                .with_output(path_sub_stream)
+        })
     }
 }
 

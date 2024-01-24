@@ -308,143 +308,94 @@ impl SubGroup {
 
         let mut created_group_stream = None;
 
-        let path_streams =
-            streams
-                .output_from_input(0, true, graph)
-                .update(|output_stream, facts_proof| {
-                    let path_streams = output_stream.update_path(
-                        &valid_path_fields,
-                        |sub_input_stream, output_stream| {
-                            output_stream.update_sub_stream(
-                                sub_input_stream,
-                                graph,
-                                |output_stream, sub_output_stream, facts_proof| {
-                                    let mut group_stream =
-                                        output_stream.new_named_sub_stream("group", graph);
-                                    let variant_id = sub_output_stream.input_variant_id();
+        let path_streams = streams.output_from_input(0, true, graph).update_path(
+            graph,
+            &valid_path_fields,
+            |output_stream, sub_output_stream, facts_proof| {
+                let mut group_stream = output_stream.new_named_sub_stream("group", graph);
+                let variant_id = sub_output_stream.input_variant_id();
 
-                                    let (group_by_datum_ids, group_datum_ids) = {
-                                        let mut output_stream_def =
-                                            sub_output_stream.record_definition().borrow_mut();
-                                        let mut group_stream_def =
-                                            group_stream.record_definition().borrow_mut();
+                let (group_by_datum_ids, group_datum_ids) = {
+                    let mut output_stream_def = sub_output_stream.record_definition().borrow_mut();
+                    let mut group_stream_def = group_stream.record_definition().borrow_mut();
 
-                                        let variant = &output_stream_def[variant_id];
-                                        let mut group_by_datum_ids = Vec::with_capacity(
-                                            variant.data_len() - valid_fields.len(),
-                                        );
-                                        let mut group_data = Vec::with_capacity(valid_fields.len());
-                                        let mut group_datum_ids =
-                                            Vec::with_capacity(valid_fields.len());
-                                        for datum_id in variant.data() {
-                                            let datum = &output_stream_def[datum_id];
-                                            if valid_fields
-                                                .iter()
-                                                .any(|field| field.name() == datum.name())
-                                            {
-                                                group_data.push(datum);
-                                                group_datum_ids.push(datum.id());
-                                            } else {
-                                                group_by_datum_ids.push(datum.id());
-                                            }
-                                        }
+                    let variant = &output_stream_def[variant_id];
+                    let mut group_by_datum_ids =
+                        Vec::with_capacity(variant.data_len() - valid_fields.len());
+                    let mut group_data = Vec::with_capacity(valid_fields.len());
+                    let mut group_datum_ids = Vec::with_capacity(valid_fields.len());
+                    for datum_id in variant.data() {
+                        let datum = &output_stream_def[datum_id];
+                        if valid_fields
+                            .iter()
+                            .any(|field| field.name() == datum.name())
+                        {
+                            group_data.push(datum);
+                            group_datum_ids.push(datum.id());
+                        } else {
+                            group_by_datum_ids.push(datum.id());
+                        }
+                    }
 
-                                        check_undirected_order_starts_with(
-                                            &group_by_datum_ids,
-                                            sub_output_stream.facts().order(),
-                                            &output_stream_def,
-                                            "main sub stream",
-                                            || trace_filter!(trace, SUB_GROUP_TRACE_NAME),
-                                        )?;
-
-                                        let mut map = BTreeMap::<DatumId, DatumId>::new();
-                                        for datum in &group_data {
-                                            let new_id = group_stream_def.copy_datum(datum);
-                                            map.insert(datum.id(), new_id);
-                                        }
-                                        for datum_id in &group_datum_ids {
-                                            output_stream_def.remove_datum(*datum_id);
-                                        }
-
-                                        let group_order = sub_output_stream.facts().order()
-                                            [group_by_datum_ids.len()..]
-                                            .iter()
-                                            .map(|d| d.map(|d| map[&d]))
-                                            .collect::<Vec<_>>();
-                                        group_stream.facts_mut().set_order(group_order);
-                                        let group_distinct = sub_output_stream
-                                            .facts()
-                                            .distinct()
-                                            .iter()
-                                            .filter_map(|d| map.get(d).copied())
-                                            .collect::<Vec<_>>();
-                                        group_stream.facts_mut().set_distinct(group_distinct);
-
-                                        (group_by_datum_ids, group_datum_ids)
-                                    };
-
-                                    let group_stream = group_stream.close_record_variant(
-                                        facts_proof.order_facts_updated().distinct_facts_updated(),
-                                    );
-
-                                    let module_name = graph
-                                        .chain_customizer()
-                                        .streams_module_name
-                                        .sub_n(&***group_stream.record_type());
-                                    sub_output_stream.add_vec_datum(
-                                        params.group_field,
-                                        &format!(
-                                            "{module_name}::Record{group_variant_id}",
-                                            module_name = module_name,
-                                            group_variant_id = group_stream.variant_id(),
-                                        ),
-                                        group_stream.clone(),
-                                    );
-
-                                    created_group_stream = Some(group_stream);
-
-                                    sub_output_stream
-                                        .break_order_fact_at_ids(group_datum_ids.iter().cloned());
-                                    sub_output_stream.set_distinct_fact_ids(group_by_datum_ids);
-
-                                    Ok(facts_proof.order_facts_updated().distinct_facts_updated())
-                                },
-                            )
-                        },
-                        |field: &str, path_stream, sub_output_stream, facts_proof| {
-                            let module_name = graph
-                                .chain_customizer()
-                                .streams_module_name
-                                .sub_n(&***sub_output_stream.record_type());
-                            let record = &format!(
-                                "{module_name}::Record{group_variant_id}",
-                                module_name = module_name,
-                                group_variant_id = sub_output_stream.variant_id(),
-                            );
-                            path_stream.replace_vec_datum(field, record, sub_output_stream);
-                            Ok(facts_proof.order_facts_updated().distinct_facts_updated())
-                        },
-                        |field: &str, output_stream, sub_output_stream| {
-                            let module_name = graph
-                                .chain_customizer()
-                                .streams_module_name
-                                .sub_n(&***sub_output_stream.record_type());
-                            let record = &format!(
-                                "{module_name}::Record{group_variant_id}",
-                                module_name = module_name,
-                                group_variant_id = sub_output_stream.variant_id(),
-                            );
-                            output_stream.replace_vec_datum(field, record, sub_output_stream);
-                            Ok(())
-                        },
-                        graph,
+                    check_undirected_order_starts_with(
+                        &group_by_datum_ids,
+                        sub_output_stream.facts().order(),
+                        &output_stream_def,
+                        "main sub stream",
+                        || trace_filter!(trace, SUB_GROUP_TRACE_NAME),
                     )?;
 
-                    Ok(facts_proof
-                        .order_facts_updated()
-                        .distinct_facts_updated()
-                        .with_output(path_streams))
-                })?;
+                    let mut map = BTreeMap::<DatumId, DatumId>::new();
+                    for datum in &group_data {
+                        let new_id = group_stream_def.copy_datum(datum);
+                        map.insert(datum.id(), new_id);
+                    }
+                    for datum_id in &group_datum_ids {
+                        output_stream_def.remove_datum(*datum_id);
+                    }
+
+                    let group_order = sub_output_stream.facts().order()[group_by_datum_ids.len()..]
+                        .iter()
+                        .map(|d| d.map(|d| map[&d]))
+                        .collect::<Vec<_>>();
+                    group_stream.facts_mut().set_order(group_order);
+                    let group_distinct = sub_output_stream
+                        .facts()
+                        .distinct()
+                        .iter()
+                        .filter_map(|d| map.get(d).copied())
+                        .collect::<Vec<_>>();
+                    group_stream.facts_mut().set_distinct(group_distinct);
+
+                    (group_by_datum_ids, group_datum_ids)
+                };
+
+                let group_stream = group_stream.close_record_variant(
+                    facts_proof.order_facts_updated().distinct_facts_updated(),
+                );
+
+                let module_name = graph
+                    .chain_customizer()
+                    .streams_module_name
+                    .sub_n(&***group_stream.record_type());
+                sub_output_stream.add_vec_datum(
+                    params.group_field,
+                    &format!(
+                        "{module_name}::Record{group_variant_id}",
+                        module_name = module_name,
+                        group_variant_id = group_stream.variant_id(),
+                    ),
+                    group_stream.clone(),
+                );
+
+                created_group_stream = Some(group_stream);
+
+                sub_output_stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
+                sub_output_stream.set_distinct_fact_ids(group_by_datum_ids);
+
+                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+            },
+        )?;
 
         let outputs = streams.build();
 
