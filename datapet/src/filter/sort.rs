@@ -32,7 +32,9 @@ impl Sort {
     ) -> ChainResult<Self> {
         let valid_fields = params
             .fields
-            .validate_on_stream(&inputs[0], graph, || trace_filter!(trace, SORT_TRACE_NAME))?;
+            .validate_on_stream(inputs.single(), graph, || {
+                trace_filter!(trace, SORT_TRACE_NAME)
+            })?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
@@ -140,7 +142,7 @@ impl SubSort {
         let (valid_path_fields, path_def) =
             params
                 .path_fields
-                .validate_path_on_stream(&inputs[0], graph, || {
+                .validate_path_on_stream(inputs.single(), graph, || {
                     trace_filter!(trace, SUB_SORT_TRACE_NAME)
                 })?;
         let valid_fields = params.fields.validate_on_record_definition(&path_def, || {

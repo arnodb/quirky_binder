@@ -116,7 +116,7 @@ impl SubDedup {
         let (valid_path_fields, _) =
             params
                 .path_fields
-                .validate_path_on_stream(&inputs[0], graph, || {
+                .validate_path_on_stream(inputs.single(), graph, || {
                     trace_filter!(trace, SUB_DEDUP_TRACE_NAME)
                 })?;
 

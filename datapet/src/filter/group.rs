@@ -41,7 +41,9 @@ impl Group {
     ) -> ChainResult<Group> {
         let valid_fields = params
             .fields
-            .validate_on_stream(&inputs[0], graph, || trace_filter!(trace, GROUP_TRACE_NAME))?;
+            .validate_on_stream(inputs.single(), graph, || {
+                trace_filter!(trace, GROUP_TRACE_NAME)
+            })?;
         let valid_group_field = ValidFieldName::try_from(params.group_field).map_err(|_| {
             ChainError::InvalidFieldName {
                 name: params.group_field.to_owned(),
@@ -289,7 +291,7 @@ impl SubGroup {
         let (valid_path_fields, path_def) =
             params
                 .path_fields
-                .validate_path_on_stream(&inputs[0], graph, || {
+                .validate_path_on_stream(inputs.single(), graph, || {
                     trace_filter!(trace, SUB_GROUP_TRACE_NAME)
                 })?;
         let valid_group_field = ValidFieldName::try_from(params.group_field).map_err(|_| {

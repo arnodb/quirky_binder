@@ -29,9 +29,11 @@ impl ExtractFields {
         params: ExtractFieldsParams,
         trace: Trace,
     ) -> ChainResult<Self> {
-        let valid_fields = params.fields.validate_on_stream(&inputs[0], graph, || {
-            trace_filter!(trace, EXTRACT_FIELDS_TRACE_NAME)
-        })?;
+        let valid_fields = params
+            .fields
+            .validate_on_stream(inputs.single(), graph, || {
+                trace_filter!(trace, EXTRACT_FIELDS_TRACE_NAME)
+            })?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams.new_named_stream("extracted", graph);
