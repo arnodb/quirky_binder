@@ -541,7 +541,7 @@ pub(crate) fn generate_module<'a>(
                 let trace = Trace::root();
 
                 let entry_nodes: Vec<Box<dyn DynNode>> = vec![
-                    #(Box::new(__dtpt_private::#main_names(&mut graph, root, trace)?),)*
+                    #(Box::new(__dtpt_private::#main_names(&mut graph, root.clone(), trace.clone())?),)*
                 ];
                 Ok(graph.build(entry_nodes))
             }
