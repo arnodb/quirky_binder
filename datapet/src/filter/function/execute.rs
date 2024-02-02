@@ -9,6 +9,7 @@ const FUNCTION_EXECUTE_TRACE_NAME: &str = "function_execute";
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct FunctionExecuteParams<'a> {
+    thread_type: Option<ChainThreadType>,
     body: &'a str,
 }
 
@@ -19,6 +20,7 @@ pub struct FunctionExecute {
     inputs: [NodeStream; 0],
     #[getset(get = "pub")]
     outputs: [NodeStream; 0],
+    thread_type: ChainThreadType,
     body: TokenStream,
 }
 
@@ -44,6 +46,7 @@ impl FunctionExecute {
             name,
             inputs,
             outputs: [],
+            thread_type: params.thread_type.unwrap_or_default(),
             body: valid_body,
         })
     }
@@ -63,7 +66,8 @@ impl DynNode for FunctionExecute {
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
-        let thread_id = chain.new_threaded_source(&self.name, &self.inputs, &self.outputs);
+        let thread_id =
+            chain.new_threaded_source(&self.name, self.thread_type, &self.inputs, &self.outputs);
 
         let body = &self.body;
 

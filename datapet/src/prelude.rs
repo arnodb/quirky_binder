@@ -1,6 +1,7 @@
 pub use crate::{
     chain::{
-        error::ChainError, Chain, ChainCustomizer, ChainResult, ImportScope, Trace, TraceElement,
+        error::ChainError, Chain, ChainCustomizer, ChainResult, ChainThreadType, ImportScope,
+        Trace, TraceElement,
     },
     graph::{
         builder::{

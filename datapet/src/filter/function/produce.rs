@@ -120,7 +120,12 @@ impl DynNode for FunctionProduce {
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
-        let thread_id = chain.new_threaded_source(&self.name, &self.inputs, &self.outputs);
+        let thread_id = chain.new_threaded_source(
+            &self.name,
+            ChainThreadType::Regular,
+            &self.inputs,
+            &self.outputs,
+        );
 
         let def = chain.stream_definition_fragments(self.outputs.single());
         let record = def.record();

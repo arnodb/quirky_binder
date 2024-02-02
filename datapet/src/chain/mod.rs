@@ -4,6 +4,7 @@ use codegen::{Module, Scope};
 use datapet_lang::location::Location;
 use itertools::Itertools;
 use proc_macro2::TokenStream;
+use serde::Deserialize;
 
 use self::error::ChainError;
 use crate::prelude::*;
@@ -16,11 +17,19 @@ pub type ChainResult<T> = Result<T, ChainError>;
 struct ChainThread {
     id: usize,
     name: FullyQualifiedName,
+    thread_type: ChainThreadType,
     main: Option<FullyQualifiedName>,
     input_streams: Box<[NodeStream]>,
     output_streams: Box<[NodeStream]>,
     input_pipes: Option<Box<[usize]>>,
     output_pipes: Option<Box<[usize]>>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default, Deserialize, Debug)]
+pub enum ChainThreadType {
+    #[default]
+    Regular,
+    Background,
 }
 
 #[derive(Clone)]
@@ -87,9 +96,11 @@ impl<'a> Chain<'a> {
         stream.definition_fragments(&self.customizer.streams_module_name)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn new_thread(
         &mut self,
         name: FullyQualifiedName,
+        thread_type: ChainThreadType,
         input_streams: Box<[NodeStream]>,
         output_streams: Box<[NodeStream]>,
         input_pipes: Option<Box<[usize]>>,
@@ -140,6 +151,7 @@ impl<'a> Chain<'a> {
         self.threads.push(ChainThread {
             id: thread_id,
             name,
+            thread_type,
             main,
             input_streams,
             output_streams,
@@ -157,11 +169,13 @@ impl<'a> Chain<'a> {
     pub fn new_threaded_source(
         &mut self,
         name: &FullyQualifiedName,
+        thread_type: ChainThreadType,
         inputs: &[NodeStream; 0],
         outputs: &[NodeStream],
     ) -> usize {
         self.new_thread(
             name.clone(),
+            thread_type,
             inputs.to_vec().into_boxed_slice(),
             outputs.to_vec().into_boxed_slice(),
             None,
@@ -194,6 +208,7 @@ impl<'a> Chain<'a> {
             let streams = Box::new([thread.output_streams[source_thread.stream_index].clone()]);
             let thread_id = self.new_thread(
                 new_thread_name.clone(),
+                ChainThreadType::Regular,
                 streams.clone(),
                 streams,
                 Some(Box::new([input_pipe])),
@@ -298,6 +313,7 @@ impl<'a> Chain<'a> {
             .collect::<Vec<usize>>();
         self.new_thread(
             name.clone(),
+            ChainThreadType::Regular,
             inputs.to_vec().into_boxed_slice(),
             outputs.to_vec().into_boxed_slice(),
             Some(input_pipes.into_boxed_slice()),
@@ -352,12 +368,25 @@ impl<'a> Chain<'a> {
             }
             .into_iter()
             .flatten();
+            let interrupt = match thread.thread_type {
+                ChainThreadType::Regular => None,
+                ChainThreadType::Background => Some(quote! {
+                    pub interrupt: std::sync::Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>,
+                }),
+            };
             let struct_def = quote! {
+
+                pub struct ThreadOuterControl {
+                    #interrupt
+                }
+
                 pub struct ThreadControl {
                     pub chain_configuration: Arc<ChainConfiguration>,
+                    #interrupt
                     #(pub #inputs: Option<Receiver<Option<#input_types>>>,)*
                     #(pub #outputs: Option<SyncSender<Option<#output_types>>>,)*
                 }
+
             };
             scope.raw(&struct_def.to_string());
         }
@@ -378,8 +407,30 @@ impl<'a> Chain<'a> {
                 .iter()
                 .enumerate()
                 .map(|(thread_index, thread)| {
+                    let thread_outer_control = format_ident!(
+                        "{}thread_outer_control_{}",
+                        match thread.thread_type {
+                            ChainThreadType::Regular => "_",
+                            ChainThreadType::Background => "",
+                        },
+                        thread.id
+                    );
                     let thread_control = format_ident!("thread_control_{}", thread.id);
                     let thread_module = format_ident!("thread_{}", thread.id);
+                    let interrupt = match thread.thread_type {
+                        ChainThreadType::Regular => None,
+                        ChainThreadType::Background => Some(quote! {
+                            interrupt: std::sync::Arc::new((
+                                std::sync::Mutex::new(false),
+                                std::sync::Condvar::new(),
+                            )),
+                        }),
+                    };
+                    let interrupt_clone = interrupt.is_some().then(|| {
+                        quote! {
+                            interrupt: #thread_outer_control.interrupt.clone(),
+                        }
+                    });
                     let inputs = thread
                         .input_pipes
                         .as_ref()
@@ -405,13 +456,21 @@ impl<'a> Chain<'a> {
                         .into_iter()
                         .flatten();
                     let config_assignment = if thread_index + 1 < self.threads.len() {
-                        quote! {chain_configuration: chain_configuration.clone(), }
+                        quote! {
+                            chain_configuration: chain_configuration.clone(),
+                        }
                     } else {
-                        quote! {chain_configuration,}
+                        quote! {
+                            chain_configuration,
+                        }
                     };
                     quote! {
+                        let #thread_outer_control = #thread_module::ThreadOuterControl {
+                            #interrupt
+                        };
                         let #thread_control = #thread_module::ThreadControl {
                             #config_assignment
+                            #interrupt_clone
                             #(#inputs)*
                             #(#outputs)*
                         };
@@ -424,13 +483,45 @@ impl<'a> Chain<'a> {
                     syn::parse_str::<syn::Expr>(&thread.main.as_ref().expect("main").to_string())
                         .expect("thread_main");
                 let thread_control = format_ident!("thread_control_{}", thread.id);
-                quote! { let #join_thread = std::thread::spawn(#thread_main(#thread_control)); }
+                quote! {
+                    let #join_thread = std::thread::spawn(#thread_main(#thread_control));
+                }
             });
 
-            let join_threads = self.threads.iter().map(|thread| {
-                let join_thread = format_ident!("join_{}", thread.id);
-                quote! { #join_thread.join().unwrap()?; }
-            });
+            let join_regular_threads = self
+                .threads
+                .iter()
+                .filter(|thread| thread.thread_type == ChainThreadType::Regular)
+                .map(|thread| {
+                    let join_thread = format_ident!("join_{}", thread.id);
+                    quote! {
+                        #join_thread.join().unwrap()?;
+                    }
+                });
+
+            let interrupt_background_threads = self
+                .threads
+                .iter()
+                .filter(|thread| thread.thread_type == ChainThreadType::Background)
+                .map(|thread| {
+                    let thread_outer_control = format_ident!("thread_outer_control_{}", thread.id);
+                    quote! {{
+                        let mut is_interrupted = #thread_outer_control.interrupt.0.lock().unwrap();
+                        *is_interrupted = true;
+                        #thread_outer_control.interrupt.1.notify_all();
+                    }}
+                });
+
+            let join_background_threads = self
+                .threads
+                .iter()
+                .filter(|thread| thread.thread_type == ChainThreadType::Background)
+                .map(|thread| {
+                    let join_thread = format_ident!("join_{}", thread.id);
+                    quote! {
+                        #join_thread.join().unwrap()?;
+                    }
+                });
 
             self.scope.import("std::sync", "Arc");
             self.scope.import(
@@ -462,7 +553,11 @@ impl<'a> Chain<'a> {
 
                     #(#spawn_threads)*
 
-                    #(#join_threads)*
+                    #(#join_regular_threads)*
+
+                    #(#interrupt_background_threads)*
+
+                    #(#join_background_threads)*
 
                     Ok(())
                 }
