@@ -1,11 +1,11 @@
-use crate::ast::{
-    ConnectedFilter, Filter, Graph, GraphDefinition, GraphDefinitionSignature, Module, StreamLine,
-    StreamLineInput, StreamLineOutput, UseDeclaration,
-};
+use serde::Deserialize;
 
 use self::lexer::{Lexer, Token};
-
 use super::{assemble_inputs, SpannedError, SpannedErrorKind};
+use crate::ast::{
+    ConnectedFilter, Filter, Graph, GraphDefinition, GraphDefinitionSignature, Module, ModuleItem,
+    StreamLine, StreamLineInput, StreamLineOutput, UseDeclaration,
+};
 
 pub mod lexer;
 
@@ -90,28 +90,56 @@ where
     I: Iterator<Item = Token<'a>>,
 {
     let mut items = Vec::new();
-    loop {
-        match lexer.tokens().peek() {
-            use_declaration_lookahead!() => {
-                let item = use_declaration(lexer)?;
-                items.push(item.into());
-            }
-            graph_definition_lookahead!() => {
-                let item = graph_definition(lexer)?;
-                items.push(item.into());
-            }
-            Some(_) => {
-                let item = graph(lexer)?;
-                items.push(item.into());
-            }
-            None => break,
-        }
+    while lexer.tokens().peek().is_some() {
+        let item = annotated_module_item(lexer)?;
+        items.push(item);
     }
     Ok(Module { items })
 }
 
+pub fn annotated_module_item<'a, I>(
+    lexer: &mut Lexer<'a, I>,
+) -> Result<ModuleItem<'a>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    match lexer.tokens().peek() {
+        Some(Token::Hash(_)) => {
+            let _hash = lexer.tokens().next().unwrap();
+            let annotations = annotations(lexer)?;
+            module_item(lexer, Some(annotations))
+        }
+        _ => module_item(lexer, None),
+    }
+}
+
+pub fn module_item<'a, I>(
+    lexer: &mut Lexer<'a, I>,
+    annotations: Option<&'a str>,
+) -> Result<ModuleItem<'a>, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    match lexer.tokens().peek() {
+        use_declaration_lookahead!() => Ok(use_declaration(lexer, annotations)?.into()),
+        graph_definition_lookahead!() => Ok(graph_definition(lexer, annotations)?.into()),
+        _ => Ok(graph(lexer, annotations)?.into()),
+    }
+}
+
+pub fn annotations<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<&'a str, SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    let start = match_token!(lexer, Token::OpenBracket, SpannedErrorKind::Token("("))?;
+    code_loop(lexer)?;
+    let end = match_token!(lexer, Token::CloseBracket, SpannedErrorKind::Token(")"))?;
+    Ok(lexer.input_slice(start, end))
+}
+
 pub fn use_declaration<'a, I>(
     lexer: &mut Lexer<'a, I>,
+    annotations: Option<&'a str>,
 ) -> Result<UseDeclaration<'a>, SpannedError<&'a str>>
 where
     I: Iterator<Item = Token<'a>>,
@@ -119,7 +147,10 @@ where
     match_token!(lexer, Token::Use, SpannedErrorKind::Token("use"))?;
     let use_tree = use_tree(lexer)?;
     match_token!(lexer, Token::SemiColon, SpannedErrorKind::Token(";"))?;
-    Ok(UseDeclaration { use_tree })
+    Ok(UseDeclaration {
+        annotations: annotations.map_or_else(|| Ok(()), parse_annotations)?,
+        use_tree,
+    })
 }
 
 pub fn use_tree<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<&'a str, SpannedError<&'a str>>
@@ -187,6 +218,7 @@ where
 
 pub fn graph_definition<'a, I>(
     lexer: &mut Lexer<'a, I>,
+    annotations: Option<&'a str>,
 ) -> Result<GraphDefinition<'a>, SpannedError<&'a str>>
 where
     I: Iterator<Item = Token<'a>>,
@@ -199,6 +231,7 @@ where
     let signature = graph_definition_signature(lexer)?;
     let stream_lines = stream_lines(lexer)?;
     Ok(GraphDefinition {
+        annotations: annotations.map_or_else(|| Ok(()), parse_annotations)?,
         signature,
         stream_lines,
         visible: visibility.is_some(),
@@ -243,11 +276,15 @@ where
     Ok(params)
 }
 
-pub fn graph<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<Graph<'a>, SpannedError<&'a str>>
+pub fn graph<'a, I>(
+    lexer: &mut Lexer<'a, I>,
+    annotations: Option<&'a str>,
+) -> Result<Graph<'a>, SpannedError<&'a str>>
 where
     I: Iterator<Item = Token<'a>>,
 {
     Ok(Graph {
+        annotations: annotations.map_or_else(|| Ok(Default::default()), parse_annotations)?,
         stream_lines: stream_lines(lexer)?,
     })
 }
@@ -387,55 +424,7 @@ where
     I: Iterator<Item = Token<'a>>,
 {
     let start = match_token!(lexer, Token::OpenBracket, SpannedErrorKind::Token("("))?;
-    loop {
-        match lexer.tokens().peek() {
-            Some(Token::CloseBracket(_)) => {
-                break;
-            }
-            Some(Token::QuotedChar(_))
-            | Some(Token::QuotedString(_))
-            | Some(Token::OpenBracket(_))
-            | Some(Token::OpenCurly(_))
-            | Some(Token::OpenSquare(_)) => {
-                code(lexer)?;
-            }
-            Some(Token::As(_))
-            | Some(Token::CloseAngle(_))
-            | Some(Token::Colon2(_))
-            | Some(Token::Comma(_))
-            | Some(Token::Dash(_))
-            | Some(Token::Ident(_))
-            | Some(Token::Hash(_))
-            | Some(Token::OpenAngle(_))
-            | Some(Token::Pub(_))
-            | Some(Token::SemiColon(_))
-            | Some(Token::Star(_))
-            | Some(Token::Use(_))
-            | Some(Token::NotAnIdent(_))
-            | Some(Token::Char(_)) => {
-                lexer.tokens().next().unwrap();
-            }
-            Some(Token::CloseCurly(_)) | Some(Token::CloseSquare(_)) | None => {
-                break;
-            }
-            Some(Token::UnrecognizedToken(span)) => {
-                return match span.chars().next() {
-                    Some('\'') => Err(SpannedError {
-                        kind: SpannedErrorKind::UnterminatedChar,
-                        span: &span[0..1],
-                    }),
-                    Some('"') => Err(SpannedError {
-                        kind: SpannedErrorKind::UnterminatedString,
-                        span: &span[0..1],
-                    }),
-                    _ => Err(SpannedError {
-                        kind: SpannedErrorKind::UnrecognizedToken,
-                        span,
-                    }),
-                };
-            }
-        }
-    }
+    code_loop(lexer)?;
     let end = match_token!(lexer, Token::CloseBracket, SpannedErrorKind::Token(")"))?;
     Ok(lexer.input_slice(start, end))
 }
@@ -509,6 +498,62 @@ where
     }
     match_token!(lexer, Token::CloseSquare, SpannedErrorKind::Token("]"))?;
     Ok(streams)
+}
+
+fn code_loop<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<(), SpannedError<&'a str>>
+where
+    I: Iterator<Item = Token<'a>>,
+{
+    loop {
+        match lexer.tokens().peek() {
+            Some(Token::CloseBracket(_)) => {
+                break;
+            }
+            Some(Token::QuotedChar(_))
+            | Some(Token::QuotedString(_))
+            | Some(Token::OpenBracket(_))
+            | Some(Token::OpenCurly(_))
+            | Some(Token::OpenSquare(_)) => {
+                code(lexer)?;
+            }
+            Some(Token::As(_))
+            | Some(Token::CloseAngle(_))
+            | Some(Token::Colon2(_))
+            | Some(Token::Comma(_))
+            | Some(Token::Dash(_))
+            | Some(Token::Ident(_))
+            | Some(Token::Hash(_))
+            | Some(Token::OpenAngle(_))
+            | Some(Token::Pub(_))
+            | Some(Token::SemiColon(_))
+            | Some(Token::Star(_))
+            | Some(Token::Use(_))
+            | Some(Token::NotAnIdent(_))
+            | Some(Token::Char(_)) => {
+                lexer.tokens().next().unwrap();
+            }
+            Some(Token::CloseCurly(_)) | Some(Token::CloseSquare(_)) | None => {
+                break;
+            }
+            Some(Token::UnrecognizedToken(span)) => {
+                return match span.chars().next() {
+                    Some('\'') => Err(SpannedError {
+                        kind: SpannedErrorKind::UnterminatedChar,
+                        span: &span[0..1],
+                    }),
+                    Some('"') => Err(SpannedError {
+                        kind: SpannedErrorKind::UnterminatedString,
+                        span: &span[0..1],
+                    }),
+                    _ => Err(SpannedError {
+                        kind: SpannedErrorKind::UnrecognizedToken,
+                        span,
+                    }),
+                };
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn code<'a, I>(lexer: &mut Lexer<'a, I>) -> Result<&'a str, SpannedError<&'a str>>
@@ -638,13 +683,25 @@ where
     match_token!(lexer, Token::Ident, SpannedErrorKind::Identifier)
 }
 
+pub fn parse_annotations<'a, T>(input: &'a str) -> Result<T, SpannedError<&'a str>>
+where
+    T: Deserialize<'a>,
+{
+    let ron_options = ron::Options::default().with_default_extension(
+        ron::extensions::Extensions::UNWRAP_NEWTYPES | ron::extensions::Extensions::IMPLICIT_SOME,
+    );
+    ron_options.from_str(input).map_err(|err| SpannedError {
+        kind: SpannedErrorKind::AnnotationsParseError(err),
+        span: input,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
 
-    use crate::parser::{crafted_impl::lexer::lexer, SpannedErrorKind};
-
     use super::*;
+    use crate::parser::{crafted_impl::lexer::lexer, SpannedErrorKind};
 
     macro_rules! assert_span_at_distance {
         ($input:ident, $span:expr, $expected:expr, $expected_distance:expr) => {
@@ -680,7 +737,7 @@ mod tests {
     #[case("use ::{foo}\u{20};", "::{foo}")]
     fn test_valid_use_declaration(#[case] input: &str, #[case] expected_use_tree: &str) {
         let mut lexer = lexer(input);
-        let ud = assert_matches!(use_declaration(&mut lexer), Ok(ud) => ud);
+        let ud = assert_matches!(use_declaration(&mut lexer, None), Ok(ud) => ud);
         assert_eq!(ud.use_tree, expected_use_tree);
     }
 
@@ -702,7 +759,7 @@ mod tests {
     ) {
         let mut lexer = lexer(input);
         let (kind, span) = assert_matches!(
-            use_declaration(&mut lexer),
+            use_declaration(&mut lexer, None),
             Err(SpannedError { kind, span }) => (kind, span)
         );
         assert_eq!(kind, expected_kind);

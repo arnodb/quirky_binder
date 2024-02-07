@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::ast::{Module, StreamLineInput};
 
 #[cfg(feature = "crafted_parser")]
@@ -66,7 +68,7 @@ impl<I> nom::error::ParseError<I> for SpannedError<I> {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum SpannedErrorKind {
     Identifier,
     Token(&'static str),
@@ -75,6 +77,7 @@ pub enum SpannedErrorKind {
     UnterminatedChar,
     UnterminatedString,
     UnrecognizedToken,
+    AnnotationsParseError(ron::de::SpannedError),
     // Nom errors that have not been mapped but should probably be
     #[cfg(feature = "nom_parser")]
     Nom(nom::error::ErrorKind),
@@ -83,19 +86,20 @@ pub enum SpannedErrorKind {
 }
 
 impl SpannedErrorKind {
-    pub fn description(&self) -> &str {
+    pub fn description(&self) -> Cow<str> {
         match self {
-            Self::Identifier => "identifier",
-            Self::Token(token) => token,
-            Self::Code => "code",
-            Self::UnbalancedCode => "unbalanced code",
-            Self::UnterminatedChar => "unterminated char",
-            Self::UnterminatedString => "unterminated string",
-            Self::UnrecognizedToken => "unrecognized token",
+            Self::Identifier => "identifier".into(),
+            Self::Token(token) => (*token).into(),
+            Self::Code => "code".into(),
+            Self::UnbalancedCode => "unbalanced code".into(),
+            Self::UnterminatedChar => "unterminated char".into(),
+            Self::UnterminatedString => "unterminated string".into(),
+            Self::UnrecognizedToken => "unrecognized token".into(),
+            Self::AnnotationsParseError(err) => format!("annotations parse error: {}", err).into(),
             #[cfg(feature = "nom_parser")]
-            Self::Nom(nom) => nom.description(),
+            Self::Nom(nom) => nom.description().into(),
             #[cfg(feature = "nom_parser")]
-            Self::NomIncomplete => "incomplete",
+            Self::NomIncomplete => "incomplete".into(),
         }
     }
 }

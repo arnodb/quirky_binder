@@ -11,12 +11,11 @@ use nom::{
     AsChar, IResult, InputTakeAtPosition, Parser,
 };
 
+use super::{assemble_inputs, SpannedError, SpannedErrorKind};
 use crate::ast::{
     ConnectedFilter, Filter, Graph, GraphDefinition, GraphDefinitionSignature, Module, StreamLine,
     StreamLineInput, StreamLineOutput, UseDeclaration,
 };
-
-use super::{assemble_inputs, SpannedError, SpannedErrorKind};
 
 pub type SpannedResult<I, O> = IResult<I, O, SpannedError<I>>;
 
@@ -38,7 +37,10 @@ pub fn use_declaration(input: &str) -> SpannedResult<&str, UseDeclaration> {
         ts(keyword("use")),
         cut(terminated(use_tree, ps(token(";")))),
     )
-    .map(|use_tree| UseDeclaration { use_tree })
+    .map(|use_tree| UseDeclaration {
+        annotations: Default::default(),
+        use_tree,
+    })
     .parse(input)
 }
 
@@ -98,6 +100,7 @@ fn graph_definition(input: &str) -> SpannedResult<&str, GraphDefinition> {
         cut(ps(stream_lines)),
     ))
     .map(|(visibility, signature, stream_lines)| GraphDefinition {
+        annotations: Default::default(),
         signature,
         stream_lines,
         visible: visibility.is_some(),
@@ -148,7 +151,10 @@ fn params(input: &str) -> SpannedResult<&str, Vec<&str>> {
 
 fn graph(input: &str) -> SpannedResult<&str, Graph> {
     stream_lines
-        .map(|stream_lines| Graph { stream_lines })
+        .map(|stream_lines| Graph {
+            annotations: Default::default(),
+            stream_lines,
+        })
         .parse(input)
 }
 

@@ -1,3 +1,5 @@
+use serde::Deserialize;
+
 #[derive(Debug)]
 pub struct Module<'a> {
     pub items: Vec<ModuleItem<'a>>,
@@ -30,11 +32,13 @@ impl<'a> From<Graph<'a>> for ModuleItem<'a> {
 
 #[derive(PartialEq, Eq, Debug)]
 pub struct UseDeclaration<'a> {
+    pub annotations: (),
     pub use_tree: &'a str,
 }
 
 #[derive(Debug)]
 pub struct GraphDefinition<'a> {
+    pub annotations: (),
     pub signature: GraphDefinitionSignature<'a>,
     pub stream_lines: Vec<StreamLine<'a>>,
     pub visible: bool,
@@ -82,5 +86,12 @@ pub enum StreamLineOutput<'a> {
 
 #[derive(Debug)]
 pub struct Graph<'a> {
+    pub annotations: GraphAnnotations<'a>,
     pub stream_lines: Vec<StreamLine<'a>>,
+}
+
+#[derive(Default, Debug, Deserialize)]
+pub struct GraphAnnotations<'a> {
+    pub name: Option<&'a str>,
+    pub feature: Option<&'a str>,
 }

@@ -8,9 +8,8 @@ use annotate_snippets::display_list::DisplayList;
 use antinom::rng::{AnarchyLevel, AntiNomRandRng};
 use rand_chacha::rand_core::SeedableRng;
 
-use crate::snippet::snippet_for_input_and_part;
-
 use super::{fuzzer, ToSpannedError};
+use crate::snippet::snippet_for_input_and_part;
 
 const FUZZ_ITERATIONS: usize = 1000;
 
@@ -128,7 +127,7 @@ fn fuzz_use_declaration() {
             input: &str,
         ) -> Result<crate::ast::UseDeclaration, super::SpannedError<&str>> {
             let mut lexer = lexer(input);
-            crate::parser::crafted_impl::use_declaration(&mut lexer)
+            crate::parser::crafted_impl::use_declaration(&mut lexer, None)
         }
 
         fuzz_test!(seed, fuzzer, crafted_parser, AnarchyLevel::LawAndOrder);

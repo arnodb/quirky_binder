@@ -1,9 +1,10 @@
+use std::{borrow::Cow, collections::BTreeMap, ops::Deref, path::Path};
+
 use datapet_lang::location::{Location, Span};
 use gen::{codegen_parse_module, generate_module};
 use itertools::Itertools;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use std::{borrow::Cow, collections::BTreeMap, ops::Deref, path::Path};
 
 mod gen;
 

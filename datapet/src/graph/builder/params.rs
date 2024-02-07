@@ -8,8 +8,10 @@ pub struct ParamsBuilder {
 impl Default for ParamsBuilder {
     fn default() -> Self {
         Self {
-            ron_options: ron::Options::default()
-                .with_default_extension(ron::extensions::Extensions::UNWRAP_NEWTYPES),
+            ron_options: ron::Options::default().with_default_extension(
+                ron::extensions::Extensions::UNWRAP_NEWTYPES
+                    | ron::extensions::Extensions::IMPLICIT_SOME,
+            ),
         }
     }
 }

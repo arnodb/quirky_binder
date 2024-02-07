@@ -1,3 +1,8 @@
+use std::{
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    iter::{Enumerate, Peekable},
+};
+
 use datapet_lang::{
     ast::{
         ConnectedFilter, Graph, GraphDefinition, Module, ModuleItem, StreamLine, StreamLineInput,
@@ -9,12 +14,48 @@ use datapet_lang::{
 use inflector::Inflector;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
-use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
-    iter::{Enumerate, Peekable},
-};
 
 use crate::{CodegenError, DtptErrorEmitter};
+
+struct GraphNames {
+    pub names: Vec<GraphName>,
+    pub next_graph_id: usize,
+}
+
+struct GraphName {
+    name: String,
+    feature: Option<String>,
+}
+
+impl GraphNames {
+    fn new() -> Self {
+        Self {
+            names: Vec::new(),
+            next_graph_id: 0,
+        }
+    }
+
+    fn add_name(&mut self, name: String, feature: Option<&str>) -> Result<(), String> {
+        if self.names.iter().any(|n| n.name == name) {
+            return Err(format!("Graph name {} already exists", name));
+        }
+        self.names.push(GraphName {
+            name,
+            feature: feature.map(ToString::to_string),
+        });
+        Ok(())
+    }
+
+    fn new_name(&mut self, feature: Option<&str>) -> String {
+        loop {
+            let name = format!("dtpt_main_{}", self.next_graph_id);
+            self.next_graph_id += 1;
+            if self.add_name(name.clone(), feature).is_ok() {
+                return name;
+            }
+        }
+    }
+}
 
 pub(crate) fn codegen_parse_module<'a>(
     input: &'a str,
@@ -23,7 +64,7 @@ pub(crate) fn codegen_parse_module<'a>(
     parse_module(input).map_err(|err| {
         let part = err.span;
         let error = err.kind.description();
-        error_emitter.emit_error(part, error.into())
+        error_emitter.emit_error(part, error)
     })
 }
 
@@ -151,18 +192,36 @@ fn dtpt_graph_definition<'a>(
 
 fn dtpt_graph<'a>(
     graph: &'a Graph<'a>,
-    id: usize,
+    graph_names: &mut GraphNames,
     error_emitter: &mut DtptErrorEmitter<'a>,
 ) -> TokenStream {
-    let name_str = format!("dtpt_main_{}", id);
+    let Graph {
+        annotations,
+        stream_lines,
+    } = graph;
+    let name_str = if let Some(name) = annotations.name {
+        match graph_names.add_name(name.to_owned(), annotations.feature) {
+            Ok(()) => name.to_owned(),
+            Err(err) => {
+                error_emitter.emit_error(name, err.into());
+                graph_names.new_name(annotations.feature)
+            }
+        }
+    } else {
+        graph_names.new_name(annotations.feature)
+    };
     let name = format_ident!("{}", name_str);
     let (body, ordered_var_names, main_stream, named_streams) =
-        dtpt_stream_lines(&name_str, &graph.stream_lines, error_emitter);
+        dtpt_stream_lines(&name_str, stream_lines, error_emitter);
     named_streams.check_all_streams_connected(error_emitter);
     if let Some((_, anchor)) = main_stream {
         error_emitter.emit_error(anchor, "main stream cannot be connected".into());
     }
+    let feature_gate = annotations
+        .feature
+        .map(|feature| quote![#[cfg(feature = #feature)]]);
     quote! {
+        #feature_gate
         pub fn #name<R: TypeResolver + Copy>(
             graph: &mut GraphBuilder<R>,
             name: FullyQualifiedName,
@@ -493,17 +552,13 @@ pub(crate) fn generate_module<'a>(
     datapet_crate: &Ident,
     error_emitter: &mut DtptErrorEmitter<'a>,
 ) -> Result<TokenStream, CodegenError> {
-    let mut graph_id = 0;
+    let mut graph_names = GraphNames::new();
     let content = TokenStream::from_iter(module.items.iter().map(|item| match item {
         ModuleItem::UseDeclaration(use_declaration) => dtpt_use_declaration(use_declaration),
         ModuleItem::GraphDefinition(graph_definition) => {
             dtpt_graph_definition(graph_definition, error_emitter)
         }
-        ModuleItem::Graph(graph) => {
-            let id = graph_id;
-            graph_id += 1;
-            dtpt_graph(graph, id, error_emitter)
-        }
+        ModuleItem::Graph(graph) => dtpt_graph(graph, &mut graph_names, error_emitter),
     }));
     let exports = TokenStream::from_iter(
         module
@@ -522,10 +577,15 @@ pub(crate) fn generate_module<'a>(
             })
             .map(|name| quote! { pub use __dtpt_private::#name; }),
     );
-    let main = (graph_id > 0).then(|| {
-        let main_names = (0..graph_id)
-            .map(|id| format_ident!("dtpt_main_{}", id))
-            .collect::<Vec<_>>();
+    let main = (!graph_names.names.is_empty()).then(|| {
+        let main_names = graph_names.names
+            .iter()
+            .map(|name|format_ident!("{}", name.name));
+        let main_features = graph_names.names
+            .iter()
+            .map(|name| name.feature
+                 .as_ref()
+                 .map(|feature|quote![#[cfg(feature = #feature)]]));
         quote! {
             pub fn dtpt_main<R>(
                 mut graph: GraphBuilder<R>,
@@ -541,7 +601,10 @@ pub(crate) fn generate_module<'a>(
                 let trace = Trace::root();
 
                 let entry_nodes: Vec<Box<dyn DynNode>> = vec![
-                    #(Box::new(__dtpt_private::#main_names(&mut graph, root.clone(), trace.clone())?),)*
+                    #(
+                        #main_features
+                        Box::new(__dtpt_private::#main_names(&mut graph, root.clone(), trace.clone())?),
+                    )*
                 ];
                 Ok(graph.build(entry_nodes))
             }
