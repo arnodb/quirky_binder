@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use annotate_snippets::display_list::DisplayList;
 use datapet_codegen::{
     parse_and_generate_glob_modules, parse_and_generate_module, CodegenError, ErrorEmitter,
@@ -6,12 +8,13 @@ use datapet_lang::snippet::snippet_for_input_and_part;
 use proc_macro2::Ident;
 use proc_macro_error::{abort_if_dirty, emit_error, proc_macro_error};
 use quote::format_ident;
-use std::borrow::Cow;
 use syn::{
     parenthesized,
     parse::{ParseStream, Parser},
     token, Error, LitStr,
 };
+
+mod decorators;
 
 struct ProcMacroErrorEmitter<'a> {
     span: &'a Ident,
@@ -168,4 +171,17 @@ pub fn dtpt(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 #[proc_macro_error]
 pub fn dtpt_internal(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     dtpt_1(input, &format_ident!("crate"))
+}
+
+#[proc_macro]
+pub fn tracking_allocator_static(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    decorators::tracking_allocator_static(input)
+}
+
+#[proc_macro_attribute]
+pub fn tracking_allocator_main(
+    attr: proc_macro::TokenStream,
+    item: proc_macro::TokenStream,
+) -> proc_macro::TokenStream {
+    decorators::tracking_allocator_main(attr, item)
 }

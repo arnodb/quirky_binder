@@ -1,6 +1,6 @@
-use datapet::dtpt;
-use datapet::prelude::*;
 use std::path::Path;
+
+use datapet::{dtpt, prelude::*};
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
 
 fn main() {
@@ -22,6 +22,12 @@ use datapet::{
         unwrap::unwrap,
     },
 };
+
+#(
+    name: "dtpt_monitor",
+    feature: "dtpt_monitor",
+)
+{ ( datapet::filter::monitor::monitor() ) }
 
 {
   (

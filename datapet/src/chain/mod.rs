@@ -574,8 +574,12 @@ impl<'a> Chain<'a> {
     ) -> &mut Scope {
         let mut iter = path.into_iter();
         let customize_module = |module: &mut Module| {
+            module.scope().import(
+                &chain_customizer.error_type_path(),
+                &chain_customizer.error_type_name(),
+            );
             for (path, ty) in &chain_customizer.custom_module_imports {
-                module.import(path, ty);
+                module.scope().import(path, ty);
             }
             let thread_module = format!("thread_{}", thread_id);
             module.scope().import("super", &thread_module).vis("pub");

@@ -1,11 +1,13 @@
 include!(concat!(env!("OUT_DIR"), "/chain.rs"));
 
 pub mod tokenize {
+    use std::collections::VecDeque;
+
+    use fallible_iterator::FallibleIterator;
+
     use crate::chain::streams::read_input::{
         Record0 as RecordIn, Record1 as RecordOut, UnpackedRecord1 as UnpackedRecordOut,
     };
-    use fallible_iterator::FallibleIterator;
-    use std::collections::VecDeque;
 
     pub fn tokenize<I, E>(mut input: I) -> impl FallibleIterator<Item = RecordOut, Error = E>
     where

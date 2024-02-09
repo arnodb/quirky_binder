@@ -12,6 +12,8 @@ extern crate lazy_static;
 #[macro_use]
 extern crate thiserror;
 
+pub use datapet_codegen_macro::{tracking_allocator_main, tracking_allocator_static};
+
 pub mod chain;
 pub mod data;
 pub mod iterator;

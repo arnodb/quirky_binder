@@ -18,6 +18,12 @@ use datapet::{
     },
 };
 
+#(
+    name: "dtpt_monitor",
+    feature: "dtpt_monitor",
+)
+{ ( datapet::filter::monitor::monitor() ) }
+
 {
   (
       function_produce#read_token(

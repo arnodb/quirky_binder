@@ -10,6 +10,9 @@ mod chain {
     include!(concat!(env!("OUT_DIR"), "/chain.rs"));
 }
 
+datapet_support::tracking_allocator_static!();
+
+#[datapet_support::tracking_allocator_main]
 fn main() {
     let mut chain_configuration = ChainConfiguration::new();
 

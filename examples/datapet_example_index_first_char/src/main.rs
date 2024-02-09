@@ -8,6 +8,9 @@ extern crate static_assertions;
 #[allow(clippy::module_inception)]
 mod chain;
 
+datapet_support::tracking_allocator_static!();
+
+#[datapet_support::tracking_allocator_main]
 fn main() {
     chain::main(ChainConfiguration::default()).unwrap();
 }

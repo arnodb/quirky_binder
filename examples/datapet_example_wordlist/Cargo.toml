@@ -11,6 +11,15 @@ serde = "1"
 static_assertions = "1"
 truc_runtime = { git = "https://github.com/arnodb/truc.git" }
 
+# dtpt_monitor
+chrono = { version = "0.4", optional = true }
+self-meter = { version = "0.6", optional = true }
+tracking-allocator = { version = "0.4", optional = true }
+
+[features]
+default = []
+dtpt_monitor = ["chrono", "self-meter", "tracking-allocator"]
+
 [build-dependencies]
 datapet = { path = "../../datapet" }
 datapet_lang = { path = "../../datapet_lang" }
