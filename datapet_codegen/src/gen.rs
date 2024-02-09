@@ -164,13 +164,15 @@ fn dtpt_graph_definition<'a>(
         #[serde(deny_unknown_fields)]
         pub struct #params_type_name<'a> {
             #(#params: &'a str,)*
+            #[serde(default)]
+            _a: std::marker::PhantomData<&'a ()>,
         }
 
         pub fn #name<R: TypeResolver + Copy>(
             graph: &mut GraphBuilder<R>,
             name: FullyQualifiedName,
             inputs: [NodeStream; #input_count],
-            #params_type_name { #(#params,)* }: #params_type_name,
+            #params_type_name { #(#params,)* _a }: #params_type_name,
             trace: Trace,
         ) -> ChainResult<NodeCluster<#input_count, #output_count>> {
 
