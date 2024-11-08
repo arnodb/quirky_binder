@@ -1,4 +1,4 @@
-# datapet
-[![Build Status](https://github.com/arnodb/datapet/actions/workflows/ci.yml/badge.svg)](https://github.com/arnodb/datapet/actions/workflows/ci.yml)
+# quirky_binder
+[![Build Status](https://github.com/arnodb/quirky_binder/actions/workflows/ci.yml/badge.svg)](https://github.com/arnodb/quirky_binder/actions/workflows/ci.yml)
 
-Data Pet
+Quirky Binder

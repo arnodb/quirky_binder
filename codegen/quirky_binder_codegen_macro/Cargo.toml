@@ -1,0 +1,17 @@
+[package]
+name = "quirky_binder_codegen_macro"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.65.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+annotate-snippets = { version = "0.9", features = ["color"] }
+proc-macro-error = "1"
+proc-macro2 = "1"
+quirky_binder_codegen = { path = "../quirky_binder_codegen" }
+quirky_binder_lang = { path = "../../quirky_binder_lang" }
+quote = "1"
+syn = { version = "1", features = ["full"] }

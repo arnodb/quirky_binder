@@ -1,0 +1,82 @@
+use quirky_binder::{
+    filter::{
+        fork::join::join,
+        function::{
+            produce::function_produce,
+            terminate::function_terminate,
+        },
+    },
+};
+
+{
+  (
+      function_produce(
+        fields: [("num", "i8")],
+        body: r#"{
+            use std::collections::BTreeSet;
+
+            use rand::Rng;
+            use rand_chacha::rand_core::SeedableRng;
+
+            let mut rng = rand_chacha::ChaCha8Rng::from_entropy();
+            println!("Seed: {:02x?}", rng.get_seed());
+
+            let nums = (0..1024)
+                .into_iter()
+                .map(|_| rng.gen())
+                .collect::<BTreeSet<i8>>();
+            for num in nums {
+                let record = new_record(num);
+                output.send(Some(record))?;
+            }
+            output.send(None)?;
+            Ok(())
+        }"#,
+        order_fields: Some(["num"]),
+        distinct_fields: Some(["num"]),
+      )
+    -> stream_1
+  )
+
+  (
+      function_produce(
+        fields: [("other_num", "i8")],
+        body: r#"{
+            use std::collections::BTreeSet;
+
+            use rand::Rng;
+            use rand_chacha::rand_core::SeedableRng;
+
+            let mut rng = rand_chacha::ChaCha8Rng::from_entropy();
+            println!("Seed: {:02x?}", rng.get_seed());
+
+            let nums = (0..1024)
+                .into_iter()
+                .map(|_| rng.gen())
+                .collect::<BTreeSet<i8>>();
+            for num in nums {
+                let record = new_record(num);
+                output.send(Some(record))?;
+            }
+            output.send(None)?;
+            Ok(())
+        }"#,
+        order_fields: Some(["other_num"]),
+        distinct_fields: Some(["other_num"]),
+      )
+    -> stream_2
+  )
+
+  ( < stream_1
+    - [stream_2] join(
+      primary_fields: ["num"],
+      secondary_fields: ["other_num"],
+    )
+    - function_terminate(
+        body: r#"
+            while input.next()?.is_some() {}
+            Ok(())
+"#,
+      )
+  )
+}

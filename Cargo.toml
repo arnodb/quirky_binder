@@ -1,17 +1,17 @@
 [workspace]
 resolver = "2"
 members = [
-    "datapet",
-    "datapet_codegen",
-    "datapet_codegen_macro",
-    "datapet_lang",
-    "datapet_support",
-    "tests/datapet_tests",
-    "tests/datapet_tests_source",
-    "examples/datapet_example_index_first_char",
-    "examples/datapet_example_tree",
-    "examples/datapet_example_wordlist",
+    "quirky_binder",
+    "quirky_binder_lang",
+    "quirky_binder_support",
+    "codegen/quirky_binder_codegen",
+    "codegen/quirky_binder_codegen_macro",
+    "tests/quirky_binder_tests",
+    "tests/quirky_binder_tests_source",
+    "examples/quirky_binder_example_index_first_char",
+    "examples/quirky_binder_example_tree",
+    "examples/quirky_binder_example_wordlist",
 ]
 exclude = [
-    "datapet_codegen_wasm",
+    "codegen/quirky_binder_codegen_wasm",
 ]

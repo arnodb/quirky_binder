@@ -10,7 +10,7 @@ BASENAME=$(basename "$0")
 WORKSPACE_DIR=$(cd $SCRIPTS_DIR/.. && pwd)
 RUST_TOOLCHAIN_FILE="$WORKSPACE_DIR/rust-toolchain"
 
-MSRV=$(cat "$WORKSPACE_DIR/datapet/Cargo.toml" | sed -n -e 's/^\s*rust-version\s*=\s*"\([^"]*\)"\s*$/\1/p')
+MSRV=$(cat "$WORKSPACE_DIR/quirky_binder/Cargo.toml" | sed -n -e 's/^\s*rust-version\s*=\s*"\([^"]*\)"\s*$/\1/p')
 
 usage() {
     echo "$BASENAME -c|--clear"
@@ -73,6 +73,7 @@ done
 
 echo "Removing \`Cargo.lock\`..."
 rm -f "$WORKSPACE_DIR/Cargo.lock"
+rm -f "$WORKSPACE_DIR/codegen/quirky_binder_codegen_wasm/Cargo.lock"
 
 if [ x"$RUST_TOOLCHAIN" = x ]
 then

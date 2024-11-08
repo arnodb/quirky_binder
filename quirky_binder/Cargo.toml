@@ -1,0 +1,24 @@
+[package]
+name = "quirky_binder"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.65.0"
+
+[dependencies]
+codegen = "0.1"
+derive-new = "0.5"
+derive_more = "0.99"
+getset = "0.1"
+handlebars = "4"
+itertools = "0.10"
+proc-macro2 = "1"
+quirky_binder_codegen_macro = { path = "../codegen/quirky_binder_codegen_macro" }
+quirky_binder_lang = { path = "../quirky_binder_lang" }
+quirky_binder_support = { path = "../quirky_binder_support" }
+quote = "1"
+ron = { git = "https://github.com/ron-rs/ron.git" }
+serde = { version = "1", features = ["derive"] }
+syn = { version = "1", features = ["full", "extra-traits"] }
+thiserror = "1"
+truc = { git = "https://github.com/arnodb/truc.git" }
+which = "4"

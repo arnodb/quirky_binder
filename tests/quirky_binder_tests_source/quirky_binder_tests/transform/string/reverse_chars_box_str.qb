@@ -1,0 +1,32 @@
+use quirky_binder::{
+    filter::{
+        function::{
+            produce::function_produce,
+            terminate::function_terminate,
+        },
+        transform::string::reverse_chars,
+    },
+};
+
+{
+  (
+      function_produce(
+        fields: [("value", "Box<str>")],
+        body: r#"{
+            let record = new_record("BoîTe".into());
+            output.send(Some(record))?;
+            output.send(None)?;
+            Ok(())
+        }"#,
+      )
+    - reverse_chars(fields: ["value"])
+    - function_terminate(
+        body: r#"
+            let record = input.next()?.unwrap();
+            assert_eq!(record.value().as_ref(), "eTîoB");
+            assert!(input.next()?.is_none());
+            Ok(())
+"#,
+      )
+  )
+}
