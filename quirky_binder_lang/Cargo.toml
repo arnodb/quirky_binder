@@ -3,6 +3,11 @@ name = "quirky_binder_lang"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.65.0"
+license-file = "../LICENSE"
+description = "Quirky Binder Language"
+documentation = "https://docs.rs/quirky_binder_lang"
+repository = "https://github.com/arnodb/quirky_binder"
+readme = "../README.md"
 
 [features]
 default = ["crafted_parser"]
@@ -18,7 +23,7 @@ derive-new = "0.5"
 logos = { version = "0.13", optional = true }
 nom = { version = "7", optional = true }
 peekmore = { version = "1", optional = true }
-ron = { git = "https://github.com/ron-rs/ron.git" }
+ron = "0.9.0-alpha.0"
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]

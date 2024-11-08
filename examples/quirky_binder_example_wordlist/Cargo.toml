@@ -26,4 +26,4 @@ quirky_binder_lang = { path = "../../quirky_binder_lang" }
 quirky_binder_support = { path = "../../quirky_binder_support" }
 handlebars = "4"
 serde = { version = "1", features = ["derive"] }
-truc = { git = "https://github.com/arnodb/truc.git" }
+truc = "0.2"

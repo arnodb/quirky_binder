@@ -9,4 +9,4 @@ handlebars = "4"
 quirky_binder = { path = "../../quirky_binder" }
 quirky_binder_lang = { path = "../../quirky_binder_lang" }
 serde = { version = "1", features = ["derive"] }
-truc = { git = "https://github.com/arnodb/truc.git" }
+truc = "0.2"

@@ -3,6 +3,11 @@ name = "quirky_binder_codegen_macro"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.65.0"
+license-file = "../../LICENSE"
+description = "Quirky Binder Codegen Macro"
+documentation = "https://docs.rs/quirky_binder_codegen_macro"
+repository = "https://github.com/arnodb/quirky_binder"
+readme = "../../README.md"
 
 [lib]
 proc-macro = true
@@ -11,7 +16,7 @@ proc-macro = true
 annotate-snippets = { version = "0.9", features = ["color"] }
 proc-macro-error = "1"
 proc-macro2 = "1"
-quirky_binder_codegen = { path = "../quirky_binder_codegen" }
-quirky_binder_lang = { path = "../../quirky_binder_lang" }
+quirky_binder_codegen = { version = "0.1.0", path = "../quirky_binder_codegen" }
+quirky_binder_lang = { version = "0.1.0", path = "../../quirky_binder_lang" }
 quote = "1"
 syn = { version = "1", features = ["full"] }
