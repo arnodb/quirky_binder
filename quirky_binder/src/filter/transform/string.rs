@@ -2,10 +2,10 @@ use proc_macro2::TokenStream;
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
+use super::{
+    SubTransform, SubTransformParams, SubTransformSpec, Transform, TransformParams, TransformSpec,
+};
 use crate::prelude::*;
-
-use super::{SubTransform, SubTransformParams, SubTransformSpec};
-use super::{Transform, TransformParams, TransformSpec};
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]

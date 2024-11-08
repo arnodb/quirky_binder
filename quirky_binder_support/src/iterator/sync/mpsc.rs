@@ -1,5 +1,6 @@
-use fallible_iterator::FallibleIterator;
 use std::sync::mpsc::{Receiver, RecvError};
+
+use fallible_iterator::FallibleIterator;
 
 /// Receives records from a `Receiver`
 #[derive(new)]
@@ -31,56 +32,62 @@ where
     }
 }
 
-#[test]
-fn should_stream_received_records() {
-    use std::sync::mpsc::channel;
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use super::*;
 
-    #[derive(Debug)]
-    struct Error(String);
+    #[test]
+    fn should_stream_received_records() {
+        use std::sync::mpsc::channel;
 
-    impl From<RecvError> for Error {
-        fn from(_: RecvError) -> Self {
-            Self("Receive error".to_string())
+        #[derive(Debug)]
+        struct Error(String);
+
+        impl From<RecvError> for Error {
+            fn from(_: RecvError) -> Self {
+                Self("Receive error".to_string())
+            }
         }
-    }
 
-    let (tx, rx) = channel();
-    let mut stream = Receive::<_, Error>::new(rx);
-    for i in 0..42 {
-        tx.send(Some(i)).unwrap();
-    }
-    tx.send(None).unwrap();
-    for i in 0..42 {
-        assert_matches!(stream.next(), Ok(Some(j)) if j == i);
-    }
-    // End of stream
-    assert_matches!(stream.next(), Ok(None));
-    assert_matches!(stream.next(), Ok(None));
-}
-
-#[test]
-fn should_stream_received_records_from_sync_channel() {
-    use std::sync::mpsc::sync_channel;
-
-    #[derive(Debug)]
-    struct Error(String);
-
-    impl From<RecvError> for Error {
-        fn from(_: RecvError) -> Self {
-            Self("Receive error".to_string())
+        let (tx, rx) = channel();
+        let mut stream = Receive::<_, Error>::new(rx);
+        for i in 0..42 {
+            tx.send(Some(i)).unwrap();
         }
+        tx.send(None).unwrap();
+        for i in 0..42 {
+            assert_matches!(stream.next(), Ok(Some(j)) if j == i);
+        }
+        // End of stream
+        assert_matches!(stream.next(), Ok(None));
+        assert_matches!(stream.next(), Ok(None));
     }
 
-    let (tx, rx) = sync_channel(100);
-    let mut stream = Receive::<_, Error>::new(rx);
-    for i in 0..42 {
-        tx.send(Some(i)).unwrap();
+    #[test]
+    fn should_stream_received_records_from_sync_channel() {
+        use std::sync::mpsc::sync_channel;
+
+        #[derive(Debug)]
+        struct Error(String);
+
+        impl From<RecvError> for Error {
+            fn from(_: RecvError) -> Self {
+                Self("Receive error".to_string())
+            }
+        }
+
+        let (tx, rx) = sync_channel(100);
+        let mut stream = Receive::<_, Error>::new(rx);
+        for i in 0..42 {
+            tx.send(Some(i)).unwrap();
+        }
+        tx.send(None).unwrap();
+        for i in 0..42 {
+            assert_matches!(stream.next(), Ok(Some(j)) if j == i);
+        }
+        // End of stream
+        assert_matches!(stream.next(), Ok(None));
+        assert_matches!(stream.next(), Ok(None));
     }
-    tx.send(None).unwrap();
-    for i in 0..42 {
-        assert_matches!(stream.next(), Ok(Some(j)) if j == i);
-    }
-    // End of stream
-    assert_matches!(stream.next(), Ok(None));
-    assert_matches!(stream.next(), Ok(None));
 }

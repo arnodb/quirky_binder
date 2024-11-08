@@ -1,5 +1,6 @@
-use crate::prelude::*;
 use std::collections::BTreeMap;
+
+use crate::prelude::*;
 
 pub mod graph;
 

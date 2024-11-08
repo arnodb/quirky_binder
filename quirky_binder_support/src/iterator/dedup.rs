@@ -101,20 +101,26 @@ where
     }
 }
 
-#[test]
-fn should_dedup_stream() {
-    let mut stream = Dedup::new(
-        fallible_iterator::convert(
-            [("a", 12), ("a", 12), ("a", 42), ("b", 42)]
-                .into_iter()
-                .map(Ok::<_, ()>),
-        ),
-        |a, b| (&a.0).eq(&b.0) && a.1.eq(&b.1),
-    );
-    assert_matches!(stream.next(), Ok(Some((v, 12))) if v == "a");
-    assert_matches!(stream.next(), Ok(Some((v, 42))) if v == "a");
-    assert_matches!(stream.next(), Ok(Some((v, 42))) if v == "b");
-    // End of stream
-    assert_matches!(stream.next(), Ok(None));
-    assert_matches!(stream.next(), Ok(None));
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_dedup_stream() {
+        let mut stream = Dedup::new(
+            fallible_iterator::convert(
+                [("a", 12), ("a", 12), ("a", 42), ("b", 42)]
+                    .into_iter()
+                    .map(Ok::<_, ()>),
+            ),
+            |a, b| (&a.0).eq(&b.0) && a.1.eq(&b.1),
+        );
+        assert_matches!(stream.next(), Ok(Some((v, 12))) if v == "a");
+        assert_matches!(stream.next(), Ok(Some((v, 42))) if v == "a");
+        assert_matches!(stream.next(), Ok(Some((v, 42))) if v == "b");
+        // End of stream
+        assert_matches!(stream.next(), Ok(None));
+        assert_matches!(stream.next(), Ok(None));
+    }
 }

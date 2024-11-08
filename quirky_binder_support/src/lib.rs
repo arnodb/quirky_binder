@@ -1,3 +1,4 @@
+#![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 #![cfg_attr(test, allow(clippy::comparison_to_empty))]
 
 #[cfg(test)]

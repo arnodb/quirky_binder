@@ -63,8 +63,9 @@ where
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
-    use super::{fields_eq, fields_eq_ab};
+    use super::*;
 
     #[test]
     fn test_fields_eq_1() {

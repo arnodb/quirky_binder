@@ -69,24 +69,30 @@ impl BufferReader {
     }
 }
 
-#[test]
-fn test_memory() {
-    let mut buffer = Buffer::with_max_size_in_memory(1024 * 1024);
-    buffer.push("universe").unwrap();
-    buffer.push(42).unwrap();
-    let mut reader = buffer.end_writing().unwrap();
-    assert_eq!(reader.read::<String>().unwrap(), "universe");
-    assert_eq!(reader.read::<i32>().unwrap(), 42);
-    reader.end_reading().unwrap();
-}
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use super::*;
 
-#[test]
-fn test_rolled() {
-    let mut buffer = Buffer::with_max_size_in_memory(1);
-    buffer.push("universe").unwrap();
-    buffer.push(42).unwrap();
-    let mut reader = buffer.end_writing().unwrap();
-    assert_eq!(reader.read::<String>().unwrap(), "universe");
-    assert_eq!(reader.read::<i32>().unwrap(), 42);
-    reader.end_reading().unwrap();
+    #[test]
+    fn test_memory() {
+        let mut buffer = Buffer::with_max_size_in_memory(1024 * 1024);
+        buffer.push("universe").unwrap();
+        buffer.push(42).unwrap();
+        let mut reader = buffer.end_writing().unwrap();
+        assert_eq!(reader.read::<String>().unwrap(), "universe");
+        assert_eq!(reader.read::<i32>().unwrap(), 42);
+        reader.end_reading().unwrap();
+    }
+
+    #[test]
+    fn test_rolled() {
+        let mut buffer = Buffer::with_max_size_in_memory(1);
+        buffer.push("universe").unwrap();
+        buffer.push(42).unwrap();
+        let mut reader = buffer.end_writing().unwrap();
+        assert_eq!(reader.read::<String>().unwrap(), "universe");
+        assert_eq!(reader.read::<i32>().unwrap(), 42);
+        reader.end_reading().unwrap();
+    }
 }

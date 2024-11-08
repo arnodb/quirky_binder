@@ -146,8 +146,9 @@ where
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
-    use super::{fields_cmp, fields_cmp_ab, Directed};
+    use super::*;
 
     #[test]
     fn test_fields_cmp_1() {

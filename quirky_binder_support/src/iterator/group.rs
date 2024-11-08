@@ -48,77 +48,83 @@ where
     }
 }
 
-#[test]
-fn should_group_stream() {
-    let mut stream = Group::new(
-        fallible_iterator::convert(
-            ["", "a", "A", "z", "ZZZ", "zero", "Zorro"]
-                .into_iter()
-                .map(Ok::<_, ()>),
-        ),
-        |word| word,
-        |group, word| {
-            let group_fc = group.chars().next().map(|c| c.to_lowercase());
-            let word_fc = word.chars().next().map(|c| c.to_lowercase());
-            match (group_fc, word_fc) {
-                (Some(a), Some(b)) => a.eq(b),
-                (None, None) => true,
-                (Some(_), None) | (None, Some(_)) => false,
-            }
-        },
-        |_group, _word| {},
-    );
-    assert_matches!(stream.next(), Ok(Some(v)) if v == "");
-    assert_matches!(stream.next(), Ok(Some(v)) if v == "a");
-    assert_matches!(stream.next(), Ok(Some(v)) if v == "z");
-    // End of stream
-    assert_matches!(stream.next(), Ok(None));
-    assert_matches!(stream.next(), Ok(None));
-}
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use super::*;
 
-#[test]
-fn should_group_stream_and_count() {
-    let mut stream = Group::new(
-        fallible_iterator::convert(
-            ["", "a", "A", "ZZZ", "z", "zero", "Zorro"]
-                .into_iter()
-                .map(Ok::<_, ()>),
-        ),
-        |word| (word, 1),
-        |group, word| {
-            let group_fc = group.0.chars().next().map(|c| c.to_lowercase());
-            let word_fc = word.chars().next().map(|c| c.to_lowercase());
-            match (group_fc, word_fc) {
-                (Some(a), Some(b)) => a.eq(b),
-                (None, None) => true,
-                (Some(_), None) | (None, Some(_)) => false,
-            }
-        },
-        |group, _word| group.1 += 1,
-    );
-    assert_matches!(stream.next(), Ok(Some((v, 1))) if v == "");
-    assert_matches!(stream.next(), Ok(Some((v, 2))) if v == "a");
-    assert_matches!(stream.next(), Ok(Some((v, 4))) if v == "ZZZ");
-    // End of stream
-    assert_matches!(stream.next(), Ok(None));
-    assert_matches!(stream.next(), Ok(None));
-}
+    #[test]
+    fn should_group_stream() {
+        let mut stream = Group::new(
+            fallible_iterator::convert(
+                ["", "a", "A", "z", "ZZZ", "zero", "Zorro"]
+                    .into_iter()
+                    .map(Ok::<_, ()>),
+            ),
+            |word| word,
+            |group, word| {
+                let group_fc = group.chars().next().map(|c| c.to_lowercase());
+                let word_fc = word.chars().next().map(|c| c.to_lowercase());
+                match (group_fc, word_fc) {
+                    (Some(a), Some(b)) => a.eq(b),
+                    (None, None) => true,
+                    (Some(_), None) | (None, Some(_)) => false,
+                }
+            },
+            |_group, _word| {},
+        );
+        assert_matches!(stream.next(), Ok(Some(v)) if v == "");
+        assert_matches!(stream.next(), Ok(Some(v)) if v == "a");
+        assert_matches!(stream.next(), Ok(Some(v)) if v == "z");
+        // End of stream
+        assert_matches!(stream.next(), Ok(None));
+        assert_matches!(stream.next(), Ok(None));
+    }
 
-#[test]
-fn should_group_stream_and_aggregate_into_vactor() {
-    let mut stream = Group::new(
-        fallible_iterator::convert(
-            [("a", 12), ("a", 12), ("a", 42), ("b", 42)]
-                .into_iter()
-                .map(Ok::<_, ()>),
-        ),
-        |input| (input.0, vec![input.1]),
-        |a: &(&str, Vec<i32>), b| (&a.0).eq(&b.0),
-        |group, input| group.1.push(input.1),
-    );
-    assert_matches!(stream.next(), Ok(Some((v, g))) if v == "a" && g == vec![12, 12, 42]);
-    assert_matches!(stream.next(), Ok(Some((v, g))) if v == "b" && g == vec![42]);
-    // End of stream
-    assert_matches!(stream.next(), Ok(None));
-    assert_matches!(stream.next(), Ok(None));
+    #[test]
+    fn should_group_stream_and_count() {
+        let mut stream = Group::new(
+            fallible_iterator::convert(
+                ["", "a", "A", "ZZZ", "z", "zero", "Zorro"]
+                    .into_iter()
+                    .map(Ok::<_, ()>),
+            ),
+            |word| (word, 1),
+            |group, word| {
+                let group_fc = group.0.chars().next().map(|c| c.to_lowercase());
+                let word_fc = word.chars().next().map(|c| c.to_lowercase());
+                match (group_fc, word_fc) {
+                    (Some(a), Some(b)) => a.eq(b),
+                    (None, None) => true,
+                    (Some(_), None) | (None, Some(_)) => false,
+                }
+            },
+            |group, _word| group.1 += 1,
+        );
+        assert_matches!(stream.next(), Ok(Some((v, 1))) if v == "");
+        assert_matches!(stream.next(), Ok(Some((v, 2))) if v == "a");
+        assert_matches!(stream.next(), Ok(Some((v, 4))) if v == "ZZZ");
+        // End of stream
+        assert_matches!(stream.next(), Ok(None));
+        assert_matches!(stream.next(), Ok(None));
+    }
+
+    #[test]
+    fn should_group_stream_and_aggregate_into_vactor() {
+        let mut stream = Group::new(
+            fallible_iterator::convert(
+                [("a", 12), ("a", 12), ("a", 42), ("b", 42)]
+                    .into_iter()
+                    .map(Ok::<_, ()>),
+            ),
+            |input| (input.0, vec![input.1]),
+            |a: &(&str, Vec<i32>), b| (&a.0).eq(&b.0),
+            |group, input| group.1.push(input.1),
+        );
+        assert_matches!(stream.next(), Ok(Some((v, g))) if v == "a" && g == vec![12, 12, 42]);
+        assert_matches!(stream.next(), Ok(Some((v, g))) if v == "b" && g == vec![42]);
+        // End of stream
+        assert_matches!(stream.next(), Ok(None));
+        assert_matches!(stream.next(), Ok(None));
+    }
 }

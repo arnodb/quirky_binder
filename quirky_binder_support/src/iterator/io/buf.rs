@@ -1,5 +1,6 @@
-use fallible_iterator::FallibleIterator;
 use std::io::{BufRead, Stdin, StdinLock};
+
+use fallible_iterator::FallibleIterator;
 
 /// Reads a buffer and stream one item per line, `'0x0a' trimmed from the end.`
 #[derive(new)]
@@ -55,13 +56,19 @@ impl FallibleIterator for ReadStdinLines {
     }
 }
 
-#[test]
-fn should_stream_lines_from_string() {
-    let input = "Hello\nWorld";
-    let mut stream = ReadLines::new(input.as_bytes());
-    assert_matches!(stream.next(), Ok(Some(line)) if &*line == "Hello");
-    assert_matches!(stream.next(), Ok(Some(line)) if &*line == "World");
-    // End of stream
-    assert_matches!(stream.next(), Ok(None));
-    assert_matches!(stream.next(), Ok(None));
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn should_stream_lines_from_string() {
+        let input = "Hello\nWorld";
+        let mut stream = ReadLines::new(input.as_bytes());
+        assert_matches!(stream.next(), Ok(Some(line)) if &*line == "Hello");
+        assert_matches!(stream.next(), Ok(Some(line)) if &*line == "World");
+        // End of stream
+        assert_matches!(stream.next(), Ok(None));
+        assert_matches!(stream.next(), Ok(None));
+    }
 }

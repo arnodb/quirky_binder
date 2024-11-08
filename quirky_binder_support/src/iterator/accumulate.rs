@@ -94,36 +94,42 @@ impl State {
     }
 }
 
-#[test]
-fn should_accumulate_stream() {
-    #[derive(Debug)]
-    enum Error {
-        Bincode(bincode::Error),
-    }
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use super::*;
 
-    impl From<bincode::Error> for Error {
-        fn from(err: bincode::Error) -> Self {
-            Self::Bincode(err)
+    #[test]
+    fn should_accumulate_stream() {
+        #[derive(Debug)]
+        enum Error {
+            Bincode(bincode::Error),
         }
-    }
 
-    let mut stream = Accumulate::new(fallible_iterator::convert(
-        [
-            "ZZZ".to_owned(),
-            "".to_owned(),
-            "a".to_owned(),
-            "z".to_owned(),
-            "A".to_owned(),
-        ]
-        .into_iter()
-        .map(Ok::<_, Error>),
-    ));
-    assert_matches!(stream.next(), Ok(Some(v)) if v == "ZZZ");
-    assert_matches!(stream.next(), Ok(Some(v)) if v == "");
-    assert_matches!(stream.next(), Ok(Some(v)) if v == "a");
-    assert_matches!(stream.next(), Ok(Some(v)) if v == "z");
-    assert_matches!(stream.next(), Ok(Some(v)) if v == "A");
-    // End of stream
-    assert_matches!(stream.next(), Ok(None));
-    assert_matches!(stream.next(), Ok(None));
+        impl From<bincode::Error> for Error {
+            fn from(err: bincode::Error) -> Self {
+                Self::Bincode(err)
+            }
+        }
+
+        let mut stream = Accumulate::new(fallible_iterator::convert(
+            [
+                "ZZZ".to_owned(),
+                "".to_owned(),
+                "a".to_owned(),
+                "z".to_owned(),
+                "A".to_owned(),
+            ]
+            .into_iter()
+            .map(Ok::<_, Error>),
+        ));
+        assert_matches!(stream.next(), Ok(Some(v)) if v == "ZZZ");
+        assert_matches!(stream.next(), Ok(Some(v)) if v == "");
+        assert_matches!(stream.next(), Ok(Some(v)) if v == "a");
+        assert_matches!(stream.next(), Ok(Some(v)) if v == "z");
+        assert_matches!(stream.next(), Ok(Some(v)) if v == "A");
+        // End of stream
+        assert_matches!(stream.next(), Ok(None));
+        assert_matches!(stream.next(), Ok(None));
+    }
 }

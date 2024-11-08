@@ -31,3 +31,6 @@ antinom = { git = "https://github.com/arnodb/antinom.git" }
 assert_matches = "1"
 rand_chacha = { version = "0.3" }
 rstest = "0.18.2"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage,coverage_nightly)'] }

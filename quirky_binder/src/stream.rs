@@ -1,10 +1,12 @@
-use crate::prelude::*;
-use itertools::Itertools;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::Deref,
 };
+
+use itertools::Itertools;
 use truc::record::definition::{DatumId, RecordVariantId};
+
+use crate::prelude::*;
 
 /// Defines the type of records going through a given stream.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Default, Display, Debug, From)]

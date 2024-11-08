@@ -146,4 +146,5 @@ fn assemble_inputs<'a>(
 pub mod fuzzer;
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod fuzz_tests;

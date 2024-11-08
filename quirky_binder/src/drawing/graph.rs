@@ -1,10 +1,12 @@
+use std::collections::{btree_map::Entry, BTreeMap};
+
+use truc::record::definition::{DatumId, RecordVariantId};
+
 use super::{
     Drawing, DrawingColumn, DrawingEdge, DrawingNode, DrawingPort, DrawingPortAlign,
     DrawingPortSize, DrawingPortsColumn,
 };
 use crate::prelude::*;
-use std::collections::{btree_map::Entry, BTreeMap};
-use truc::record::definition::{DatumId, RecordVariantId};
 
 const COLORS: [&str; 20] = [
     "#e6194B", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#42d4f4", "#f032e6",

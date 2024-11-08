@@ -3,8 +3,6 @@ use std::cmp::Ordering;
 use binary_heap_plus::BinaryHeap;
 use compare::Compare;
 use fallible_iterator::FallibleIterator;
-#[cfg(test)]
-use rstest::rstest;
 use serde::{Deserialize, Serialize};
 
 use super::collections::CollectionsIteratorFnHelper;
@@ -313,101 +311,107 @@ where
 }
 
 #[cfg(test)]
-#[rstest]
-#[case(DEFAULT_SLICE_SIZE)]
-#[case(1)]
-#[case(2)]
-#[case(3)]
-#[case(4)]
-#[case(5)]
-#[case(42)]
-fn should_sort_stream(#[case] slice_size: usize) {
-    #[derive(Debug)]
-    enum Error {
-        Bincode(bincode::Error),
-    }
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests {
+    use rstest::rstest;
 
-    impl From<bincode::Error> for Error {
-        fn from(err: bincode::Error) -> Self {
-            Self::Bincode(err)
+    use super::*;
+
+    #[rstest]
+    #[case(DEFAULT_SLICE_SIZE)]
+    #[case(1)]
+    #[case(2)]
+    #[case(3)]
+    #[case(4)]
+    #[case(5)]
+    #[case(42)]
+    fn should_sort_stream(#[case] slice_size: usize) {
+        #[derive(Debug)]
+        enum Error {
+            Bincode(bincode::Error),
         }
-    }
 
-    let mut stream = Sort::with_slice_size(
-        fallible_iterator::convert(
-            [
-                "ZZZ".to_owned(),
-                "".to_owned(),
-                "a".to_owned(),
-                "z".to_owned(),
-                "A".to_owned(),
-            ]
-            .into_iter()
-            .map(Ok::<_, Error>),
-        ),
-        |a, b| {
-            a.to_lowercase()
-                .cmp(&b.to_lowercase())
-                .then_with(|| a.cmp(b))
-        },
-        slice_size,
-    );
-    assert_matches!(stream.next(), Ok(Some(v)) if v == "");
-    assert_matches!(stream.next(), Ok(Some(v)) if v == "A");
-    assert_matches!(stream.next(), Ok(Some(v)) if v == "a");
-    assert_matches!(stream.next(), Ok(Some(v)) if v == "z");
-    assert_matches!(stream.next(), Ok(Some(v)) if v == "ZZZ");
-    // End of stream
-    assert_matches!(stream.next(), Ok(None));
-    assert_matches!(stream.next(), Ok(None));
-}
-
-#[cfg(test)]
-#[rstest]
-#[case(DEFAULT_SLICE_SIZE)]
-#[case(1)]
-#[case(2)]
-#[case(3)]
-#[case(4)]
-#[case(5)]
-#[case(42)]
-fn should_sort_big_stream(#[case] slice_size: usize) {
-    #[derive(Debug)]
-    enum Error {
-        Bincode(bincode::Error),
-    }
-
-    impl From<bincode::Error> for Error {
-        fn from(err: bincode::Error) -> Self {
-            Self::Bincode(err)
+        impl From<bincode::Error> for Error {
+            fn from(err: bincode::Error) -> Self {
+                Self::Bincode(err)
+            }
         }
+
+        let mut stream = Sort::with_slice_size(
+            fallible_iterator::convert(
+                [
+                    "ZZZ".to_owned(),
+                    "".to_owned(),
+                    "a".to_owned(),
+                    "z".to_owned(),
+                    "A".to_owned(),
+                ]
+                .into_iter()
+                .map(Ok::<_, Error>),
+            ),
+            |a, b| {
+                a.to_lowercase()
+                    .cmp(&b.to_lowercase())
+                    .then_with(|| a.cmp(b))
+            },
+            slice_size,
+        );
+        assert_matches!(stream.next(), Ok(Some(v)) if v == "");
+        assert_matches!(stream.next(), Ok(Some(v)) if v == "A");
+        assert_matches!(stream.next(), Ok(Some(v)) if v == "a");
+        assert_matches!(stream.next(), Ok(Some(v)) if v == "z");
+        assert_matches!(stream.next(), Ok(Some(v)) if v == "ZZZ");
+        // End of stream
+        assert_matches!(stream.next(), Ok(None));
+        assert_matches!(stream.next(), Ok(None));
     }
 
-    use rand::Rng;
-    use rand_chacha::rand_core::SeedableRng;
+    #[rstest]
+    #[case(DEFAULT_SLICE_SIZE)]
+    #[case(1)]
+    #[case(2)]
+    #[case(3)]
+    #[case(4)]
+    #[case(5)]
+    #[case(42)]
+    fn should_sort_big_stream(#[case] slice_size: usize) {
+        #[derive(Debug)]
+        enum Error {
+            Bincode(bincode::Error),
+        }
 
-    let mut rng = rand_chacha::ChaCha8Rng::from_entropy();
-    println!("Seed: {:02x?}", rng.get_seed());
+        impl From<bincode::Error> for Error {
+            fn from(err: bincode::Error) -> Self {
+                Self::Bincode(err)
+            }
+        }
 
-    let input = (0..(1024 * 1024))
-        .map(|_| {
-            let num: i32 = rng.gen();
-            num
-        })
-        .collect::<Vec<_>>();
+        use rand::Rng;
+        use rand_chacha::rand_core::SeedableRng;
 
-    let mut stream = Sort::with_slice_size(
-        fallible_iterator::convert(input.clone().into_iter().map(Ok::<_, Error>)),
-        |a, b| a.cmp(b),
-        slice_size,
-    );
+        let mut rng = rand_chacha::ChaCha8Rng::from_entropy();
+        println!("Seed: {:02x?}", rng.get_seed());
 
-    let mut input = input;
-    input.sort();
-    for num in input {
-        assert_matches!(stream.next(), Ok(Some(v)) if v == num);
+        let input = (0..(1024 * 1024))
+            .map(|_| {
+                let num: i32 = rng.gen();
+                num
+            })
+            .collect::<Vec<_>>();
+
+        let mut stream = Sort::with_slice_size(
+            fallible_iterator::convert(input.clone().into_iter().map(Ok::<_, Error>)),
+            |a, b| a.cmp(b),
+            slice_size,
+        );
+
+        let mut input = input;
+        input.sort();
+        for num in input {
+            assert_matches!(stream.next(), Ok(Some(v)) if v == num);
+        }
+        // End of stream
+        assert_matches!(stream.next(), Ok(None));
+        assert_matches!(stream.next(), Ok(None));
     }
-    // End of stream
-    assert_matches!(stream.next(), Ok(None));
-    assert_matches!(stream.next(), Ok(None));
 }

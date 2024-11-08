@@ -1,5 +1,6 @@
-use quirky_binder::{prelude::*, quirky_binder};
 use std::{fs::File, io::Write, path::Path};
+
+use quirky_binder::{prelude::*, quirky_binder};
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
 
 quirky_binder!(include_glob_test("quirky_binder_tests", "**/*.qb"));

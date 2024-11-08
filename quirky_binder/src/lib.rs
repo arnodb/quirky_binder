@@ -1,3 +1,5 @@
+#![cfg_attr(coverage_nightly, feature(coverage_attribute))]
+
 #[macro_use]
 extern crate derive_more;
 #[macro_use]

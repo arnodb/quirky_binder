@@ -182,11 +182,12 @@ pub fn lexer(input: &str) -> Lexer<impl Iterator<Item = Token>> {
 }
 
 #[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
 mod tests {
     use logos::{Logos, Span};
     use rstest::rstest;
 
-    use super::Token;
+    use super::*;
 
     #[rstest]
     #[case(r#"'\''"#, vec![(Ok(Token::QuotedChar(r#"'\''"#)), 0..4)])]

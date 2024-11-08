@@ -1,5 +1,6 @@
-use crate::prelude::*;
 use truc::record::type_resolver::TypeResolver;
+
+use crate::prelude::*;
 
 #[derive(Getters)]
 pub struct Accumulate {
