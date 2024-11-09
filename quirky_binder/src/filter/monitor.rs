@@ -25,7 +25,7 @@ pub monitor()
             use chrono::{DateTime, Utc};
 
             let mut csv = File::create("qb_monitor.csv").unwrap();
-            write!(csv, "Timestamp,memory_rss,memory_swap,memory_object,memory_wrapped\n").unwrap();
+            writeln!(csv, "Timestamp,memory_rss,memory_swap,memory_object,memory_wrapped").unwrap();
 
             let mut meter = self_meter::Meter::new(Duration::from_millis(1000)).unwrap();
             meter.track_current_thread("main");
@@ -40,9 +40,9 @@ pub monitor()
                 if let Some(report) = report.as_ref() {
                     let timestamp = DateTime::<Utc>::from(report.timestamp);
                     let data = crate::quirky_binder_monitor::DATA.lock().unwrap();
-                    write!(
+                    writeln!(
                         csv,
-                        "{},{},{},{},{}\n",
+                        "{},{},{},{},{}",
                         timestamp,
                         report.memory_rss,
                         report.memory_swap,

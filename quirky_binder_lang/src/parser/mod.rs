@@ -104,7 +104,7 @@ impl SpannedErrorKind {
     }
 }
 
-trait ToSpannedError<'a> {
+pub trait ToSpannedError<'a> {
     fn to_spanned_error(&self, input: &'a str) -> SpannedError<&'a str>;
 }
 

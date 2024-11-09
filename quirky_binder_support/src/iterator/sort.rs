@@ -239,28 +239,6 @@ where
     }
 }
 
-trait Heads<Record>: Send {
-    fn push(&mut self, record: Record);
-
-    fn pop(&mut self) -> Option<Record>;
-
-    fn is_empty(&self) -> bool;
-}
-
-impl<Record: Send, C: Compare<Record> + Send> Heads<Record> for BinaryHeap<Record, C> {
-    fn push(&mut self, record: Record) {
-        BinaryHeap::push(self, record)
-    }
-
-    fn pop(&mut self) -> Option<Record> {
-        BinaryHeap::pop(self)
-    }
-
-    fn is_empty(&self) -> bool {
-        BinaryHeap::is_empty(self)
-    }
-}
-
 #[derive(new)]
 pub struct SubSort<
     Input: FallibleIterator<Item = Record, Error = Error>,
@@ -328,7 +306,7 @@ mod tests {
     fn should_sort_stream(#[case] slice_size: usize) {
         #[derive(Debug)]
         enum Error {
-            Bincode(bincode::Error),
+            Bincode(#[allow(dead_code)] bincode::Error),
         }
 
         impl From<bincode::Error> for Error {
@@ -377,7 +355,7 @@ mod tests {
     fn should_sort_big_stream(#[case] slice_size: usize) {
         #[derive(Debug)]
         enum Error {
-            Bincode(bincode::Error),
+            Bincode(#[allow(dead_code)] bincode::Error),
         }
 
         impl From<bincode::Error> for Error {

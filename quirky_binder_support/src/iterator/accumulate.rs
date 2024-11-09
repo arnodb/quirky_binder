@@ -103,7 +103,7 @@ mod tests {
     fn should_accumulate_stream() {
         #[derive(Debug)]
         enum Error {
-            Bincode(bincode::Error),
+            Bincode(#[allow(dead_code)] bincode::Error),
         }
 
         impl From<bincode::Error> for Error {

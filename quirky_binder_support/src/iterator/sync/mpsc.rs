@@ -42,7 +42,7 @@ mod tests {
         use std::sync::mpsc::channel;
 
         #[derive(Debug)]
-        struct Error(String);
+        struct Error(#[allow(dead_code)] String);
 
         impl From<RecvError> for Error {
             fn from(_: RecvError) -> Self {
@@ -69,7 +69,7 @@ mod tests {
         use std::sync::mpsc::sync_channel;
 
         #[derive(Debug)]
-        struct Error(String);
+        struct Error(#[allow(dead_code)] String);
 
         impl From<RecvError> for Error {
             fn from(_: RecvError) -> Self {

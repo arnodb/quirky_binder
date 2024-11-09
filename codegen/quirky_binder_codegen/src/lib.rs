@@ -87,7 +87,7 @@ impl ModuleCode {
             _ => self
                 .sub_modules
                 .entry(path[path_index].clone())
-                .or_insert_with(ModuleCode::default)
+                .or_default()
                 .add(path, path_index + 1, code),
         }
     }

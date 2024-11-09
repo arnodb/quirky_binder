@@ -46,7 +46,7 @@ impl Graph {
         use std::io::Write;
 
         {
-            let mut file = File::create(&output.join("streams.rs")).unwrap();
+            let mut file = File::create(output.join("streams.rs")).unwrap();
             let mut scope = Scope::new();
             for (record_type, definition) in &self.record_definitions {
                 let module = scope.get_or_new_module(&record_type[0]).vis("pub");

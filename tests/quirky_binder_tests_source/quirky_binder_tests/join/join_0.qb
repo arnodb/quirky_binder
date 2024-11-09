@@ -22,7 +22,6 @@ use quirky_binder::{
             println!("Seed: {:02x?}", rng.get_seed());
 
             let nums = (0..1024)
-                .into_iter()
                 .map(|_| rng.gen())
                 .collect::<BTreeSet<i8>>();
             for num in nums {
@@ -51,7 +50,6 @@ use quirky_binder::{
             println!("Seed: {:02x?}", rng.get_seed());
 
             let nums = (0..1024)
-                .into_iter()
                 .map(|_| rng.gen())
                 .collect::<BTreeSet<i8>>();
             for num in nums {
