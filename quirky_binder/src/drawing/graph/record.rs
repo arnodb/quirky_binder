@@ -7,7 +7,8 @@ use super::{
 };
 use crate::{
     drawing::{
-        Drawing, DrawingPort, DrawingPortAlign, DrawingPortSize, DrawingPortsColumn, DynNode,
+        Drawing, DrawingPort, DrawingPortAlign, DrawingPortId, DrawingPortSize, DrawingPortsColumn,
+        DynNode,
     },
     graph::visit::{visit_node, Visit},
     prelude::*,
@@ -33,7 +34,7 @@ impl<'a> RecordsDrawingHelper<'a> {
         let variant = &record_definition[stream.variant_id()];
 
         for d in variant.data() {
-            let input_port_id = *port_count;
+            let input_port_id = DrawingPortId::from(*port_count);
             *port_count += 1;
             port_columns.push(DrawingPortsColumn {
                 ports: vec![DrawingPort {
@@ -78,7 +79,7 @@ impl<'a> RecordsDrawingHelper<'a> {
         let variant = &record_definition[stream.variant_id()];
 
         for d in variant.data() {
-            let output_port_id = *port_count;
+            let output_port_id = DrawingPortId::from(*port_count);
             *port_count += 1;
             port_columns.push(DrawingPortsColumn {
                 ports: vec![DrawingPort {
@@ -120,8 +121,8 @@ impl<'a> RecordsDrawingHelper<'a> {
         let variant = &record_definition[stream.variant_id()];
 
         for d in variant.data() {
-            let input_port_id = *port_count;
-            let output_port_id = *port_count + 1;
+            let input_port_id = DrawingPortId::from(*port_count);
+            let output_port_id = DrawingPortId::from(*port_count + 1);
             *port_count += 2;
             port_columns.push(DrawingPortsColumn {
                 ports: vec![

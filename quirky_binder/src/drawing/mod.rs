@@ -28,9 +28,12 @@ pub struct DrawingPortsColumn {
     pub align: DrawingPortAlign,
 }
 
+#[derive(Debug, Clone, Copy, From, Deref)]
+pub struct DrawingPortId(usize);
+
 #[derive(Debug)]
 pub struct DrawingPort {
-    pub id: usize,
+    pub id: DrawingPortId,
     pub size: DrawingPortSize,
     pub redundant: bool,
 }
@@ -51,8 +54,8 @@ pub enum DrawingPortAlign {
 
 #[derive(Debug)]
 pub struct DrawingEdge<'a> {
-    pub tail: usize,
-    pub head: usize,
+    pub tail: DrawingPortId,
+    pub head: DrawingPortId,
     pub color: &'a str,
 }
 
@@ -286,12 +289,12 @@ where
                     }
                 };
                 let mut go_down_next = false;
-                for DrawingPort {
-                    id,
-                    size,
-                    redundant,
-                } in ports
-                {
+                for port in ports {
+                    let DrawingPort {
+                        id,
+                        size,
+                        redundant,
+                    } = *port;
                     if !redundant {
                         if go_down_next {
                             top += PORT_Y_DISTANCE;
@@ -308,8 +311,8 @@ where
                                 + col * (LABEL_MAX_WIDTH + BLANK_WIDTH)
                                 + (ports_count + port_col) * PORT_X_DISTANCE,
                             cy: top,
-                            size: *size,
-                            redundant: *redundant,
+                            size,
+                            redundant,
                         },
                     );
                 }

@@ -3,7 +3,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 use crate::{
     drawing::{
         Drawing, DrawingColumn, DrawingEdge, DrawingNode, DrawingPort, DrawingPortAlign,
-        DrawingPortSize, DrawingPortsColumn,
+        DrawingPortId, DrawingPortSize, DrawingPortsColumn,
     },
     prelude::*,
 };
@@ -26,7 +26,7 @@ const COLORS: [&str; 20] = [
 pub struct DrawingHelper<'a, PortKey: Ord, ColorKey: Ord> {
     pub columns: Vec<DrawingColumn<'a>>,
     pub node_column_and_index: BTreeMap<&'a [Box<str>], (usize, usize)>,
-    pub output_ports: BTreeMap<PortKey, usize>,
+    pub output_ports: BTreeMap<PortKey, DrawingPortId>,
     pub edges: Vec<DrawingEdge<'a>>,
     pub edges_color: BTreeMap<ColorKey, &'static str>,
     pub next_color: usize,
@@ -143,7 +143,7 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
         from: &PortKey,
         from_color_key: ColorKey,
     ) {
-        let input_port_id = *port_count;
+        let input_port_id = DrawingPortId::from(*port_count);
         *port_count += 1;
 
         let mut index = port_columns.len();
@@ -186,7 +186,7 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
         port_count: &mut usize,
         to: PortKey,
     ) {
-        let output_port_id = *port_count;
+        let output_port_id = DrawingPortId::from(*port_count);
         *port_count += 1;
 
         let mut index = port_columns.len();
@@ -217,7 +217,8 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
             });
         }
 
-        self.output_ports.insert(to, output_port_id);
+        let old = self.output_ports.insert(to, output_port_id);
+        assert!(old.is_none());
     }
 
     pub fn push_connected_ports(
@@ -228,8 +229,8 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
         from_color_key: ColorKey,
         to: PortKey,
     ) {
-        let input_port_id = *port_count;
-        let output_port_id = *port_count + 1;
+        let input_port_id = DrawingPortId::from(*port_count);
+        let output_port_id = DrawingPortId::from(*port_count + 1);
         *port_count += 2;
 
         port_columns.push(DrawingPortsColumn {
@@ -250,10 +251,11 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
 
         self.push_edge(from, input_port_id, from_color_key);
 
-        self.output_ports.insert(to, output_port_id);
+        let old = self.output_ports.insert(to, output_port_id);
+        assert!(old.is_none());
     }
 
-    pub fn push_edge(&mut self, tail_key: &PortKey, head: usize, color_key: ColorKey) {
+    pub fn push_edge(&mut self, tail_key: &PortKey, head: DrawingPortId, color_key: ColorKey) {
         let color = self.get_color_for(color_key);
         self.edges.push(DrawingEdge {
             tail: self.output_ports[tail_key],

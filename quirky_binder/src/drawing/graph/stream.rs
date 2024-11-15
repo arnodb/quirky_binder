@@ -3,7 +3,9 @@ use truc::record::definition::{DatumId, RecordVariantId};
 
 use super::helper::{drawing_source_node_name, DrawingHelper};
 use crate::{
-    drawing::{Drawing, DrawingPort, DrawingPortAlign, DrawingPortSize, DrawingPortsColumn},
+    drawing::{
+        Drawing, DrawingPort, DrawingPortAlign, DrawingPortId, DrawingPortSize, DrawingPortsColumn,
+    },
     graph::visit::{visit_node, Visit},
     prelude::*,
 };
@@ -23,7 +25,7 @@ impl<'a> StreamsDrawingHelper<'a> {
         stream: &'a NodeSubStream,
         depth: usize,
     ) {
-        let input_port_id = *port_count;
+        let input_port_id = DrawingPortId::from(*port_count);
         *port_count += 1;
         port_columns.push(DrawingPortsColumn {
             ports: vec![DrawingPort {
@@ -68,7 +70,7 @@ impl<'a> StreamsDrawingHelper<'a> {
         stream: &'a NodeSubStream,
         depth: usize,
     ) {
-        let output_port_id = *port_count;
+        let output_port_id = DrawingPortId::from(*port_count);
         *port_count += 1;
         port_columns.push(DrawingPortsColumn {
             ports: vec![DrawingPort {
@@ -112,8 +114,8 @@ impl<'a> StreamsDrawingHelper<'a> {
         stream: &'a NodeSubStream,
         depth: usize,
     ) {
-        let input_port_id = *port_count;
-        let output_port_id = *port_count + 1;
+        let input_port_id = DrawingPortId::from(*port_count);
+        let output_port_id = DrawingPortId::from(*port_count + 1);
         *port_count += 2;
         port_columns.push(DrawingPortsColumn {
             ports: vec![
