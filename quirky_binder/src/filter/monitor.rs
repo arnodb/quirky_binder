@@ -13,7 +13,7 @@ use crate::{
 pub monitor()
 {
   (
-      function_execute(
+      function_execute#monitor(
         thread_type: Background,
         body: r#"
             use std::{

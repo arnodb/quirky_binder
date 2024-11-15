@@ -109,10 +109,6 @@ impl<const N: usize> DynNode for FunctionTerminate<N> {
 
         chain.set_thread_main(thread_id, self.name.clone());
     }
-
-    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
-        Box::new(Some(self as &dyn DynNode).into_iter())
-    }
 }
 
 pub fn function_terminate<const N: usize, R: TypeResolver + Copy>(

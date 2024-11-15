@@ -74,10 +74,6 @@ impl DynNode for FunctionUpdate {
 
         chain.implement_inline_node(self, self.inputs.single(), self.outputs.single(), body);
     }
-
-    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
-        Box::new(Some(self as &dyn DynNode).into_iter())
-    }
 }
 
 pub fn function_update<R: TypeResolver + Copy>(

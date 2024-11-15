@@ -81,10 +81,6 @@ impl DynNode for FunctionExecute {
             },
         );
     }
-
-    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
-        Box::new(Some(self as &dyn DynNode).into_iter())
-    }
 }
 
 pub fn function_execute<R: TypeResolver + Copy>(

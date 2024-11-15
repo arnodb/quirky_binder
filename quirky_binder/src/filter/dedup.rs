@@ -69,10 +69,6 @@ impl DynNode for Dedup {
             &inline_body,
         );
     }
-
-    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
-        Box::new(Some(self as &dyn DynNode).into_iter())
-    }
 }
 
 pub fn dedup<R: TypeResolver + Copy>(
@@ -210,10 +206,6 @@ impl DynNode for SubDedup {
             self.outputs.single(),
             &inline_body,
         );
-    }
-
-    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
-        Box::new(Some(self as &dyn DynNode).into_iter())
     }
 }
 

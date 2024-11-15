@@ -60,10 +60,6 @@ impl DynNode for Accumulate {
             &inline_body,
         );
     }
-
-    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
-        Box::new(Some(self as &dyn DynNode).into_iter())
-    }
 }
 
 pub fn accumulate<R: TypeResolver + Copy>(

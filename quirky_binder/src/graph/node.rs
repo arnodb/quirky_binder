@@ -9,7 +9,13 @@ pub trait DynNode {
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain);
 
-    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_>;
+    fn nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(std::iter::empty())
+    }
+
+    fn is_cluster(&self) -> bool {
+        false
+    }
 }
 
 #[derive(new)]
@@ -53,7 +59,11 @@ impl<const IN: usize, const OUT: usize> DynNode for NodeCluster<IN, OUT> {
         }
     }
 
-    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
-        Box::new(self.ordered_nodes.iter().flat_map(|node| node.all_nodes()))
+    fn nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
+        Box::new(self.ordered_nodes.iter().map(|node| node.as_ref()))
+    }
+
+    fn is_cluster(&self) -> bool {
+        true
     }
 }

@@ -271,10 +271,6 @@ impl<Spec: TransformSpec> DynNode for Transform<Spec> {
             &inline_body,
         );
     }
-
-    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
-        Box::new(Some(self as &dyn DynNode).into_iter())
-    }
 }
 
 #[derive(Debug)]
@@ -559,9 +555,5 @@ impl<Spec: SubTransformSpec> DynNode for SubTransform<Spec> {
                 }
             },
         );
-    }
-
-    fn all_nodes(&self) -> Box<dyn Iterator<Item = &dyn DynNode> + '_> {
-        Box::new(Some(self as &dyn DynNode).into_iter())
     }
 }
