@@ -6,6 +6,7 @@ members = [
     "quirky_binder_support",
     "codegen/quirky_binder_codegen",
     "codegen/quirky_binder_codegen_macro",
+    "contrib/quirky_binder_csv",
     "tests/quirky_binder_tests",
     "tests/quirky_binder_tests_source",
     "examples/quirky_binder_example_index_first_char",

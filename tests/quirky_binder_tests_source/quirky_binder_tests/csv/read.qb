@@ -1,0 +1,24 @@
+use quirky_binder::{
+    filter::{
+        function::terminate::function_terminate,
+    },
+};
+use quirky_binder_csv::read_csv;
+
+{
+  (
+      read_csv(
+        input_file: "input/hello_universe.csv",
+        fields: [("hello", "String"), ("universe", "usize")],
+      )
+    - function_terminate(
+        body: r#"
+            let record = input.next()?.unwrap();
+            assert_eq!(record.hello(), "world");
+            assert_eq!(*record.universe(), 42);
+            assert!(input.next()?.is_none());
+            Ok(())
+"#,
+      )
+  )
+}
