@@ -1,4 +1,9 @@
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::{
+    collections::{btree_map::Entry, BTreeMap},
+    fmt::Debug,
+};
+
+use itertools::{EitherOrBoth, Itertools};
 
 use crate::{
     drawing::{
@@ -23,20 +28,24 @@ const COLORS: [&str; 20] = [
     "#808000", "#ffd8b1", "#000075", "#a9a9a9",
 ];
 
-pub struct DrawingHelper<'a, PortKey: Ord, ColorKey: Ord> {
+pub struct DrawingHelper<'a, PortKey: Ord + Debug, PathKey: Ord + Debug> {
     pub columns: Vec<DrawingColumn<'a>>,
     pub node_column_and_index: BTreeMap<&'a [Box<str>], (usize, usize)>,
+    pub port_count: usize,
     pub output_ports: BTreeMap<PortKey, DrawingPortId>,
     pub edges: Vec<DrawingEdge<'a>>,
-    pub edges_color: BTreeMap<ColorKey, &'static str>,
+    pub edges_color: BTreeMap<PathKey, &'static str>,
     pub next_color: usize,
 }
 
-impl<'a, PortKey: Ord, ColorKey: Ord> Default for DrawingHelper<'a, PortKey, ColorKey> {
+impl<'a, PortKey: Ord + Debug, PathKey: Ord + Debug> Default
+    for DrawingHelper<'a, PortKey, PathKey>
+{
     fn default() -> Self {
         Self {
             columns: Default::default(),
             node_column_and_index: Default::default(),
+            port_count: Default::default(),
             output_ports: Default::default(),
             edges: Default::default(),
             edges_color: Default::default(),
@@ -45,7 +54,9 @@ impl<'a, PortKey: Ord, ColorKey: Ord> Default for DrawingHelper<'a, PortKey, Col
     }
 }
 
-impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
+impl<'a, PortKey: Ord + Copy + Debug, PathKey: Ord + Copy + Debug>
+    DrawingHelper<'a, PortKey, PathKey>
+{
     pub fn make_room_for_node(&mut self, node: &dyn DynNode) -> (usize, usize) {
         let col = if let Some(input) = node.inputs().first() {
             let main_source_node_name = drawing_source_node_name(input);
@@ -124,7 +135,7 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
             .insert(node.name(), (col, column.nodes.len() - 1));
     }
 
-    fn get_color_for(&mut self, key: ColorKey) -> &'static str {
+    fn get_color_for(&mut self, key: PathKey) -> &'static str {
         match self.edges_color.entry(key) {
             Entry::Vacant(vacant) => {
                 let color = COLORS[self.next_color % COLORS.len()];
@@ -136,126 +147,7 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
         }
     }
 
-    pub fn push_input_port(
-        &mut self,
-        port_columns: &mut Vec<DrawingPortsColumn>,
-        port_count: &mut usize,
-        from: &PortKey,
-        from_color_key: ColorKey,
-    ) {
-        let input_port_id = DrawingPortId::from(*port_count);
-        *port_count += 1;
-
-        let mut index = port_columns.len();
-        loop {
-            if index > 0 && port_columns[index - 1].align == DrawingPortAlign::Bottom {
-                index -= 1;
-            } else {
-                break;
-            }
-        }
-
-        if index < port_columns.len() {
-            let column = &mut port_columns[index];
-            column.ports.insert(
-                0,
-                DrawingPort {
-                    id: input_port_id,
-                    size: DrawingPortSize::Normal,
-                    redundant: false,
-                },
-            );
-            column.align = DrawingPortAlign::Middle;
-        } else {
-            port_columns.push(DrawingPortsColumn {
-                ports: vec![DrawingPort {
-                    id: input_port_id,
-                    size: DrawingPortSize::Normal,
-                    redundant: false,
-                }],
-                align: DrawingPortAlign::Top,
-            });
-        }
-
-        self.push_edge(from, input_port_id, from_color_key);
-    }
-
-    pub fn push_output_port(
-        &mut self,
-        port_columns: &mut Vec<DrawingPortsColumn>,
-        port_count: &mut usize,
-        to: PortKey,
-    ) {
-        let output_port_id = DrawingPortId::from(*port_count);
-        *port_count += 1;
-
-        let mut index = port_columns.len();
-        loop {
-            if index > 0 && port_columns[index - 1].align == DrawingPortAlign::Top {
-                index -= 1;
-            } else {
-                break;
-            }
-        }
-
-        if index < port_columns.len() {
-            let column = &mut port_columns[index];
-            column.ports.push(DrawingPort {
-                id: output_port_id,
-                size: DrawingPortSize::Normal,
-                redundant: false,
-            });
-            column.align = DrawingPortAlign::Middle;
-        } else {
-            port_columns.push(DrawingPortsColumn {
-                ports: vec![DrawingPort {
-                    id: output_port_id,
-                    size: DrawingPortSize::Normal,
-                    redundant: false,
-                }],
-                align: DrawingPortAlign::Bottom,
-            });
-        }
-
-        let old = self.output_ports.insert(to, output_port_id);
-        assert!(old.is_none());
-    }
-
-    pub fn push_connected_ports(
-        &mut self,
-        port_columns: &mut Vec<DrawingPortsColumn>,
-        port_count: &mut usize,
-        from: &PortKey,
-        from_color_key: ColorKey,
-        to: PortKey,
-    ) {
-        let input_port_id = DrawingPortId::from(*port_count);
-        let output_port_id = DrawingPortId::from(*port_count + 1);
-        *port_count += 2;
-
-        port_columns.push(DrawingPortsColumn {
-            ports: vec![
-                DrawingPort {
-                    id: input_port_id,
-                    size: DrawingPortSize::Normal,
-                    redundant: false,
-                },
-                DrawingPort {
-                    id: output_port_id,
-                    size: DrawingPortSize::Normal,
-                    redundant: true,
-                },
-            ],
-            align: DrawingPortAlign::Middle,
-        });
-
-        self.push_edge(from, input_port_id, from_color_key);
-
-        let old = self.output_ports.insert(to, output_port_id);
-        assert!(old.is_none());
-    }
-
-    pub fn push_edge(&mut self, tail_key: &PortKey, head: DrawingPortId, color_key: ColorKey) {
+    pub fn push_edge(&mut self, tail_key: &PortKey, head: DrawingPortId, color_key: PathKey) {
         let color = self.get_color_for(color_key);
         self.edges.push(DrawingEdge {
             tail: self.output_ports[tail_key],
@@ -263,14 +155,387 @@ impl<'a, PortKey: Ord, ColorKey: Ord> DrawingHelper<'a, PortKey, ColorKey> {
             color,
         });
     }
+
+    pub fn node_ports_builder(&mut self) -> NodePortsBuilder<'a, '_, PortKey, PathKey> {
+        NodePortsBuilder::new(self)
+    }
 }
 
 #[allow(clippy::from_over_into)]
-impl<'a, PortKey: Ord, ColorKey: Ord> Into<Drawing<'a>> for DrawingHelper<'a, PortKey, ColorKey> {
+impl<'a, PortKey: Ord + Debug, PathKey: Ord + Debug> Into<Drawing<'a>>
+    for DrawingHelper<'a, PortKey, PathKey>
+{
     fn into(self) -> Drawing<'a> {
         Drawing {
             columns: self.columns,
             edges: self.edges,
         }
+    }
+}
+
+enum NodePortColumn<PortKey, PathKey> {
+    Input {
+        path: PathKey,
+        port_size: DrawingPortSize,
+        edge_tail: PortKey,
+    },
+    Output {
+        port_key: PortKey,
+        path: PathKey,
+        port_size: DrawingPortSize,
+    },
+    ConnectedInputOutput {
+        path: PathKey,
+        port_size: DrawingPortSize,
+        edge_tail: PortKey,
+        output_port_key: PortKey,
+    },
+    DisconnectedInputOutput {
+        input_path: PathKey,
+        input_port_size: DrawingPortSize,
+        edge_tail: PortKey,
+        output_port_key: PortKey,
+        output_path: PathKey,
+        output_port_size: DrawingPortSize,
+    },
+    None,
+}
+
+#[derive(new)]
+pub struct NodePortsBuilder<'a, 'h, PortKey: Ord + Copy + Debug, PathKey: Ord + Copy + Debug> {
+    helper: &'h mut DrawingHelper<'a, PortKey, PathKey>,
+    #[new(default)]
+    columns: Vec<NodePortColumn<PortKey, PathKey>>,
+}
+
+impl<'a, 'h, PortKey: Ord + Copy + Debug, PathKey: Eq + Ord + Copy + Debug>
+    NodePortsBuilder<'a, 'h, PortKey, PathKey>
+{
+    pub fn input(
+        &mut self,
+        edge_tail: PortKey,
+        input_path: PathKey,
+        input_port_size: DrawingPortSize,
+    ) {
+        let mut i = 0;
+        while i < self.columns.len() {
+            let col = &mut self.columns[i];
+            match *col {
+                NodePortColumn::Output {
+                    port_key: output_port_key,
+                    path: output_path,
+                    port_size: output_port_size,
+                } => {
+                    if output_path == input_path {
+                        *col = NodePortColumn::ConnectedInputOutput {
+                            path: input_path,
+                            port_size: input_port_size,
+                            edge_tail,
+                            output_port_key,
+                        };
+                    } else {
+                        *col = NodePortColumn::DisconnectedInputOutput {
+                            input_path,
+                            input_port_size,
+                            edge_tail,
+                            output_port_key,
+                            output_path,
+                            output_port_size,
+                        };
+                    }
+                    break;
+                }
+                NodePortColumn::Input { .. }
+                | NodePortColumn::ConnectedInputOutput { .. }
+                | NodePortColumn::DisconnectedInputOutput { .. }
+                | NodePortColumn::None => {}
+            }
+            i += 1;
+        }
+        if i >= self.columns.len() {
+            self.columns.push(NodePortColumn::Input {
+                path: input_path,
+                port_size: input_port_size,
+                edge_tail,
+            });
+        }
+    }
+
+    pub fn output(
+        &mut self,
+        output_port_key: PortKey,
+        output_path: PathKey,
+        output_port_size: DrawingPortSize,
+    ) {
+        let mut i = 0;
+        while i < self.columns.len() {
+            let col = &mut self.columns[i];
+            match *col {
+                NodePortColumn::Input {
+                    path: input_path,
+                    port_size: input_port_size,
+                    edge_tail,
+                } => {
+                    if input_path == output_path {
+                        *col = NodePortColumn::ConnectedInputOutput {
+                            path: input_path,
+                            port_size: input_port_size,
+                            edge_tail,
+                            output_port_key,
+                        };
+                    } else {
+                        *col = NodePortColumn::DisconnectedInputOutput {
+                            input_path,
+                            input_port_size,
+                            edge_tail,
+                            output_port_key,
+                            output_path,
+                            output_port_size,
+                        };
+                    }
+                    break;
+                }
+                NodePortColumn::Output { .. }
+                | NodePortColumn::ConnectedInputOutput { .. }
+                | NodePortColumn::DisconnectedInputOutput { .. }
+                | NodePortColumn::None => {}
+            }
+            i += 1;
+        }
+        if i >= self.columns.len() {
+            self.columns.push(NodePortColumn::Output {
+                port_key: output_port_key,
+                path: output_path,
+                port_size: output_port_size,
+            });
+        }
+    }
+
+    fn consolidate_slice_from(&mut self, from: usize) -> usize {
+        let mut inputs = Vec::new();
+        let mut outputs = Vec::new();
+        let mut i = from;
+        while i < self.columns.len() {
+            match &self.columns[i] {
+                NodePortColumn::Input { .. } => {
+                    inputs.push(i);
+                }
+                NodePortColumn::Output { .. } => {
+                    outputs.push(i);
+                }
+                NodePortColumn::ConnectedInputOutput { .. } => {
+                    break;
+                }
+                NodePortColumn::DisconnectedInputOutput { .. } => {
+                    // Should not happen but let's have a sensible behaviour
+                    inputs.push(i);
+                    outputs.push(i);
+                }
+                NodePortColumn::None => {}
+            }
+            i += 1;
+        }
+        let mut a = from;
+        for input_output in inputs.into_iter().zip_longest(outputs.into_iter()) {
+            match input_output {
+                EitherOrBoth::Both(input, output) => {
+                    let (input_path, input_port_size, edge_tail) = match &self.columns[input] {
+                        NodePortColumn::Input {
+                            path,
+                            port_size,
+                            edge_tail,
+                        } => (*path, *port_size, *edge_tail),
+                        NodePortColumn::DisconnectedInputOutput {
+                            input_path,
+                            input_port_size,
+                            edge_tail,
+                            ..
+                        } => (*input_path, *input_port_size, *edge_tail),
+                        _ => unreachable!(),
+                    };
+                    let (output_port_key, output_path, output_port_size) =
+                        match &self.columns[output] {
+                            NodePortColumn::Output {
+                                port_key,
+                                path,
+                                port_size,
+                            } => (*port_key, *path, *port_size),
+                            NodePortColumn::DisconnectedInputOutput {
+                                output_port_key,
+                                output_path,
+                                output_port_size,
+                                ..
+                            } => (*output_port_key, *output_path, *output_port_size),
+                            _ => unreachable!(),
+                        };
+                    self.columns[a] = NodePortColumn::DisconnectedInputOutput {
+                        input_path,
+                        input_port_size,
+                        edge_tail,
+                        output_port_key,
+                        output_path,
+                        output_port_size,
+                    };
+                }
+                EitherOrBoth::Left(input) => {
+                    let (path, port_size, edge_tail) = match &self.columns[input] {
+                        NodePortColumn::Input {
+                            path,
+                            port_size,
+                            edge_tail,
+                        } => (*path, *port_size, *edge_tail),
+                        NodePortColumn::DisconnectedInputOutput {
+                            input_path,
+                            input_port_size,
+                            edge_tail,
+                            ..
+                        } => (*input_path, *input_port_size, *edge_tail),
+                        _ => unreachable!(),
+                    };
+                    self.columns[a] = NodePortColumn::Input {
+                        path,
+                        port_size,
+                        edge_tail,
+                    };
+                }
+                EitherOrBoth::Right(output) => {
+                    let (port_key, path, port_size) = match &self.columns[output] {
+                        NodePortColumn::Output {
+                            port_key,
+                            path,
+                            port_size,
+                        } => (*port_key, *path, *port_size),
+                        NodePortColumn::DisconnectedInputOutput {
+                            output_port_key,
+                            output_path,
+                            output_port_size,
+                            ..
+                        } => (*output_port_key, *output_path, *output_port_size),
+                        _ => unreachable!(),
+                    };
+                    self.columns[a] = NodePortColumn::Output {
+                        port_key,
+                        path,
+                        port_size,
+                    };
+                }
+            }
+            a += 1;
+        }
+        while a < i {
+            self.columns[a] = NodePortColumn::None;
+            a += 1;
+        }
+        i
+    }
+
+    fn consolidate(&mut self) {
+        let mut i = 0;
+        while i < self.columns.len() {
+            match &self.columns[i] {
+                NodePortColumn::Input { .. }
+                | NodePortColumn::Output { .. }
+                | NodePortColumn::None => {
+                    i = self.consolidate_slice_from(i);
+                }
+                NodePortColumn::ConnectedInputOutput { .. }
+                | NodePortColumn::DisconnectedInputOutput { .. } => {
+                    i += 1;
+                }
+            }
+        }
+    }
+
+    pub fn build(mut self) -> Vec<DrawingPortsColumn> {
+        self.consolidate();
+        self.columns
+            .into_iter()
+            .filter_map(|col| match col {
+                NodePortColumn::Input {
+                    path,
+                    port_size,
+                    edge_tail,
+                } => {
+                    let port_id = DrawingPortId::from(self.helper.port_count);
+                    self.helper.port_count += 1;
+                    self.helper.push_edge(&edge_tail, port_id, path);
+                    Some(DrawingPortsColumn {
+                        ports: vec![DrawingPort {
+                            id: port_id,
+                            size: port_size,
+                        }],
+                        align: DrawingPortAlign::Top,
+                    })
+                }
+                NodePortColumn::Output {
+                    port_key,
+                    path: _,
+                    port_size,
+                } => {
+                    let port_id = DrawingPortId::from(self.helper.port_count);
+                    self.helper.port_count += 1;
+                    let old = self.helper.output_ports.insert(port_key, port_id);
+                    assert!(old.is_none());
+                    Some(DrawingPortsColumn {
+                        ports: vec![DrawingPort {
+                            id: port_id,
+                            size: port_size,
+                        }],
+                        align: DrawingPortAlign::Bottom,
+                    })
+                }
+                NodePortColumn::ConnectedInputOutput {
+                    path,
+                    port_size,
+                    edge_tail,
+                    output_port_key,
+                } => {
+                    let port_id = DrawingPortId::from(self.helper.port_count);
+                    self.helper.port_count += 1;
+                    self.helper.push_edge(&edge_tail, port_id, path);
+                    let old = self.helper.output_ports.insert(output_port_key, port_id);
+                    assert!(old.is_none());
+                    Some(DrawingPortsColumn {
+                        ports: vec![DrawingPort {
+                            id: port_id,
+                            size: port_size,
+                        }],
+                        align: DrawingPortAlign::Middle,
+                    })
+                }
+                NodePortColumn::DisconnectedInputOutput {
+                    input_path,
+                    input_port_size,
+                    edge_tail,
+                    output_port_key,
+                    output_path: _,
+                    output_port_size,
+                } => {
+                    let input_port_id = DrawingPortId::from(self.helper.port_count);
+                    let output_port_id = DrawingPortId::from(self.helper.port_count + 1);
+                    self.helper.port_count += 2;
+                    self.helper.push_edge(&edge_tail, input_port_id, input_path);
+                    let old = self
+                        .helper
+                        .output_ports
+                        .insert(output_port_key, output_port_id);
+                    assert!(old.is_none());
+                    Some(DrawingPortsColumn {
+                        ports: vec![
+                            DrawingPort {
+                                id: input_port_id,
+                                size: input_port_size,
+                            },
+                            DrawingPort {
+                                id: output_port_id,
+                                size: output_port_size,
+                            },
+                        ],
+                        align: DrawingPortAlign::Middle,
+                    })
+                }
+                NodePortColumn::None => None,
+            })
+            .collect()
     }
 }

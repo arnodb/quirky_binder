@@ -35,7 +35,6 @@ pub struct DrawingPortId(usize);
 pub struct DrawingPort {
     pub id: DrawingPortId,
     pub size: DrawingPortSize,
-    pub redundant: bool,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
@@ -234,7 +233,6 @@ where
         cx: usize,
         cy: usize,
         size: DrawingPortSize,
-        redundant: bool,
     }
 
     impl SvgPort {
@@ -260,11 +258,7 @@ where
         {
             let columns_real_rows = port_columns
                 .iter()
-                .map(|DrawingPortsColumn { ports, align: _ }| {
-                    ports
-                        .iter()
-                        .fold(0, |count, port| count + if port.redundant { 0 } else { 1 })
-                })
+                .map(|DrawingPortsColumn { ports, align: _ }| ports.len())
                 .collect::<Vec<usize>>();
             let max_real_rows = columns_real_rows
                 .iter()
@@ -290,19 +284,11 @@ where
                 };
                 let mut go_down_next = false;
                 for port in ports {
-                    let DrawingPort {
-                        id,
-                        size,
-                        redundant,
-                    } = *port;
-                    if !redundant {
-                        if go_down_next {
-                            top += PORT_Y_DISTANCE;
-                        }
-                        go_down_next = true;
-                    } else {
-                        go_down_next = false;
+                    let DrawingPort { id, size } = *port;
+                    if go_down_next {
+                        top += PORT_Y_DISTANCE;
                     }
+                    go_down_next = true;
                     svg_ports.insert(
                         *id,
                         SvgPort {
@@ -312,7 +298,6 @@ where
                                 + (ports_count + port_col) * PORT_X_DISTANCE,
                             cy: top,
                             size,
-                            redundant,
                         },
                     );
                 }
@@ -394,7 +379,7 @@ where
         Ok(())
     }
 
-    for port in svg_ports.values().filter(|port| !port.redundant) {
+    for port in svg_ports.values() {
         write_stream_port(&mut w, port)?;
     }
 
