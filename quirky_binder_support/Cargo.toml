@@ -1,6 +1,6 @@
 [package]
 name = "quirky_binder_support"
-version = "0.1.0"
+version = "0.1.1-dev"
 edition = "2021"
 rust-version = "1.65.0"
 license-file = "../LICENSE"
@@ -17,7 +17,7 @@ derive-new = "0.5"
 derive_more = "0.99"
 fallible-iterator = "0.2"
 lazy_static = "1"
-quirky_binder_codegen_macro = { version = "0.1.0", path = "../codegen/quirky_binder_codegen_macro" }
+quirky_binder_codegen_macro = { version = "0.1.1-dev", path = "../codegen/quirky_binder_codegen_macro" }
 serde = { version = "1", features = ["derive"] }
 tempfile = "3"
 thiserror = "1"

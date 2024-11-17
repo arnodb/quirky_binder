@@ -1,6 +1,6 @@
 [package]
 name = "quirky_binder_codegen_macro"
-version = "0.1.0"
+version = "0.1.1-dev"
 edition = "2021"
 rust-version = "1.65.0"
 license-file = "../../LICENSE"
@@ -16,7 +16,7 @@ proc-macro = true
 annotate-snippets = { version = "0.9", features = ["color"] }
 proc-macro-error = "1"
 proc-macro2 = "1"
-quirky_binder_codegen = { version = "0.1.0", path = "../quirky_binder_codegen" }
-quirky_binder_lang = { version = "0.1.0", path = "../../quirky_binder_lang" }
+quirky_binder_codegen = { version = "0.1.1-dev", path = "../quirky_binder_codegen" }
+quirky_binder_lang = { version = "0.1.1-dev", path = "../../quirky_binder_lang" }
 quote = "1"
 syn = { version = "1", features = ["full"] }
