@@ -21,12 +21,12 @@ struct StreamsDrawingVisitor<'a> {
 
 impl<'a> StreamsDrawingVisitor<'a> {
     fn input_stream(
-        graph: &'a Graph,
-        ports: &mut NodePortsBuilder<'a, '_, StreamsPortKey<'a>, StreamsPathKey<'a>>,
+        &mut self,
+        ports: &mut NodePortsBuilder<StreamsPortKey<'a>, StreamsPathKey<'a>>,
         stream: &'a NodeStream,
     ) {
         let source = drawing_source_node_name(stream);
-        let record_definition = &graph.record_definitions()[stream.record_type()];
+        let record_definition = &self.graph.record_definitions()[stream.record_type()];
         let variant = &record_definition[stream.variant_id()];
 
         ports.input(
@@ -37,18 +37,18 @@ impl<'a> StreamsDrawingVisitor<'a> {
 
         for d in variant.data() {
             if let Some(sub_stream) = stream.sub_streams().get(&d) {
-                Self::input_sub_stream(graph, ports, sub_stream, source);
+                self.input_sub_stream(ports, sub_stream, source);
             }
         }
     }
 
     fn input_sub_stream(
-        graph: &'a Graph,
-        ports: &mut NodePortsBuilder<'a, '_, StreamsPortKey<'a>, StreamsPathKey<'a>>,
+        &mut self,
+        ports: &mut NodePortsBuilder<StreamsPortKey<'a>, StreamsPathKey<'a>>,
         stream: &'a NodeSubStream,
         source: &'a [Box<str>],
     ) {
-        let record_definition = &graph.record_definitions()[stream.record_type()];
+        let record_definition = &self.graph.record_definitions()[stream.record_type()];
         let variant = &record_definition[stream.variant_id()];
 
         ports.input(
@@ -59,18 +59,18 @@ impl<'a> StreamsDrawingVisitor<'a> {
 
         for d in variant.data() {
             if let Some(sub_stream) = stream.sub_streams().get(&d) {
-                Self::input_sub_stream(graph, ports, sub_stream, source);
+                self.input_sub_stream(ports, sub_stream, source);
             }
         }
     }
 
     fn output_stream(
-        graph: &'a Graph,
-        ports: &mut NodePortsBuilder<'a, '_, StreamsPortKey<'a>, StreamsPathKey<'a>>,
+        &mut self,
+        ports: &mut NodePortsBuilder<StreamsPortKey<'a>, StreamsPathKey<'a>>,
         stream: &'a NodeStream,
     ) {
         let source = drawing_source_node_name(stream);
-        let record_definition = &graph.record_definitions()[stream.record_type()];
+        let record_definition = &self.graph.record_definitions()[stream.record_type()];
         let variant = &record_definition[stream.variant_id()];
 
         ports.output(
@@ -81,18 +81,18 @@ impl<'a> StreamsDrawingVisitor<'a> {
 
         for d in variant.data() {
             if let Some(sub_stream) = stream.sub_streams().get(&d) {
-                Self::output_sub_stream(graph, ports, sub_stream, source);
+                self.output_sub_stream(ports, sub_stream, source);
             }
         }
     }
 
     fn output_sub_stream(
-        graph: &'a Graph,
-        ports: &mut NodePortsBuilder<'a, '_, StreamsPortKey<'a>, StreamsPathKey<'a>>,
+        &mut self,
+        ports: &mut NodePortsBuilder<StreamsPortKey<'a>, StreamsPathKey<'a>>,
         stream: &'a NodeSubStream,
         source: &'a [Box<str>],
     ) {
-        let record_definition = &graph.record_definitions()[stream.record_type()];
+        let record_definition = &self.graph.record_definitions()[stream.record_type()];
         let variant = &record_definition[stream.variant_id()];
 
         ports.output(
@@ -103,7 +103,7 @@ impl<'a> StreamsDrawingVisitor<'a> {
 
         for d in variant.data() {
             if let Some(sub_stream) = stream.sub_streams().get(&d) {
-                Self::output_sub_stream(graph, ports, sub_stream, source);
+                self.output_sub_stream(ports, sub_stream, source);
             }
         }
     }
@@ -118,17 +118,17 @@ impl<'a> Visit<'a> for StreamsDrawingVisitor<'a> {
 
         let (col, row) = self.helper.make_room_for_node(node);
 
-        let mut ports = self.helper.node_ports_builder();
+        let mut ports = NodePortsBuilder::default();
 
         for input in node.inputs() {
-            Self::input_stream(self.graph, &mut ports, input);
+            self.input_stream(&mut ports, input);
         }
 
         for output in node.outputs() {
-            Self::output_stream(self.graph, &mut ports, output);
+            self.output_stream(&mut ports, output);
         }
 
-        let port_columns = ports.build();
+        let port_columns = ports.build(&mut self.helper);
 
         self.helper
             .push_node_into_column(col, row, node, port_columns);

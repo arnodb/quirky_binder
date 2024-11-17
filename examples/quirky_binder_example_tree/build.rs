@@ -23,12 +23,6 @@ use quirky_binder::{
     },
 };
 
-#(
-    name: "quirky_binder_monitor",
-    feature: "quirky_binder_monitor",
-)
-{ ( quirky_binder::filter::monitor::monitor() ) }
-
 {
   (
       function_produce#read_fs(
@@ -99,6 +93,13 @@ use quirky_binder::{
     -> children
   )
 }
+
+#(
+    name: "quirky_binder_monitor",
+    feature: "quirky_binder_monitor",
+)
+{ ( quirky_binder::filter::monitor::monitor() ) }
+
 "###
     ));
 

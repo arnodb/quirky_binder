@@ -104,12 +104,6 @@ use quirky_binder::{
 
 use super::tokenize;
 
-#(
-    name: "quirky_binder_monitor",
-    feature: "quirky_binder_monitor",
-)
-{ ( quirky_binder::filter::monitor::monitor() ) }
-
 {
   (
       function_produce#read_input(
@@ -155,6 +149,13 @@ use super::tokenize;
       )
   )
 }
+
+#(
+    name: "quirky_binder_monitor",
+    feature: "quirky_binder_monitor",
+)
+{ ( quirky_binder::filter::monitor::monitor() ) }
+
 "###
     ));
 

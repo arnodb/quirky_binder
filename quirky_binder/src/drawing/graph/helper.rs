@@ -155,10 +155,6 @@ impl<'a, PortKey: Ord + Copy + Debug, PathKey: Ord + Copy + Debug>
             color,
         });
     }
-
-    pub fn node_ports_builder(&mut self) -> NodePortsBuilder<'a, '_, PortKey, PathKey> {
-        NodePortsBuilder::new(self)
-    }
 }
 
 #[allow(clippy::from_over_into)]
@@ -201,15 +197,22 @@ enum NodePortColumn<PortKey, PathKey> {
     None,
 }
 
-#[derive(new)]
-pub struct NodePortsBuilder<'a, 'h, PortKey: Ord + Copy + Debug, PathKey: Ord + Copy + Debug> {
-    helper: &'h mut DrawingHelper<'a, PortKey, PathKey>,
-    #[new(default)]
+pub struct NodePortsBuilder<PortKey: Ord + Copy + Debug, PathKey: Ord + Copy + Debug> {
     columns: Vec<NodePortColumn<PortKey, PathKey>>,
 }
 
-impl<'a, 'h, PortKey: Ord + Copy + Debug, PathKey: Eq + Ord + Copy + Debug>
-    NodePortsBuilder<'a, 'h, PortKey, PathKey>
+impl<PortKey: Ord + Copy + Debug, PathKey: Ord + Copy + Debug> Default
+    for NodePortsBuilder<PortKey, PathKey>
+{
+    fn default() -> Self {
+        NodePortsBuilder {
+            columns: Default::default(),
+        }
+    }
+}
+
+impl<PortKey: Ord + Copy + Debug, PathKey: Eq + Ord + Copy + Debug>
+    NodePortsBuilder<PortKey, PathKey>
 {
     pub fn input(
         &mut self,
@@ -446,7 +449,10 @@ impl<'a, 'h, PortKey: Ord + Copy + Debug, PathKey: Eq + Ord + Copy + Debug>
         }
     }
 
-    pub fn build(mut self) -> Vec<DrawingPortsColumn> {
+    pub fn build(
+        mut self,
+        helper: &mut DrawingHelper<PortKey, PathKey>,
+    ) -> Vec<DrawingPortsColumn> {
         self.consolidate();
         self.columns
             .into_iter()
@@ -456,9 +462,9 @@ impl<'a, 'h, PortKey: Ord + Copy + Debug, PathKey: Eq + Ord + Copy + Debug>
                     port_size,
                     edge_tail,
                 } => {
-                    let port_id = DrawingPortId::from(self.helper.port_count);
-                    self.helper.port_count += 1;
-                    self.helper.push_edge(&edge_tail, port_id, path);
+                    let port_id = DrawingPortId::from(helper.port_count);
+                    helper.port_count += 1;
+                    helper.push_edge(&edge_tail, port_id, path);
                     Some(DrawingPortsColumn {
                         ports: vec![DrawingPort {
                             id: port_id,
@@ -472,9 +478,9 @@ impl<'a, 'h, PortKey: Ord + Copy + Debug, PathKey: Eq + Ord + Copy + Debug>
                     path: _,
                     port_size,
                 } => {
-                    let port_id = DrawingPortId::from(self.helper.port_count);
-                    self.helper.port_count += 1;
-                    let old = self.helper.output_ports.insert(port_key, port_id);
+                    let port_id = DrawingPortId::from(helper.port_count);
+                    helper.port_count += 1;
+                    let old = helper.output_ports.insert(port_key, port_id);
                     assert!(old.is_none());
                     Some(DrawingPortsColumn {
                         ports: vec![DrawingPort {
@@ -490,10 +496,10 @@ impl<'a, 'h, PortKey: Ord + Copy + Debug, PathKey: Eq + Ord + Copy + Debug>
                     edge_tail,
                     output_port_key,
                 } => {
-                    let port_id = DrawingPortId::from(self.helper.port_count);
-                    self.helper.port_count += 1;
-                    self.helper.push_edge(&edge_tail, port_id, path);
-                    let old = self.helper.output_ports.insert(output_port_key, port_id);
+                    let port_id = DrawingPortId::from(helper.port_count);
+                    helper.port_count += 1;
+                    helper.push_edge(&edge_tail, port_id, path);
+                    let old = helper.output_ports.insert(output_port_key, port_id);
                     assert!(old.is_none());
                     Some(DrawingPortsColumn {
                         ports: vec![DrawingPort {
@@ -511,14 +517,11 @@ impl<'a, 'h, PortKey: Ord + Copy + Debug, PathKey: Eq + Ord + Copy + Debug>
                     output_path: _,
                     output_port_size,
                 } => {
-                    let input_port_id = DrawingPortId::from(self.helper.port_count);
-                    let output_port_id = DrawingPortId::from(self.helper.port_count + 1);
-                    self.helper.port_count += 2;
-                    self.helper.push_edge(&edge_tail, input_port_id, input_path);
-                    let old = self
-                        .helper
-                        .output_ports
-                        .insert(output_port_key, output_port_id);
+                    let input_port_id = DrawingPortId::from(helper.port_count);
+                    let output_port_id = DrawingPortId::from(helper.port_count + 1);
+                    helper.port_count += 2;
+                    helper.push_edge(&edge_tail, input_port_id, input_path);
+                    let old = helper.output_ports.insert(output_port_key, output_port_id);
                     assert!(old.is_none());
                     Some(DrawingPortsColumn {
                         ports: vec![
