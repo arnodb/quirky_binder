@@ -1,0 +1,23 @@
+use quirky_binder::{
+    filter::{
+        function::produce::function_produce,
+    },
+};
+use quirky_binder_csv::write_csv;
+
+{
+  (
+      function_produce(
+        fields: [("hello", "String"), ("universe", "usize")],
+        body: r#"{
+            let record = new_record("world".to_string(), 42);
+            output.send(Some(record))?;
+            output.send(None)?;
+            Ok(())
+        }"#,
+      )
+    - write_csv(
+        output_file: "output/hello_universe.csv",
+      )
+  )
+}

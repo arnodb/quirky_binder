@@ -123,7 +123,9 @@ impl DynNode for ReadCsv {
 
                 let file = File::open(#input_file)
                     .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
-                let mut reader = csv::Reader::from_reader(BufReader::new(file));
+                let mut reader = csv::ReaderBuilder::new()
+                    .has_headers(false)
+                    .from_reader(BufReader::new(file));
                 for result in reader.deserialize() {
                     let record = result
                         .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
