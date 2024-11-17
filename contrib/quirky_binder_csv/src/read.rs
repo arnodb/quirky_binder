@@ -11,6 +11,8 @@ pub struct ReadCsvParams<'a> {
     fields: TypedFieldsParam<'a>,
     order_fields: Option<DirectedFieldsParam<'a>>,
     distinct_fields: Option<FieldsParam<'a>>,
+    #[serde(default)]
+    has_headers: bool,
 }
 
 #[derive(Getters)]
@@ -21,6 +23,8 @@ pub struct ReadCsv {
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     input_file: String,
+    fields: Vec<(ValidFieldName, ValidFieldType)>,
+    has_headers: bool,
 }
 
 impl ReadCsv {
@@ -88,6 +92,8 @@ impl ReadCsv {
             inputs,
             outputs,
             input_file: params.input_file.to_owned(),
+            fields: valid_fields,
+            has_headers: params.has_headers,
         })
     }
 }
@@ -115,6 +121,43 @@ impl DynNode for ReadCsv {
 
         let input_file = &self.input_file;
 
+        let has_headers = self.has_headers;
+
+        let read_headers = if has_headers {
+            let header_checks = self
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(index, (field_name, _))| {
+                    let field_name = field_name.name();
+                    quote! {
+                        let header = iter.next();
+                        if let Some(header) = header {
+                            if header != #field_name {
+                                return Err(QuirkyBinderError::Custom(format!(
+                                    "Header mismatch at position {}, expected {} but got {}",
+                                    #index, #field_name, header)));
+                            }
+                        } else {
+                            return Err(QuirkyBinderError::Custom(format!(
+                                "Missing header at position {}, expected {}",
+                                #index, #field_name)));
+                        }
+                    }
+                });
+            Some(quote! {{
+                let headers = reader.headers()
+                    .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
+                let mut iter = headers.into_iter();
+                #(#header_checks)*
+                if let Some(header) = iter.next() {
+                    return Err(QuirkyBinderError::Custom(format!("Unexpected extra header {}", header)));
+                };
+            }})
+        } else {
+            None
+        };
+
         let thread_body = quote! {
             let output = thread_control.output_0.take().expect("output 0");
             move || {
@@ -123,15 +166,20 @@ impl DynNode for ReadCsv {
 
                 let file = File::open(#input_file)
                     .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
+
                 let mut reader = csv::ReaderBuilder::new()
-                    .has_headers(false)
+                    .has_headers(#has_headers)
                     .from_reader(BufReader::new(file));
+
+                #read_headers
+
                 for result in reader.deserialize() {
                     let record = result
                         .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
                     output.send(Some(record))?;
                 }
                 output.send(None)?;
+
                 Ok(())
             }
         };

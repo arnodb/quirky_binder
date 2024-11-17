@@ -6,6 +6,8 @@ use truc::record::type_resolver::TypeResolver;
 #[serde(deny_unknown_fields)]
 pub struct WriteCsvParams<'a> {
     output_file: &'a str,
+    #[serde(default)]
+    has_headers: bool,
 }
 
 #[derive(Getters)]
@@ -16,6 +18,7 @@ pub struct WriteCsv {
     #[getset(get = "pub")]
     outputs: [NodeStream; 0],
     output_file: String,
+    has_headers: bool,
 }
 
 impl WriteCsv {
@@ -31,6 +34,7 @@ impl WriteCsv {
             inputs,
             outputs: [],
             output_file: params.output_file.to_owned(),
+            has_headers: params.has_headers,
         })
     }
 }
@@ -73,6 +77,20 @@ impl DynNode for WriteCsv {
 
         let output_file = &self.output_file;
 
+        let has_headers = self.has_headers;
+
+        let write_headers = if has_headers {
+            let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
+            let variant = &record_definition[self.inputs.single().variant_id()];
+            let headers = variant.data().map(|d| record_definition[d].name());
+            Some(quote! {{
+                writer.write_record([#(#headers),*])
+                    .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
+            }})
+        } else {
+            None
+        };
+
         let thread_body = quote! {
             #(
                 #inputs
@@ -91,11 +109,18 @@ impl DynNode for WriteCsv {
                 }
                 let file = File::create(file_path)
                     .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
-                let mut writer = csv::Writer::from_writer(file);
+
+                let mut writer = csv::WriterBuilder::new()
+                    .has_headers(false)
+                    .from_writer(file);
+
+                #write_headers
+
                 while let Some(record) = input.next()? {
                     writer.serialize(record)
                         .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
                 }
+
                 Ok(())
             }
         };

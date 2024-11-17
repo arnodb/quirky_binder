@@ -10,6 +10,7 @@ use quirky_binder_csv::read_csv;
       read_csv(
         input_file: "input/hello_universe.csv",
         fields: [("hello", "String"), ("universe", "usize")],
+        has_headers: true,
       )
     - function_terminate(
         body: r#"

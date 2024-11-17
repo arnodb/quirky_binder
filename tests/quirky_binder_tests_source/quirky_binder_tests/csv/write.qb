@@ -18,6 +18,7 @@ use quirky_binder_csv::write_csv;
       )
     - write_csv(
         output_file: "output/hello_universe.csv",
+        has_headers: true,
       )
   )
 }
