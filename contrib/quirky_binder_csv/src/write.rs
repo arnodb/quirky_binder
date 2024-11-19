@@ -1,6 +1,8 @@
-use quirky_binder::prelude::*;
+use quirky_binder::{prelude::*, trace_filter};
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
+
+const WRITE_CSV_TRACE_NAME: &str = "write_csv";
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -27,8 +29,15 @@ impl WriteCsv {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: WriteCsvParams,
-        _trace: Trace,
+        trace: Trace,
     ) -> ChainResult<Self> {
+        if !inputs.single().sub_streams().is_empty() {
+            return Err(ChainError::Other {
+                msg: "Sub streams are not supported".to_owned(),
+                trace: trace_filter!(trace, WRITE_CSV_TRACE_NAME),
+            });
+        }
+
         Ok(Self {
             name,
             inputs,
