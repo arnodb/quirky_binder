@@ -743,15 +743,15 @@ mod tests {
     }
 
     #[rstest]
-    #[case("use", SpannedErrorKind::Token("{"), "", "use".as_bytes().len())]
-    #[case("use foo::{bar::,mar};", SpannedErrorKind::Token("{"), ",", "use foo::{bar::".as_bytes().len())]
-    #[case("use foo as;", SpannedErrorKind::Identifier, ";", "use foo as".as_bytes().len())]
-    #[case("use foo as\u{20};", SpannedErrorKind::Identifier, ";", "use foo as\u{20}".as_bytes().len())]
-    #[case("use foo::{::,};", SpannedErrorKind::Token("{"), ",", "use foo::{::".as_bytes().len())]
-    #[case("use foo::as bar;", SpannedErrorKind::Token("{"), "as", "use foo::".as_bytes().len())]
-    #[case("use ::{::{foo};", SpannedErrorKind::Token("}"), ";", "use ::{::{foo]".as_bytes().len())]
-    #[case("use foo asbar;", SpannedErrorKind::Token(";"), "asbar", "use foo ".as_bytes().len())]
-    #[case("use ::{foo bar};", SpannedErrorKind::Token("}"), "bar", "use ::{foo ".as_bytes().len())]
+    #[case("use", SpannedErrorKind::Token("{"), "", "use".len())]
+    #[case("use foo::{bar::,mar};", SpannedErrorKind::Token("{"), ",", "use foo::{bar::".len())]
+    #[case("use foo as;", SpannedErrorKind::Identifier, ";", "use foo as".len())]
+    #[case("use foo as\u{20};", SpannedErrorKind::Identifier, ";", "use foo as\u{20}".len())]
+    #[case("use foo::{::,};", SpannedErrorKind::Token("{"), ",", "use foo::{::".len())]
+    #[case("use foo::as bar;", SpannedErrorKind::Token("{"), "as", "use foo::".len())]
+    #[case("use ::{::{foo};", SpannedErrorKind::Token("}"), ";", "use ::{::{foo]".len())]
+    #[case("use foo asbar;", SpannedErrorKind::Token(";"), "asbar", "use foo ".len())]
+    #[case("use ::{foo bar};", SpannedErrorKind::Token("}"), "bar", "use ::{foo ".len())]
     fn test_invalid_use_declaration(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
@@ -768,11 +768,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case("foo{bar", SpannedErrorKind::UnbalancedCode, "{", "foo".as_bytes().len())]
-    #[case("foo{(bar", SpannedErrorKind::UnbalancedCode, "(", "foo{".as_bytes().len())]
-    #[case("(foo\"bar", SpannedErrorKind::UnterminatedString, "\"", "(foo".as_bytes().len())]
-    #[case("foo'bar", SpannedErrorKind::UnterminatedChar, "'", "foo".as_bytes().len())]
-    #[case("foo'bar\\", SpannedErrorKind::UnterminatedChar, "'", "foo".as_bytes().len())]
+    #[case("foo{bar", SpannedErrorKind::UnbalancedCode, "{", "foo".len())]
+    #[case("foo{(bar", SpannedErrorKind::UnbalancedCode, "(", "foo{".len())]
+    #[case("(foo\"bar", SpannedErrorKind::UnterminatedString, "\"", "(foo".len())]
+    #[case("foo'bar", SpannedErrorKind::UnterminatedChar, "'", "foo".len())]
+    #[case("foo'bar\\", SpannedErrorKind::UnterminatedChar, "'", "foo".len())]
     fn test_invalid_code(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
@@ -789,10 +789,10 @@ mod tests {
     }
 
     #[rstest]
-    #[case("[2foo]", SpannedErrorKind::Identifier, "2foo", "[".as_bytes().len())]
-    #[case("[foo, 2bar]", SpannedErrorKind::Identifier, "2bar", "[foo, ".as_bytes().len())]
-    #[case("[, foo]", SpannedErrorKind::Token("]"), ",", "[".as_bytes().len())]
-    #[case("[foo bar]", SpannedErrorKind::Token("]"), "bar", "[foo ".as_bytes().len())]
+    #[case("[2foo]", SpannedErrorKind::Identifier, "2foo", "[".len())]
+    #[case("[foo, 2bar]", SpannedErrorKind::Identifier, "2bar", "[foo, ".len())]
+    #[case("[, foo]", SpannedErrorKind::Token("]"), ",", "[".len())]
+    #[case("[foo bar]", SpannedErrorKind::Token("]"), "bar", "[foo ".len())]
     fn test_invalid_opt_streams0(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
@@ -809,10 +809,10 @@ mod tests {
     }
 
     #[rstest]
-    #[case("[2foo]", SpannedErrorKind::Identifier, "2foo", "[".as_bytes().len())]
-    #[case("[foo, 2bar]", SpannedErrorKind::Identifier, "2bar", "[foo, ".as_bytes().len())]
-    #[case("[, foo]", SpannedErrorKind::Identifier, ",", "[".as_bytes().len())]
-    #[case("[foo bar]", SpannedErrorKind::Token("]"), "bar", "[foo ".as_bytes().len())]
+    #[case("[2foo]", SpannedErrorKind::Identifier, "2foo", "[".len())]
+    #[case("[foo, 2bar]", SpannedErrorKind::Identifier, "2bar", "[foo, ".len())]
+    #[case("[, foo]", SpannedErrorKind::Identifier, ",", "[".len())]
+    #[case("[foo bar]", SpannedErrorKind::Token("]"), "bar", "[foo ".len())]
     fn test_invalid_opt_streams1(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
@@ -829,9 +829,9 @@ mod tests {
     }
 
     #[rstest]
-    #[case("::2bar", SpannedErrorKind::Identifier, "2bar", "::".as_bytes().len())]
-    #[case("foo::2bar", SpannedErrorKind::Identifier, "2bar", "foo::".as_bytes().len())]
-    #[case(":: :: foo", SpannedErrorKind::Identifier, "::", ":: ".as_bytes().len())]
+    #[case("::2bar", SpannedErrorKind::Identifier, "2bar", "::".len())]
+    #[case("foo::2bar", SpannedErrorKind::Identifier, "2bar", "foo::".len())]
+    #[case(":: :: foo", SpannedErrorKind::Identifier, "::", ":: ".len())]
     fn test_invalid_simple_path(
         #[case] input: &str,
         #[case] expected_kind: SpannedErrorKind,
