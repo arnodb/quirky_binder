@@ -1,3 +1,8 @@
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
+
 use crate::prelude::*;
 
 pub trait DynNode {
@@ -6,6 +11,13 @@ pub trait DynNode {
     fn inputs(&self) -> &[NodeStream];
 
     fn outputs(&self) -> &[NodeStream];
+
+    fn identifier_for(&self, base: &str) -> syn::Ident {
+        let mut hasher = DefaultHasher::new();
+        self.name().to_string().hash(&mut hasher);
+        let hash = hasher.finish();
+        format_ident!("{base}_{hash:x}")
+    }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain);
 

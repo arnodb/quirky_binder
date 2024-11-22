@@ -216,20 +216,28 @@ impl DynNode for Group {
             )
         };
 
+        let rec_ident = self.identifier_for("rec");
+        let record_ident = self.identifier_for("record");
+        let group_ident = self.identifier_for("group");
+        let group_record_ident = self.identifier_for("group_record");
         let inline_body = quote! {
             quirky_binder_support::iterator::group::Group::new(
                 input,
-                |rec| {{
-                    let #record_and_unpacked_out { mut record, #fields } = #record_and_unpacked_out::from((rec, #unpacked_record_in { #group_field: Vec::new() }));
-                    let group_record = #group_record::new(#group_unpacked_record { #fields });
-                    record.#mut_group_field().push(group_record);
-                    record
-                }},
+                |#rec_ident| {
+                    let #record_and_unpacked_out { record: mut #record_ident, #fields } =
+                        #record_and_unpacked_out::from((
+                            #rec_ident,
+                            #unpacked_record_in { #group_field: Vec::new() },
+                        ));
+                    let #group_record_ident = #group_record::new(#group_unpacked_record { #fields });
+                    #record_ident.#mut_group_field().push(#group_record_ident);
+                    #record_ident
+                },
                 #eq,
-                |group, rec| {
-                    let #input_unpacked_record{ #fields, .. } = rec.unpack();
-                    let group_record = #group_record::new(#group_unpacked_record { #fields });
-                    group.#mut_group_field().push(group_record);
+                |#group_ident, #rec_ident| {
+                    let #input_unpacked_record{ #fields, .. } = #rec_ident.unpack();
+                    let #group_record_ident = #group_record::new(#group_unpacked_record { #fields });
+                    #group_ident.#mut_group_field().push(#group_record_ident);
                 },
             )
         };
@@ -440,7 +448,7 @@ impl DynNode for SubGroup {
         let group_field = self.group_field.ident();
         let mut_group_field = self.group_field.mut_ident();
 
-        let (eq, update_body) = {
+        let (eq_preamble, update_body) = {
             let path_stream = self.path_streams.last().expect("last path field");
 
             let leaf_record_definition =
@@ -463,37 +471,42 @@ impl DynNode for SubGroup {
                     }
                 }),
             );
+            let eq_ident = self.identifier_for("eq");
+            let eq_preamble = quote! { let #eq_ident = #eq; };
 
             let unpacked_record_in = out_record_definition.unpacked_record_in();
             let record_and_unpacked_out = out_record_definition.record_and_unpacked_out();
 
+            let record_ident = self.identifier_for("record");
+            let prev_record_ident = self.identifier_for("prev_record");
+            let group_record_ident = self.identifier_for("group_record");
             let update_body = quote! {
-                |record, prev_record| {
+                |#record_ident, #prev_record_ident| {
                     let #record_and_unpacked_out {
-                        mut record,
+                        record: mut #record_ident,
                         #fields
                     } = #record_and_unpacked_out::from((
-                        record, #unpacked_record_in { #group_field: Vec::new() },
+                        #record_ident, #unpacked_record_in { #group_field: Vec::new() },
                     ));
-                    if let Some(prev_record) = prev_record {
-                        if (eq)(&record, prev_record) {
+                    if let Some(#prev_record_ident) = #prev_record_ident {
+                        if (#eq_ident)(&#record_ident, #prev_record_ident) {
                             // TODO optimize
-                            let group_record = #group_record::new(
+                            let #group_record_ident = #group_record::new(
                                 #group_unpacked_record { #fields }
                             );
-                            prev_record.#mut_group_field().push(group_record);
+                            #prev_record_ident.#mut_group_field().push(#group_record_ident);
                             return VecElementConversionResult::Abandonned;
                         }
                     }
-                    let group_record = #group_record::new(
+                    let #group_record_ident = #group_record::new(
                         #group_unpacked_record { #fields }
                     );
-                    record.#mut_group_field().push(group_record);
-                    VecElementConversionResult::Converted(record)
+                    #record_ident.#mut_group_field().push(#group_record_ident);
+                    VecElementConversionResult::Converted(#record_ident)
                 }
             };
 
-            (eq, update_body)
+            (eq_preamble, update_body)
         };
 
         chain.implement_path_update(
@@ -501,9 +514,7 @@ impl DynNode for SubGroup {
             self.inputs.single(),
             self.outputs.single(),
             &self.path_streams,
-            Some(&quote! {
-                let eq = #eq;
-            }),
+            Some(&eq_preamble),
             &update_body,
         );
     }
