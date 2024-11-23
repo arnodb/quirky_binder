@@ -611,7 +611,7 @@ pub(crate) fn generate_module<'a>(
                 let entry_nodes: Vec<Box<dyn DynNode>> = vec![
                     #(
                         #main_features
-                        Box::new(__quirky_binder_private::#main_names(&mut graph, root.clone(), trace.clone())?),
+                        Box::new(__quirky_binder_private::#main_names(&mut graph, root.sub(stringify!(#main_names)), trace.clone())?),
                     )*
                 ];
                 Ok(graph.build(entry_nodes))

@@ -85,7 +85,6 @@ impl Graph {
 
         {
             let mut scope = Scope::new();
-            scope.import("fallible_iterator", "FallibleIterator");
             scope.import(
                 &self.chain_customizer.error_type_path(),
                 &self.chain_customizer.error_type_name(),

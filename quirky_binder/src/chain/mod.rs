@@ -574,10 +574,6 @@ impl<'a> Chain<'a> {
     ) -> &mut Scope {
         let mut iter = path.into_iter();
         let customize_module = |module: &mut Module| {
-            module.scope().import(
-                &chain_customizer.error_type_path(),
-                &chain_customizer.error_type_name(),
-            );
             for (path, ty) in &chain_customizer.custom_module_imports {
                 module.scope().import(path, ty);
             }
@@ -658,6 +654,13 @@ impl<'a> Chain<'a> {
             }
         };
 
+        let customizer = self.customizer;
+
+        let mut import_scope = ImportScope::default();
+        if !node.inputs().is_empty() {
+            import_scope.add_import("fallible_iterator", "FallibleIterator");
+        }
+
         let scope = self.get_or_new_module_scope(
             name.iter().take(name.len() - 1),
             self.customizer,
@@ -665,6 +668,8 @@ impl<'a> Chain<'a> {
         );
 
         scope.raw(&fn_def.to_string());
+
+        import_scope.import(scope, customizer);
     }
 
     pub fn implement_path_update(
