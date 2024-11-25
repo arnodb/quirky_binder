@@ -15,7 +15,7 @@ bincode = "1"
 compare = "0.1"
 derive-new = "0.5"
 derive_more = "0.99"
-fallible-iterator = "0.2"
+fallible-iterator = "0.3"
 lazy_static = "1"
 quirky_binder_codegen_macro = { version = "0.1.1-dev", path = "../codegen/quirky_binder_codegen_macro" }
 serde = { version = "1", features = ["derive"] }

@@ -6,7 +6,7 @@ rust-version = "1.65.0"
 
 [dependencies]
 quirky_binder_support = { path = "../../quirky_binder_support" }
-fallible-iterator = "0.2"
+fallible-iterator = "0.3"
 serde = "1"
 static_assertions = "1"
 truc_runtime = { git = "https://github.com/arnodb/truc.git" }
