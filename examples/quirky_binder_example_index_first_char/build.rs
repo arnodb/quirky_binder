@@ -38,7 +38,7 @@ impl Tokenize {
                 let datum_id = datum.id();
                 output_stream_def.remove_datum(datum_id);
                 output_stream_def.add_datum::<Box<str>, _>("word");
-                output_stream_def.add_datum::<char, _>("first_char");
+                output_stream_def.add_datum_allow_uninit::<char, _>("first_char");
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 

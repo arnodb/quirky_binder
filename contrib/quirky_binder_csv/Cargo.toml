@@ -15,4 +15,4 @@ quirky_binder = { version = "0.1.1-dev", path = "../../quirky_binder" }
 quirky_binder_lang = { version = "0.1.1-dev", path = "../../quirky_binder_lang" }
 quote = "1"
 serde = { version = "1", features = ["derive"] }
-truc = "0.2"
+truc = { git = "https://github.com/arnodb/truc.git" }

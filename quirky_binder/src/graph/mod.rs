@@ -4,7 +4,7 @@ use codegen::Scope;
 use truc::{
     generator::{
         config::GeneratorConfig,
-        fragment::{serde::SerdeImplGenerator, FragmentGenerator},
+        fragment::{clone::CloneImplGenerator, serde::SerdeImplGenerator, FragmentGenerator},
     },
     record::definition::RecordDefinition,
 };
@@ -75,6 +75,7 @@ impl Graph {
                 module.raw(&truc::generator::generate(
                     definition,
                     &GeneratorConfig::default_with_custom_generators([
+                        Box::new(CloneImplGenerator) as Box<dyn FragmentGenerator>,
                         Box::new(SerdeImplGenerator) as Box<dyn FragmentGenerator>,
                     ]),
                 ));
