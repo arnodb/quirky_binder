@@ -1,6 +1,8 @@
 use truc::record::{definition::DatumDefinition, type_resolver::TypeResolver};
 
-use crate::prelude::*;
+use crate::{prelude::*, trace_filter};
+
+const DEBUG_TRACE_NAME: &str = "debug";
 
 #[derive(Getters)]
 pub struct Debug {
@@ -17,11 +19,11 @@ impl Debug {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
-        _trace: Trace,
+        trace: Trace,
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
-            .output_from_input(0, true, graph)
+            .output_from_input(0, true, graph, || trace_filter!(trace, DEBUG_TRACE_NAME))?
             .pass_through(|builder, facts_proof| {
                 let def = builder.record_definition().borrow();
                 eprintln!("=== Filter {}:", name);
@@ -37,10 +39,12 @@ impl Debug {
                     datum: &DatumDefinition,
                     sub_stream: &NodeSubStream,
                     graph: &GraphBuilder<R>,
-                ) {
+                    trace: &Trace,
+                ) -> ChainResult<()> {
                     let def = graph
-                        .get_stream(sub_stream.record_type())
-                        .unwrap_or_else(|| panic!(r#"stream "{}""#, sub_stream.record_type()))
+                        .get_stream(sub_stream.record_type(), || {
+                            trace_filter!(trace, DEBUG_TRACE_NAME)
+                        })?
                         .borrow();
                     indent(depth);
                     eprintln!("--- Datum {}:", datum.name());
@@ -56,8 +60,10 @@ impl Debug {
                             def.get_datum_definition(datum_id).expect("datum"),
                             sub_stream,
                             graph,
-                        );
+                            trace,
+                        )?;
                     }
+                    Ok(())
                 }
                 for (&datum_id, sub_stream) in builder.sub_streams().iter() {
                     debug_sub_stream(
@@ -65,11 +71,12 @@ impl Debug {
                         def.get_datum_definition(datum_id).expect("datum"),
                         sub_stream,
                         graph,
-                    );
+                        &trace,
+                    )?;
                 }
-                facts_proof.order_facts_updated().distinct_facts_updated()
-            });
-        let outputs = streams.build();
+                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+            })?;
+        let outputs = streams.build(|| trace_filter!(trace, DEBUG_TRACE_NAME))?;
         Ok(Self {
             name,
             inputs,

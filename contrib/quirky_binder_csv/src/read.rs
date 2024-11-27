@@ -60,10 +60,10 @@ impl ReadCsv {
             .transpose()?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams.new_main_stream(graph);
+        streams.new_main_stream(graph, || trace_filter!(trace, READ_CSV_TRACE_NAME))?;
 
         streams
-            .new_main_output(graph)
+            .new_main_output(graph, || trace_filter!(trace, READ_CSV_TRACE_NAME))?
             .update(|output_stream, facts_proof| {
                 {
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
@@ -85,7 +85,7 @@ impl ReadCsv {
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
-        let outputs = streams.build();
+        let outputs = streams.build(|| trace_filter!(trace, READ_CSV_TRACE_NAME))?;
 
         Ok(Self {
             name,

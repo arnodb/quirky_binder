@@ -5,8 +5,10 @@ extern crate quote;
 
 use std::path::Path;
 
-use quirky_binder::{prelude::*, quirky_binder};
+use quirky_binder::{prelude::*, quirky_binder, trace_filter};
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
+
+const TOKENIZE_TRACE_NAME: &str = "tokenize";
 
 #[derive(Getters)]
 pub struct Tokenize {
@@ -23,12 +25,12 @@ impl Tokenize {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
-        _trace: Trace,
+        trace: Trace,
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
         streams
-            .output_from_input(0, true, graph)
+            .output_from_input(0, true, graph, || trace_filter!(trace, TOKENIZE_TRACE_NAME))?
             .update(|output_stream, facts_proof| {
                 let input_variant_id = output_stream.input_variant_id();
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
@@ -42,7 +44,7 @@ impl Tokenize {
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
-        let outputs = streams.build();
+        let outputs = streams.build(|| trace_filter!(trace, TOKENIZE_TRACE_NAME))?;
 
         Ok(Self {
             name,

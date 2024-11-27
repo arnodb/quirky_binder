@@ -32,18 +32,18 @@ pub struct OutputBuilderForPassThrough<'a, 'b, 'g, R: TypeResolver + Copy> {
 }
 
 impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g, R> {
-    pub fn pass_through_sub_stream<B>(
+    pub fn pass_through_sub_stream<B, TRACE>(
         &mut self,
         sub_stream: NodeSubStream,
         graph: &'g GraphBuilder<R>,
         build: B,
-    ) -> NodeSubStream
+        trace: TRACE,
+    ) -> ChainResult<NodeSubStream>
     where
         B: FnOnce(&mut SubStreamBuilderForPassThrough<'g, R>),
+        TRACE: Fn() -> Trace<'static>,
     {
-        let record_definition = graph
-            .get_stream(sub_stream.record_type())
-            .unwrap_or_else(|| panic!(r#"stream "{}""#, sub_stream.record_type()));
+        let record_definition = graph.get_stream(sub_stream.record_type(), trace)?;
         let (record_type, variant_id, sub_streams, facts) = sub_stream.destructure();
         let mut builder = SubStreamBuilderForPassThrough {
             record_type,
@@ -53,20 +53,22 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
             facts,
         };
         build(&mut builder);
-        builder.close_pass_through()
+        Ok(builder.close_pass_through())
     }
 
-    pub fn pass_through_path<PassThroughLeafSubStream>(
+    pub fn pass_through_path<PassThroughLeafSubStream, TRACE>(
         &mut self,
         path_fields: &[ValidFieldName],
         pass_through_leaf_sub_stream: PassThroughLeafSubStream,
         graph: &'g GraphBuilder<R>,
-    ) -> NodeSubStream
+        trace: TRACE,
+    ) -> ChainResult<NodeSubStream>
     where
         PassThroughLeafSubStream: for<'c, 'd> FnOnce(
             NodeSubStream,
             &mut OutputBuilderForPassThrough<'c, 'd, 'g, R>,
-        ) -> NodeSubStream,
+        ) -> ChainResult<NodeSubStream>,
+        TRACE: Fn() -> Trace<'static> + Copy,
     {
         struct PathFieldDetails {
             stream: NodeSubStream,
@@ -83,9 +85,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
                 .map(DatumDefinition::id);
             if let Some(datum_id) = datum_id {
                 let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
-                let sub_record_definition = graph
-                    .get_stream(sub_stream.record_type())
-                    .unwrap_or_else(|| panic!(r#"stream "{}""#, sub_stream.record_type()));
+                let sub_record_definition = graph.get_stream(sub_stream.record_type(), trace)?;
                 (datum_id, sub_stream, sub_record_definition)
             } else {
                 panic!("could not find datum `{}`", field.name());
@@ -93,7 +93,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
         };
 
         // Then find path input streams
-        let (mut path_details, leaf_sub_input_stream, _) = path_fields[1..].iter().fold(
+        let (mut path_details, leaf_sub_input_stream, _) = path_fields[1..].iter().try_fold(
             (
                 Vec::new(),
                 root_sub_stream,
@@ -109,19 +109,18 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
                         .sub_streams_mut()
                         .remove(&datum_id)
                         .expect("sub stream");
-                    let sub_record_definition = graph
-                        .get_stream(sub_stream.record_type())
-                        .unwrap_or_else(|| panic!(r#"stream "{}""#, sub_stream.record_type()));
+                    let sub_record_definition =
+                        graph.get_stream(sub_stream.record_type(), trace)?;
                     path_data.push(PathFieldDetails { stream, datum_id });
-                    (path_data, sub_stream, sub_record_definition)
+                    Ok((path_data, sub_stream, sub_record_definition))
                 } else {
                     panic!("could not find datum `{}`", field.name());
                 }
             },
-        );
+        )?;
 
         // Then update the leaf sub stream
-        let leaf_sub_output_stream = pass_through_leaf_sub_stream(leaf_sub_input_stream, self);
+        let leaf_sub_output_stream = pass_through_leaf_sub_stream(leaf_sub_input_stream, self)?;
         let mut sub_output_stream = Some(leaf_sub_output_stream.clone());
 
         // Then all streams up to the root
@@ -148,7 +147,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
             }
         }
 
-        leaf_sub_output_stream
+        Ok(leaf_sub_output_stream)
     }
 
     pub fn set_order_fact<I, F>(&mut self, order_fields: I)

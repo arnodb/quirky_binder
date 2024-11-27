@@ -3,6 +3,8 @@ use truc::record::type_resolver::TypeResolver;
 
 use crate::{prelude::*, support::eq::fields_eq, trace_filter};
 
+const DEDUP_TRACE_NAME: &str = "dedup";
+
 #[derive(Getters)]
 pub struct Dedup {
     name: FullyQualifiedName,
@@ -18,16 +20,16 @@ impl Dedup {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
-        _trace: Trace,
+        trace: Trace,
     ) -> ChainResult<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
-            .output_from_input(0, true, graph)
+            .output_from_input(0, true, graph, || trace_filter!(trace, DEDUP_TRACE_NAME))?
             .pass_through(|output_stream, facts_proof| {
                 output_stream.set_distinct_fact_all_fields();
-                facts_proof.order_facts_updated().distinct_facts_updated()
-            });
-        let outputs = streams.build();
+                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+            })?;
+        let outputs = streams.build(|| trace_filter!(trace, DEDUP_TRACE_NAME))?;
         Ok(Self {
             name,
             inputs,
@@ -117,30 +119,31 @@ impl SubDedup {
                 })?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        let path_sub_stream =
-            streams
-                .output_from_input(0, true, graph)
-                .pass_through(|output_stream, facts_proof| {
-                    let path_sub_stream = output_stream.pass_through_path(
-                        &valid_path_fields,
-                        |sub_input_stream, output_stream| {
-                            output_stream.pass_through_sub_stream(
-                                sub_input_stream,
-                                graph,
-                                |sub_output_stream| {
-                                    sub_output_stream.set_distinct_fact_all_fields()
-                                },
-                            )
-                        },
-                        graph,
-                    );
-                    facts_proof
-                        .order_facts_updated()
-                        .distinct_facts_updated()
-                        .with_output(path_sub_stream)
-                });
+        let path_sub_stream = streams
+            .output_from_input(0, true, graph, || {
+                trace_filter!(trace, SUB_DEDUP_TRACE_NAME)
+            })?
+            .pass_through(|output_stream, facts_proof| {
+                let path_sub_stream = output_stream.pass_through_path(
+                    &valid_path_fields,
+                    |sub_input_stream, output_stream| {
+                        output_stream.pass_through_sub_stream(
+                            sub_input_stream,
+                            graph,
+                            |sub_output_stream| sub_output_stream.set_distinct_fact_all_fields(),
+                            || trace_filter!(trace, SUB_DEDUP_TRACE_NAME),
+                        )
+                    },
+                    graph,
+                    || trace_filter!(trace, SUB_DEDUP_TRACE_NAME),
+                )?;
+                Ok(facts_proof
+                    .order_facts_updated()
+                    .distinct_facts_updated()
+                    .with_output(path_sub_stream))
+            })?;
 
-        let outputs = streams.build();
+        let outputs = streams.build(|| trace_filter!(trace, SUB_DEDUP_TRACE_NAME))?;
 
         Ok(Self {
             name,

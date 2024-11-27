@@ -635,21 +635,21 @@ where
         }
     }
     if let Some(last) = brackets.last() {
-        return Err(SpannedError {
+        Err(SpannedError {
             kind: SpannedErrorKind::UnbalancedCode,
             span: last.as_str(),
-        });
+        })
     } else if let Some((start, end)) = start_end {
-        return Ok(lexer.input_slice(start, end));
+        Ok(lexer.input_slice(start, end))
     } else {
-        return Err(SpannedError {
+        Err(SpannedError {
             kind: SpannedErrorKind::Code,
             span: if let Some(next) = lexer.tokens().peek() {
                 next.as_str()
             } else {
                 &lexer.input()[lexer.input().len()..]
             },
-        });
+        })
     }
 }
 

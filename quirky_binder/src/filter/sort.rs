@@ -38,16 +38,16 @@ impl Sort {
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
-            .output_from_input(0, true, graph)
+            .output_from_input(0, true, graph, || trace_filter!(trace, SORT_TRACE_NAME))?
             .pass_through(|builder, facts_proof| {
                 builder.set_order_fact(
                     valid_fields
                         .iter()
                         .map(|field| field.as_ref().map(ValidFieldName::name)),
                 );
-                facts_proof.order_facts_updated().distinct_facts_updated()
-            });
-        let outputs = streams.build();
+                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+            })?;
+        let outputs = streams.build(|| trace_filter!(trace, SORT_TRACE_NAME))?;
         Ok(Self {
             name,
             inputs,
@@ -146,19 +146,22 @@ impl SubSort {
         })?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        let path_sub_stream = streams.output_from_input(0, true, graph).pass_through_path(
-            graph,
-            &valid_path_fields,
-            |sub_output_stream| {
-                sub_output_stream.set_order_fact(
-                    valid_fields
-                        .iter()
-                        .map(|field| field.as_ref().map(ValidFieldName::name)),
-                )
-            },
-        );
+        let path_sub_stream = streams
+            .output_from_input(0, true, graph, || trace_filter!(trace, SUB_SORT_TRACE_NAME))?
+            .pass_through_path(
+                graph,
+                &valid_path_fields,
+                |sub_output_stream| {
+                    sub_output_stream.set_order_fact(
+                        valid_fields
+                            .iter()
+                            .map(|field| field.as_ref().map(ValidFieldName::name)),
+                    )
+                },
+                || trace_filter!(trace, SUB_SORT_TRACE_NAME),
+            )?;
 
-        let outputs = streams.build();
+        let outputs = streams.build(|| trace_filter!(trace, SUB_SORT_TRACE_NAME))?;
 
         Ok(Self {
             name,

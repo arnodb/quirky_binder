@@ -42,11 +42,13 @@ impl FunctionUpdate {
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
-            .output_from_input(0, true, graph)
+            .output_from_input(0, true, graph, || {
+                trace_filter!(trace, FUNCTION_UPDATE_TRACE_NAME)
+            })?
             .pass_through(|_, facts_proof| {
-                facts_proof.order_facts_updated().distinct_facts_updated()
-            });
-        let outputs = streams.build();
+                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+            })?;
+        let outputs = streams.build(|| trace_filter!(trace, FUNCTION_UPDATE_TRACE_NAME))?;
         Ok(Self {
             name,
             inputs,

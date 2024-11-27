@@ -26,20 +26,17 @@ impl<'a> FieldsParam<'a> {
     pub fn validate<L, TRACE>(self, lookup: L, trace: TRACE) -> ChainResult<Vec<ValidFieldName>>
     where
         L: Fn(&ValidFieldName) -> bool,
-        TRACE: Fn() -> Trace<'static> + Clone,
+        TRACE: Fn() -> Trace<'static> + Copy,
     {
         self.validate_ext(
-            {
-                let trace = trace.clone();
-                move |name| {
-                    if lookup(&name) {
-                        Ok(name)
-                    } else {
-                        Err(ChainError::FieldNotFound {
-                            field: name.name().to_owned(),
-                            trace: trace(),
-                        })
-                    }
+            |name| {
+                if lookup(&name) {
+                    Ok(name)
+                } else {
+                    Err(ChainError::FieldNotFound {
+                        field: name.name().to_owned(),
+                        trace: trace(),
+                    })
                 }
             },
             trace,
@@ -72,7 +69,7 @@ impl<'a> FieldsParam<'a> {
     ) -> ChainResult<Vec<ValidFieldName>>
     where
         R: TypeResolver,
-        TRACE: Fn() -> Trace<'static> + Clone,
+        TRACE: Fn() -> Trace<'static> + Copy,
     {
         self.validate_on_record_definition_ext(def, |name, _datum| Ok(name), trace)
     }
@@ -86,20 +83,17 @@ impl<'a> FieldsParam<'a> {
     where
         R: TypeResolver,
         M: Fn(ValidFieldName, &DatumDefinition) -> ChainResult<O>,
-        TRACE: Fn() -> Trace<'static> + Clone,
+        TRACE: Fn() -> Trace<'static> + Copy,
     {
         self.validate_ext(
-            {
-                let trace = trace.clone();
-                move |name| {
-                    if let Some(datum) = def.get_current_datum_definition_by_name(name.name()) {
-                        try_map(name, datum)
-                    } else {
-                        Err(ChainError::FieldNotFound {
-                            field: name.name().to_owned(),
-                            trace: trace(),
-                        })
-                    }
+            |name| {
+                if let Some(datum) = def.get_current_datum_definition_by_name(name.name()) {
+                    try_map(name, datum)
+                } else {
+                    Err(ChainError::FieldNotFound {
+                        field: name.name().to_owned(),
+                        trace: trace(),
+                    })
                 }
             },
             trace,
@@ -114,7 +108,7 @@ impl<'a> FieldsParam<'a> {
     ) -> ChainResult<Vec<ValidFieldName>>
     where
         R: TypeResolver + Copy,
-        TRACE: Fn() -> Trace<'static> + Clone,
+        TRACE: Fn() -> Trace<'static> + Copy,
     {
         self.validate_on_stream_ext(stream, graph, |name, _datum| Ok(name), trace)
     }
@@ -129,15 +123,9 @@ impl<'a> FieldsParam<'a> {
     where
         R: TypeResolver + Copy,
         M: Fn(ValidFieldName, &DatumDefinition) -> ChainResult<O>,
-        TRACE: Fn() -> Trace<'static> + Clone,
+        TRACE: Fn() -> Trace<'static> + Copy,
     {
-        let def = graph
-            .get_stream(stream.record_type())
-            .ok_or_else(|| ChainError::StreamNotFound {
-                stream: stream.record_type().to_string(),
-                trace: trace(),
-            })?
-            .borrow();
+        let def = graph.get_stream(stream.record_type(), trace)?.borrow();
         self.validate_on_record_definition_ext(&def, try_map, trace)
     }
 
@@ -149,7 +137,7 @@ impl<'a> FieldsParam<'a> {
     ) -> ChainResult<(Vec<ValidFieldName>, Ref<'g, RecordDefinitionBuilder<R>>)>
     where
         R: TypeResolver + Copy,
-        TRACE: Fn() -> Trace<'static>,
+        TRACE: Fn() -> Trace<'static> + Copy,
     {
         let (valid_first, mut s, mut def) = {
             let valid =
@@ -157,13 +145,7 @@ impl<'a> FieldsParam<'a> {
                     name: (self[0]).to_owned(),
                     trace: trace(),
                 })?;
-            let def = graph
-                .get_stream(stream.record_type())
-                .ok_or_else(|| ChainError::StreamNotFound {
-                    stream: stream.record_type().to_string(),
-                    trace: trace(),
-                })?
-                .borrow();
+            let def = graph.get_stream(stream.record_type(), trace)?.borrow();
             let datum = def
                 .get_current_datum_definition_by_name(valid.name())
                 .ok_or_else(|| ChainError::FieldNotFound {
@@ -171,13 +153,7 @@ impl<'a> FieldsParam<'a> {
                     trace: trace(),
                 })?;
             let s = &stream.sub_streams()[&datum.id()];
-            let def = graph
-                .get_stream(s.record_type())
-                .ok_or_else(|| ChainError::StreamNotFound {
-                    stream: stream.record_type().to_string(),
-                    trace: trace(),
-                })?
-                .borrow();
+            let def = graph.get_stream(s.record_type(), trace)?.borrow();
             (valid, s, def)
         };
         let valid_fields = once(Ok(valid_first))
@@ -194,13 +170,7 @@ impl<'a> FieldsParam<'a> {
                         trace: trace(),
                     })?;
                 s = &s.sub_streams()[&datum.id()];
-                def = graph
-                    .get_stream(s.record_type())
-                    .ok_or_else(|| ChainError::StreamNotFound {
-                        stream: stream.record_type().to_string(),
-                        trace: trace(),
-                    })?
-                    .borrow();
+                def = graph.get_stream(s.record_type(), trace)?.borrow();
                 Ok(valid)
             }))
             .collect::<Result<Vec<_>, _>>()?;
@@ -265,15 +235,9 @@ impl<'a> DirectedFieldsParam<'a> {
     ) -> ChainResult<Vec<Directed<ValidFieldName>>>
     where
         R: TypeResolver + Copy,
-        TRACE: Fn() -> Trace<'static>,
+        TRACE: Fn() -> Trace<'static> + Copy,
     {
-        let def = graph
-            .get_stream(stream.record_type())
-            .ok_or_else(|| ChainError::StreamNotFound {
-                stream: stream.record_type().to_string(),
-                trace: trace(),
-            })?
-            .borrow();
+        let def = graph.get_stream(stream.record_type(), trace)?.borrow();
         self.validate_on_record_definition(&def, trace)
     }
 }

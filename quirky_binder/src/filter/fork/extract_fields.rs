@@ -36,21 +36,27 @@ impl ExtractFields {
             })?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams.new_named_stream("extracted", graph);
+        streams.new_named_stream("extracted", graph, || {
+            trace_filter!(trace, EXTRACT_FIELDS_TRACE_NAME)
+        })?;
 
-        let output_stream_def =
-            streams
-                .output_from_input(0, true, graph)
-                .pass_through(|output_stream, facts_proof| {
-                    let record_definition = output_stream.record_definition();
-                    facts_proof
-                        .order_facts_updated()
-                        .distinct_facts_updated()
-                        .with_output(record_definition)
-                });
+        let output_stream_def = streams
+            .output_from_input(0, true, graph, || {
+                trace_filter!(trace, EXTRACT_FIELDS_TRACE_NAME)
+            })?
+            .pass_through(|output_stream, facts_proof| {
+                let record_definition = output_stream.record_definition();
+                Ok(facts_proof
+                    .order_facts_updated()
+                    .distinct_facts_updated()
+                    .with_output(record_definition))
+            })?;
 
-        streams.new_named_output("extracted", graph).update(
-            |output_extracted_stream, facts_proof| {
+        streams
+            .new_named_output("extracted", graph, || {
+                trace_filter!(trace, EXTRACT_FIELDS_TRACE_NAME)
+            })?
+            .update(|output_extracted_stream, facts_proof| {
                 let mut output_extracted_stream_def =
                     output_extracted_stream.record_definition().borrow_mut();
                 for field in valid_fields.iter() {
@@ -66,10 +72,9 @@ impl ExtractFields {
                 }
                 // XXX That is actually not true, let's see what we can do later.
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
-            },
-        )?;
+            })?;
 
-        let outputs = streams.build();
+        let outputs = streams.build(|| trace_filter!(trace, EXTRACT_FIELDS_TRACE_NAME))?;
 
         Ok(Self {
             name,

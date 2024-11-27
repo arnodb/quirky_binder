@@ -42,7 +42,7 @@ impl Anchor {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
         streams
-            .output_from_input(0, true, graph)
+            .output_from_input(0, true, graph, || trace_filter!(trace, ANCHOR_TRACE_NAME))?
             .update(|output_stream, facts_proof| {
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
                 output_stream_def.add_datum_override::<AnchorId<0>, _>(
@@ -60,7 +60,7 @@ impl Anchor {
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
-        let outputs = streams.build();
+        let outputs = streams.build(|| trace_filter!(trace, ANCHOR_TRACE_NAME))?;
 
         Ok(Self {
             name,

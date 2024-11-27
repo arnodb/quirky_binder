@@ -50,75 +50,76 @@ impl Join {
                 .secondary_fields
                 .validate_on_stream(&inputs[1], graph, || trace_filter!(trace, JOIN_TRACE_NAME))?;
 
-        let joined_fields =
-            streams
-                .output_from_input(0, true, graph)
-                .update(|output_stream, facts_proof| {
-                    for (stream_info, input, fields) in [
-                        ("primary stream", &inputs[0], &valid_primary_fields),
-                        ("secondary stream", &inputs[1], &valid_secondary_fields),
-                    ] {
-                        let input_stream_def = graph
-                            .get_stream(input.record_type())
-                            .expect("input_stream_def")
-                            .borrow();
+        let joined_fields = streams
+            .output_from_input(0, true, graph, || trace_filter!(trace, JOIN_TRACE_NAME))?
+            .update(|output_stream, facts_proof| {
+                for (stream_info, input, fields) in [
+                    ("primary stream", &inputs[0], &valid_primary_fields),
+                    ("secondary stream", &inputs[1], &valid_secondary_fields),
+                ] {
+                    let input_stream_def = graph
+                        .get_stream(input.record_type(), || {
+                            trace_filter!(trace, JOIN_TRACE_NAME)
+                        })?
+                        .borrow();
 
-                        let variant = &input_stream_def[input.variant_id()];
-                        let mut expected_fact_fields = Vec::with_capacity(fields.len());
-                        for datum_id in variant.data() {
-                            let datum = &input_stream_def[datum_id];
-                            if fields.iter().any(|field| field.name() == datum.name()) {
-                                expected_fact_fields.push(datum.id());
-                            }
+                    let variant = &input_stream_def[input.variant_id()];
+                    let mut expected_fact_fields = Vec::with_capacity(fields.len());
+                    for datum_id in variant.data() {
+                        let datum = &input_stream_def[datum_id];
+                        if fields.iter().any(|field| field.name() == datum.name()) {
+                            expected_fact_fields.push(datum.id());
                         }
-
-                        check_directed_order_starts_with(
-                            &expected_fact_fields,
-                            input.facts().order(),
-                            &input_stream_def,
-                            stream_info,
-                            || trace_filter!(trace, JOIN_TRACE_NAME),
-                        )?;
-                        check_distinct_eq(
-                            &expected_fact_fields,
-                            input.facts().distinct(),
-                            &input_stream_def,
-                            stream_info,
-                            || trace_filter!(trace, JOIN_TRACE_NAME),
-                        )?;
                     }
 
-                    let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                    let secondary_stream_def = graph
-                        .get_stream(inputs[1].record_type())
-                        .expect("secondary stream definition")
-                        .borrow();
-                    let variant = &secondary_stream_def[inputs[1].variant_id()];
+                    check_directed_order_starts_with(
+                        &expected_fact_fields,
+                        input.facts().order(),
+                        &input_stream_def,
+                        stream_info,
+                        || trace_filter!(trace, JOIN_TRACE_NAME),
+                    )?;
+                    check_distinct_eq(
+                        &expected_fact_fields,
+                        input.facts().distinct(),
+                        &input_stream_def,
+                        stream_info,
+                        || trace_filter!(trace, JOIN_TRACE_NAME),
+                    )?;
+                }
 
-                    let joined_fields = variant
-                        .data()
-                        .filter_map(|d| {
-                            let datum = &secondary_stream_def[d];
-                            if !valid_secondary_fields
-                                .iter()
-                                .any(|field| field.name() == datum.name())
-                            {
-                                output_stream_def.copy_datum(datum);
-                                Some(datum.name().to_owned())
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Vec<String>>();
+                let mut output_stream_def = output_stream.record_definition().borrow_mut();
+                let secondary_stream_def = graph
+                    .get_stream(inputs[1].record_type(), || {
+                        trace_filter!(trace, JOIN_TRACE_NAME)
+                    })?
+                    .borrow();
+                let variant = &secondary_stream_def[inputs[1].variant_id()];
 
-                    // XXX That is actually not true, let's see what we can do later.
-                    Ok(facts_proof
-                        .order_facts_updated()
-                        .distinct_facts_updated()
-                        .with_output(joined_fields))
-                })?;
+                let joined_fields = variant
+                    .data()
+                    .filter_map(|d| {
+                        let datum = &secondary_stream_def[d];
+                        if !valid_secondary_fields
+                            .iter()
+                            .any(|field| field.name() == datum.name())
+                        {
+                            output_stream_def.copy_datum(datum);
+                            Some(datum.name().to_owned())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<String>>();
 
-        let outputs = streams.build();
+                // XXX That is actually not true, let's see what we can do later.
+                Ok(facts_proof
+                    .order_facts_updated()
+                    .distinct_facts_updated()
+                    .with_output(joined_fields))
+            })?;
+
+        let outputs = streams.build(|| trace_filter!(trace, JOIN_TRACE_NAME))?;
 
         Ok(Self {
             name,

@@ -2,9 +2,26 @@ use super::Trace;
 
 #[derive(Error, Debug)]
 pub enum ChainError {
+    #[error("Stream {stream} already exists\nstack backtrace:\n{trace}")]
+    StreamAlreadyExists {
+        stream: String,
+        trace: Trace<'static>,
+    },
     #[error("Stream {stream} not found\nstack backtrace:\n{trace}")]
     StreamNotFound {
         stream: String,
+        trace: Trace<'static>,
+    },
+    #[error("Input {input_index} is already derived to output {output_index}\nstack backtrace:\n{trace}")]
+    InputAlreadyDerived {
+        input_index: usize,
+        output_index: usize,
+        trace: Trace<'static>,
+    },
+    #[error("Expected {expected} streams but got {actual}\nstack backtrace:\n{trace}")]
+    UnexpectedNumberOfStreams {
+        expected: usize,
+        actual: usize,
         trace: Trace<'static>,
     },
     #[error("Field {field} not found\nstack backtrace:\n{trace}")]

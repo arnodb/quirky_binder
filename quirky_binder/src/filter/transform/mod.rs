@@ -79,7 +79,7 @@ impl<Spec: TransformSpec> Transform<Spec> {
                 update_fields: params.update_fields,
                 type_update_fields: params.type_update_fields,
             },
-            trace,
+            trace.clone(),
             trace_name,
         )?;
 
@@ -87,7 +87,7 @@ impl<Spec: TransformSpec> Transform<Spec> {
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
-            .output_from_input(0, true, graph)
+            .output_from_input(0, true, graph, || trace_filter!(trace, trace_name))?
             .update(|output_stream, facts_proof| {
                 {
                     let mut record_definition = output_stream.record_definition().borrow_mut();
@@ -111,7 +111,7 @@ impl<Spec: TransformSpec> Transform<Spec> {
                 ))
             })?;
 
-        let outputs = streams.build();
+        let outputs = streams.build(|| trace_filter!(trace, trace_name))?;
 
         Ok(Self {
             spec,
@@ -350,41 +350,45 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
                 update_fields: params.update_fields,
                 type_update_fields: params.type_update_fields,
             },
-            trace,
+            trace.clone(),
             trace_name,
         )?;
 
         let mut new_variant = false;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        let path_streams = streams.output_from_input(0, true, graph).update_path(
-            graph,
-            &valid_path_fields,
-            |_output_stream, sub_output_stream, facts_proof| {
-                {
-                    let mut record_definition = sub_output_stream.record_definition().borrow_mut();
+        let path_streams = streams
+            .output_from_input(0, true, graph, || trace_filter!(trace, trace_name))?
+            .update_path(
+                graph,
+                &valid_path_fields,
+                |_output_stream, sub_output_stream, facts_proof| {
+                    {
+                        let mut record_definition =
+                            sub_output_stream.record_definition().borrow_mut();
 
-                    for (f, t) in &valid_type_update_fields {
-                        let datum_id = record_definition
-                            .get_current_datum_definition_by_name(f.name())
-                            .expect("datum")
-                            .id();
-                        record_definition.remove_datum(datum_id);
-                        record_definition.add_dynamic_datum(f.name(), t.type_name());
-                        new_variant = true;
+                        for (f, t) in &valid_type_update_fields {
+                            let datum_id = record_definition
+                                .get_current_datum_definition_by_name(f.name())
+                                .expect("datum")
+                                .id();
+                            record_definition.remove_datum(datum_id);
+                            record_definition.add_dynamic_datum(f.name(), t.type_name());
+                            new_variant = true;
+                        }
                     }
-                }
 
-                Ok(spec.update_facts(
-                    sub_output_stream,
-                    &valid_update_fields,
-                    &valid_type_update_fields,
-                    facts_proof,
-                ))
-            },
-        )?;
+                    Ok(spec.update_facts(
+                        sub_output_stream,
+                        &valid_update_fields,
+                        &valid_type_update_fields,
+                        facts_proof,
+                    ))
+                },
+                || trace_filter!(trace, trace_name),
+            )?;
 
-        let outputs = streams.build();
+        let outputs = streams.build(|| trace_filter!(trace, trace_name))?;
 
         Ok(Self {
             spec,
