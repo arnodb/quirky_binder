@@ -7,7 +7,7 @@ pub use crate::{
         builder::{
             pass_through::{OutputBuilderForPassThrough, SubStreamBuilderForPassThrough},
             update::{OutputBuilderForUpdate, PathUpdateElement, SubStreamBuilderForUpdate},
-            DistinctFactsUpdated, FactsFullyUpdated, GraphBuilder, NoFactsUpdated,
+            DerivedExtra, DistinctFactsUpdated, FactsFullyUpdated, GraphBuilder, NoFactsUpdated,
             OrderFactsUpdated, StreamsBuilder,
         },
         error::GraphGenerationError,

@@ -29,7 +29,7 @@ pub struct ToLowercase;
 impl TransformSpec for ToLowercase {
     fn update_facts<R: TypeResolver + Copy>(
         &self,
-        output_stream: &mut OutputBuilderForUpdate<R>,
+        output_stream: &mut OutputBuilderForUpdate<R, DerivedExtra>,
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
@@ -124,7 +124,7 @@ pub struct ReverseChars;
 impl TransformSpec for ReverseChars {
     fn update_facts<R: TypeResolver + Copy>(
         &self,
-        output_stream: &mut OutputBuilderForUpdate<R>,
+        output_stream: &mut OutputBuilderForUpdate<R, DerivedExtra>,
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,

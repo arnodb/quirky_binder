@@ -34,7 +34,7 @@ pub trait TransformSpec {
 
     fn update_facts<R: TypeResolver + Copy>(
         &self,
-        output_stream: &mut OutputBuilderForUpdate<R>,
+        output_stream: &mut OutputBuilderForUpdate<R, DerivedExtra>,
         update_fields: &[ValidFieldName],
         type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,

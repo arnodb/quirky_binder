@@ -17,26 +17,21 @@ use crate::{
 };
 
 #[derive(Getters, CopyGetters)]
-pub struct OutputBuilderForUpdate<'a, 'b, 'g, R: TypeResolver + Copy> {
+pub struct OutputBuilderForUpdate<'a, 'b, 'g, R: TypeResolver + Copy, Extra> {
     pub(super) streams: &'b mut StreamsBuilder<'a>,
     #[getset(get = "pub")]
     pub(super) record_type: StreamRecordType,
     #[getset(get_copy = "pub")]
     pub(super) record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
-    pub(super) input_variant_id: Option<RecordVariantId>,
     pub(super) sub_streams: BTreeMap<DatumId, NodeSubStream>,
     pub(super) source: NodeStreamSource,
     pub(super) is_output_main_stream: bool,
     #[getset(get = "pub")]
     pub(super) facts: StreamFacts,
+    pub(super) extra: Extra,
 }
 
-impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
-    pub fn input_variant_id(&self) -> RecordVariantId {
-        self.input_variant_id
-            .expect("output not derived from input")
-    }
-
+impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, 'g, R, Extra> {
     pub fn new_named_sub_stream<TRACE>(
         &self,
         name: &str,
@@ -110,7 +105,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
     where
         UpdateLeafSubStream: for<'c, 'd> FnOnce(
             NodeSubStream,
-            &mut OutputBuilderForUpdate<'c, 'd, 'g, R>,
+            &mut OutputBuilderForUpdate<'c, 'd, 'g, R, Extra>,
         ) -> ChainResult<NodeSubStream>,
         UpdatePathStream: Fn(
             &str,
@@ -120,7 +115,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
         ) -> ChainResult<FactsFullyUpdated<()>>,
         UpdateRootStream: for<'c, 'd> FnOnce(
             &str,
-            &mut OutputBuilderForUpdate<'c, 'd, 'g, R>,
+            &mut OutputBuilderForUpdate<'c, 'd, 'g, R, Extra>,
             NodeSubStream,
         ) -> ChainResult<()>,
         TRACE: Fn() -> Trace<'static> + Copy,
@@ -362,6 +357,12 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R> {
             self.facts,
         ));
         self.record_definition
+    }
+}
+
+impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R, DerivedExtra> {
+    pub fn input_variant_id(&self) -> RecordVariantId {
+        self.extra.input_variant_id
     }
 }
 

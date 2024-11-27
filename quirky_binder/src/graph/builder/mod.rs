@@ -146,7 +146,7 @@ impl<'a> StreamsBuilder<'a> {
         &'b mut self,
         graph: &'g GraphBuilder<R>,
         trace: TRACE,
-    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R>>
+    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, ()>>
     where
         TRACE: Fn() -> Trace<'static>,
     {
@@ -159,7 +159,7 @@ impl<'a> StreamsBuilder<'a> {
         name: &str,
         graph: &'g GraphBuilder<R>,
         trace: TRACE,
-    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R>>
+    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, ()>>
     where
         TRACE: Fn() -> Trace<'static>,
     {
@@ -173,7 +173,7 @@ impl<'a> StreamsBuilder<'a> {
         full_name: FullyQualifiedName,
         is_output_main_stream: bool,
         trace: TRACE,
-    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R>>
+    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, ()>>
     where
         TRACE: Fn() -> Trace<'static>,
     {
@@ -183,11 +183,11 @@ impl<'a> StreamsBuilder<'a> {
             streams: self,
             record_type,
             record_definition,
-            input_variant_id: None,
             input_sub_streams: BTreeMap::new(),
             source: full_name.into(),
             is_output_main_stream,
             facts: StreamFacts::default(),
+            extra: (),
         })
     }
 
@@ -197,7 +197,7 @@ impl<'a> StreamsBuilder<'a> {
         is_output_main_stream: bool,
         graph: &'g GraphBuilder<R>,
         trace: TRACE,
-    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R>>
+    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, DerivedExtra>>
     where
         TRACE: Fn() -> Trace<'static>,
     {
@@ -217,11 +217,13 @@ impl<'a> StreamsBuilder<'a> {
             streams: self,
             record_type: input.record_type().clone(),
             record_definition,
-            input_variant_id: Some(input.variant_id()),
             input_sub_streams: input.sub_streams().clone(),
             source,
             is_output_main_stream,
             facts: input.facts().clone(),
+            extra: DerivedExtra {
+                input_variant_id: input.variant_id(),
+            },
         })
     }
 
@@ -241,23 +243,23 @@ impl<'a> StreamsBuilder<'a> {
 
 #[must_use]
 #[derive(Getters)]
-pub struct OutputBuilder<'a, 'b, 'g, R: TypeResolver> {
+pub struct OutputBuilder<'a, 'b, 'g, R: TypeResolver, Extra> {
     streams: &'b mut StreamsBuilder<'a>,
     #[getset(get = "pub")]
     record_type: StreamRecordType,
     record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
-    input_variant_id: Option<RecordVariantId>,
     input_sub_streams: BTreeMap<DatumId, NodeSubStream>,
     source: NodeStreamSource,
     is_output_main_stream: bool,
     facts: StreamFacts,
+    extra: Extra,
 }
 
-impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
+impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilder<'a, 'b, 'g, R, Extra> {
     pub fn update<B, O>(self, build: B) -> ChainResult<O>
     where
         B: FnOnce(
-            &mut OutputBuilderForUpdate<'a, 'b, 'g, R>,
+            &mut OutputBuilderForUpdate<'a, 'b, 'g, R, Extra>,
             NoFactsUpdated<()>,
         ) -> ChainResult<FactsFullyUpdated<O>>,
     {
@@ -265,11 +267,11 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
             streams: self.streams,
             record_type: self.record_type,
             record_definition: self.record_definition,
-            input_variant_id: self.input_variant_id,
             sub_streams: self.input_sub_streams,
             source: self.source,
             is_output_main_stream: self.is_output_main_stream,
             facts: self.facts,
+            extra: self.extra,
         };
         let output = build(&mut builder, NoFactsUpdated(()))?;
         builder.build();
@@ -285,7 +287,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
     ) -> ChainResult<Vec<PathUpdateElement>>
     where
         B: for<'c, 'd> FnOnce(
-            &mut OutputBuilderForUpdate<'c, 'd, 'g, R>,
+            &mut OutputBuilderForUpdate<'c, 'd, 'g, R, Extra>,
             &mut SubStreamBuilderForUpdate<'g, R>,
             NoFactsUpdated<()>,
         ) -> ChainResult<FactsFullyUpdated<()>>,
@@ -333,7 +335,9 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
                 .with_output(path_streams))
         })
     }
+}
 
+impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R, DerivedExtra> {
     pub fn pass_through<B, O>(self, build: B) -> ChainResult<O>
     where
         B: FnOnce(
@@ -345,9 +349,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
             streams: self.streams,
             record_type: self.record_type,
             record_definition: self.record_definition,
-            input_variant_id: self
-                .input_variant_id
-                .expect("output not derived from input"),
+            input_variant_id: self.extra.input_variant_id,
             sub_streams: self.input_sub_streams,
             source: self.source,
             is_output_main_stream: self.is_output_main_stream,
@@ -384,6 +386,10 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R> {
                 .with_output(path_sub_stream))
         })
     }
+}
+
+pub struct DerivedExtra {
+    input_variant_id: RecordVariantId,
 }
 
 #[derive(Clone, Copy)]
