@@ -246,7 +246,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilder<'a, 'b, 'g, R, Ext
     where
         B: for<'c, 'd> FnOnce(
             &mut OutputBuilderForUpdate<'c, 'd, 'g, R, Extra>,
-            &mut SubStreamBuilderForUpdate<'g, R>,
+            &mut SubStreamBuilderForUpdate<'g, R, DerivedExtra>,
             NoFactsUpdated<()>,
         ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
     {

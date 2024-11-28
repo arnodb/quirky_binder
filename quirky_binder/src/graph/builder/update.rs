@@ -37,7 +37,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
         &self,
         name: &str,
         graph: &'g GraphBuilder<R>,
-    ) -> ChainResult<SubStreamBuilderForUpdate<'g, R>> {
+    ) -> ChainResult<SubStreamBuilderForUpdate<'g, R, ()>> {
         let full_name = self.streams.name.sub(name);
         self.new_sub_stream_internal(graph, full_name)
     }
@@ -46,15 +46,15 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
         &self,
         graph: &'g GraphBuilder<R>,
         full_name: FullyQualifiedName,
-    ) -> ChainResult<SubStreamBuilderForUpdate<'g, R>> {
+    ) -> ChainResult<SubStreamBuilderForUpdate<'g, R, ()>> {
         let record_type = StreamRecordType::from(full_name);
         let record_definition = graph.get_stream(&record_type)?;
         Ok(SubStreamBuilderForUpdate {
             record_type,
             record_definition,
-            input_variant_id: None,
             sub_streams: BTreeMap::new(),
             facts: StreamFacts::default(),
+            extra: (),
         })
     }
 
@@ -68,7 +68,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
     where
         B: FnOnce(
             &mut Self,
-            &mut SubStreamBuilderForUpdate<'g, R>,
+            &mut SubStreamBuilderForUpdate<'g, R, DerivedExtra>,
             NoFactsUpdated<()>,
         ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
     {
@@ -79,9 +79,11 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
         let mut builder = SubStreamBuilderForUpdate {
             record_type,
             record_definition,
-            input_variant_id: Some(variant_id),
             sub_streams,
             facts,
+            extra: DerivedExtra {
+                input_variant_id: variant_id,
+            },
         };
         let facts = build(self, &mut builder, NoFactsUpdated(()))?;
         Ok(builder.close_record_variant(facts))
@@ -103,7 +105,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
         ) -> ChainResultWithTrace<NodeSubStream>,
         UpdatePathStream: Fn(
             &str,
-            &mut SubStreamBuilderForUpdate<'g, R>,
+            &mut SubStreamBuilderForUpdate<'g, R, DerivedExtra>,
             NodeSubStream,
             NoFactsUpdated<()>,
         ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
@@ -364,26 +366,18 @@ pub struct PathUpdateElement {
 }
 
 #[derive(Getters, CopyGetters, MutGetters)]
-pub struct SubStreamBuilderForUpdate<'g, R: TypeResolver> {
+pub struct SubStreamBuilderForUpdate<'g, R: TypeResolver, Extra> {
     #[getset(get = "pub")]
     record_type: StreamRecordType,
     #[getset(get_copy = "pub")]
     record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
-    input_variant_id: Option<RecordVariantId>,
     sub_streams: BTreeMap<DatumId, NodeSubStream>,
     #[getset(get = "pub", get_mut = "pub")]
     facts: StreamFacts,
+    extra: Extra,
 }
 
-impl<'g, R: TypeResolver> SubStreamBuilderForUpdate<'g, R> {
-    pub fn input_variant_id(&self) -> RecordVariantId {
-        if let Some(input_variant_id) = self.input_variant_id {
-            input_variant_id
-        } else {
-            panic! {"output not derived from input"}
-        }
-    }
-
+impl<'g, R: TypeResolver, Extra> SubStreamBuilderForUpdate<'g, R, Extra> {
     pub fn add_vec_datum(&mut self, field: &str, record: &str, sub_stream: NodeSubStream) {
         let datum_id = add_vec_datum_to_record_definition(
             &mut self.record_definition.borrow_mut(),
@@ -451,5 +445,11 @@ impl<'g, R: TypeResolver> SubStreamBuilderForUpdate<'g, R> {
     pub fn close_record_variant(self, _facts: FactsFullyUpdated<()>) -> NodeSubStream {
         let variant_id = self.record_definition.borrow_mut().close_record_variant();
         NodeSubStream::new(self.record_type, variant_id, self.sub_streams, self.facts)
+    }
+}
+
+impl<'g, R: TypeResolver> SubStreamBuilderForUpdate<'g, R, DerivedExtra> {
+    pub fn input_variant_id(&self) -> RecordVariantId {
+        self.extra.input_variant_id
     }
 }

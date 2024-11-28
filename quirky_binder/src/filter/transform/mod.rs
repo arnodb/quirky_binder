@@ -300,7 +300,7 @@ pub trait SubTransformSpec {
 
     fn update_facts<R: TypeResolver + Copy>(
         &self,
-        output_stream: &mut SubStreamBuilderForUpdate<R>,
+        output_stream: &mut SubStreamBuilderForUpdate<R, DerivedExtra>,
         update_fields: &[ValidFieldName],
         type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,

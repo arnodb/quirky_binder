@@ -188,7 +188,7 @@ impl SubTransformSpec for SubUnwrap {
 
     fn update_facts<R: TypeResolver + Copy>(
         &self,
-        _output_stream: &mut SubStreamBuilderForUpdate<R>,
+        _output_stream: &mut SubStreamBuilderForUpdate<R, DerivedExtra>,
         _update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,

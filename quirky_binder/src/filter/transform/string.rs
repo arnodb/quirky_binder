@@ -78,7 +78,7 @@ pub struct SubToLowercase;
 impl SubTransformSpec for SubToLowercase {
     fn update_facts<R: TypeResolver + Copy>(
         &self,
-        output_stream: &mut SubStreamBuilderForUpdate<R>,
+        output_stream: &mut SubStreamBuilderForUpdate<R, DerivedExtra>,
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
@@ -175,7 +175,7 @@ pub struct SubReverseChars;
 impl SubTransformSpec for SubReverseChars {
     fn update_facts<R: TypeResolver + Copy>(
         &self,
-        output_stream: &mut SubStreamBuilderForUpdate<R>,
+        output_stream: &mut SubStreamBuilderForUpdate<R, DerivedExtra>,
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
