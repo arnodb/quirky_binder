@@ -272,7 +272,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
         Ok(())
     }
 
-    pub fn set_order_fact<I, F>(&mut self, order_fields: I)
+    pub fn set_order_fact<I, F>(&mut self, order_fields: I) -> ChainResult<()>
     where
         I: IntoIterator<Item = Directed<F>>,
         F: AsRef<str>,
@@ -281,15 +281,15 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
             &mut self.facts,
             order_fields,
             &*self.record_definition.borrow(),
-        );
+        )
     }
 
-    pub fn break_order_fact_at<I, F>(&mut self, fields: I)
+    pub fn break_order_fact_at<I, F>(&mut self, fields: I) -> ChainResult<()>
     where
         I: IntoIterator<Item = F>,
         F: AsRef<str>,
     {
-        break_order_fact_at(&mut self.facts, fields, &*self.record_definition.borrow());
+        break_order_fact_at(&mut self.facts, fields, &*self.record_definition.borrow())
     }
 
     pub fn break_order_fact_at_ids<I>(&mut self, datum_ids: I)
@@ -299,7 +299,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
         break_order_fact_at_ids(&mut self.facts, datum_ids);
     }
 
-    pub fn set_distinct_fact<I, F>(&mut self, distinct_fields: I)
+    pub fn set_distinct_fact<I, F>(&mut self, distinct_fields: I) -> ChainResult<()>
     where
         I: IntoIterator<Item = F>,
         F: AsRef<str>,
@@ -308,7 +308,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
             &mut self.facts,
             distinct_fields,
             &*self.record_definition.borrow(),
-        );
+        )
     }
 
     pub fn set_distinct_fact_ids<I>(&mut self, distinct_datum_ids: I)
@@ -322,12 +322,12 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
         set_distinct_fact_all_fields(&mut self.facts, &*self.record_definition.borrow());
     }
 
-    pub fn break_distinct_fact_for<I, F>(&mut self, fields: I)
+    pub fn break_distinct_fact_for<I, F>(&mut self, fields: I) -> ChainResult<()>
     where
         I: IntoIterator<Item = F>,
         F: AsRef<str>,
     {
-        break_distinct_fact_for(&mut self.facts, fields, &*self.record_definition.borrow());
+        break_distinct_fact_for(&mut self.facts, fields, &*self.record_definition.borrow())
     }
 
     pub fn break_distinct_fact_for_ids<I>(&mut self, datum_ids: I)
@@ -418,12 +418,12 @@ impl<'g, R: TypeResolver> SubStreamBuilderForUpdate<'g, R> {
         Ok(())
     }
 
-    pub fn break_order_fact_at<I, F>(&mut self, fields: I)
+    pub fn break_order_fact_at<I, F>(&mut self, fields: I) -> ChainResult<()>
     where
         I: IntoIterator<Item = F>,
         F: AsRef<str>,
     {
-        break_order_fact_at(&mut self.facts, fields, &*self.record_definition.borrow());
+        break_order_fact_at(&mut self.facts, fields, &*self.record_definition.borrow())
     }
 
     pub fn break_order_fact_at_ids<I>(&mut self, datum_ids: I)
@@ -440,12 +440,12 @@ impl<'g, R: TypeResolver> SubStreamBuilderForUpdate<'g, R> {
         set_distinct_fact_ids(&mut self.facts, distinct_datum_ids);
     }
 
-    pub fn break_distinct_fact_for<I, F>(&mut self, fields: I)
+    pub fn break_distinct_fact_for<I, F>(&mut self, fields: I) -> ChainResult<()>
     where
         I: IntoIterator<Item = F>,
         F: AsRef<str>,
     {
-        break_distinct_fact_for(&mut self.facts, fields, &*self.record_definition.borrow());
+        break_distinct_fact_for(&mut self.facts, fields, &*self.record_definition.borrow())
     }
 
     pub fn close_record_variant(self, _facts: FactsFullyUpdated<()>) -> NodeSubStream {

@@ -125,9 +125,15 @@ impl SubDedup {
                     &valid_path_fields,
                     |sub_input_stream, output_stream| {
                         output_stream
-                            .pass_through_sub_stream(sub_input_stream, graph, |sub_output_stream| {
-                                sub_output_stream.set_distinct_fact_all_fields()
-                            })
+                            .pass_through_sub_stream(
+                                sub_input_stream,
+                                graph,
+                                |sub_output_stream| {
+                                    sub_output_stream.set_distinct_fact_all_fields();
+                                    Ok(())
+                                },
+                                SUB_DEDUP_TRACE_NAME,
+                            )
                             .with_trace_element(trace_element!(SUB_DEDUP_TRACE_NAME))
                     },
                     graph,

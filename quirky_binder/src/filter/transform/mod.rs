@@ -37,7 +37,7 @@ pub trait TransformSpec {
         update_fields: &[ValidFieldName],
         type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
-    ) -> FactsFullyUpdated<()>;
+    ) -> ChainResultWithTrace<FactsFullyUpdated<()>>;
 
     fn update_field(&self, name: &str, src: TokenStream) -> TokenStream;
 
@@ -101,12 +101,12 @@ impl<Spec: TransformSpec> Transform<Spec> {
                     }
                 }
 
-                Ok(spec.update_facts(
+                spec.update_facts(
                     output_stream,
                     &valid_update_fields,
                     &valid_type_update_fields,
                     facts_proof,
-                ))
+                )
             })?;
 
         let outputs = streams
@@ -304,7 +304,7 @@ pub trait SubTransformSpec {
         update_fields: &[ValidFieldName],
         type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
-    ) -> FactsFullyUpdated<()>;
+    ) -> ChainResultWithTrace<FactsFullyUpdated<()>>;
 
     fn update_field(&self, name: &str, src: TokenStream) -> TokenStream;
 
@@ -375,12 +375,12 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
                         }
                     }
 
-                    Ok(spec.update_facts(
+                    spec.update_facts(
                         sub_output_stream,
                         &valid_update_fields,
                         &valid_type_update_fields,
                         facts_proof,
-                    ))
+                    )
                 },
                 trace_name,
             )?;

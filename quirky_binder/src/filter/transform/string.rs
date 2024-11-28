@@ -5,7 +5,7 @@ use truc::record::type_resolver::TypeResolver;
 use super::{
     SubTransform, SubTransformParams, SubTransformSpec, Transform, TransformParams, TransformSpec,
 };
-use crate::prelude::*;
+use crate::{prelude::*, trace_element};
 
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -33,10 +33,14 @@ impl TransformSpec for ToLowercase {
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
-    ) -> FactsFullyUpdated<()> {
-        output_stream.break_order_fact_at(update_fields.iter().map(ValidFieldName::name));
-        output_stream.break_distinct_fact_for(update_fields.iter().map(ValidFieldName::name));
-        facts_proof.order_facts_updated().distinct_facts_updated()
+    ) -> ChainResultWithTrace<FactsFullyUpdated<()>> {
+        output_stream
+            .break_order_fact_at(update_fields.iter().map(ValidFieldName::name))
+            .with_trace_element(trace_element!(TO_LOWERCASE_TRACE_NAME))?;
+        output_stream
+            .break_distinct_fact_for(update_fields.iter().map(ValidFieldName::name))
+            .with_trace_element(trace_element!(TO_LOWERCASE_TRACE_NAME))?;
+        Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }
 
     fn update_field(&self, _name: &str, src: TokenStream) -> TokenStream {
@@ -78,10 +82,14 @@ impl SubTransformSpec for SubToLowercase {
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
-    ) -> FactsFullyUpdated<()> {
-        output_stream.break_order_fact_at(update_fields.iter().map(ValidFieldName::name));
-        output_stream.break_distinct_fact_for(update_fields.iter().map(ValidFieldName::name));
-        facts_proof.order_facts_updated().distinct_facts_updated()
+    ) -> ChainResultWithTrace<FactsFullyUpdated<()>> {
+        output_stream
+            .break_order_fact_at(update_fields.iter().map(ValidFieldName::name))
+            .with_trace_element(trace_element!(SUB_TO_LOWERCASE_TRACE_NAME))?;
+        output_stream
+            .break_distinct_fact_for(update_fields.iter().map(ValidFieldName::name))
+            .with_trace_element(trace_element!(SUB_TO_LOWERCASE_TRACE_NAME))?;
+        Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }
 
     fn update_field(&self, _name: &str, src: TokenStream) -> TokenStream {
@@ -124,10 +132,12 @@ impl TransformSpec for ReverseChars {
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
-    ) -> FactsFullyUpdated<()> {
+    ) -> ChainResultWithTrace<FactsFullyUpdated<()>> {
         // TODO nice to have: change order direction
-        output_stream.break_order_fact_at(update_fields.iter().map(ValidFieldName::name));
-        facts_proof.order_facts_updated().distinct_facts_updated()
+        output_stream
+            .break_order_fact_at(update_fields.iter().map(ValidFieldName::name))
+            .with_trace_element(trace_element!(REVERSE_CHARS_TRACE_NAME))?;
+        Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }
 
     fn update_field(&self, _name: &str, src: TokenStream) -> TokenStream {
@@ -169,10 +179,12 @@ impl SubTransformSpec for SubReverseChars {
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
-    ) -> FactsFullyUpdated<()> {
+    ) -> ChainResultWithTrace<FactsFullyUpdated<()>> {
         // TODO nice to have: change order direction
-        output_stream.break_order_fact_at(update_fields.iter().map(ValidFieldName::name));
-        facts_proof.order_facts_updated().distinct_facts_updated()
+        output_stream
+            .break_order_fact_at(update_fields.iter().map(ValidFieldName::name))
+            .with_trace_element(trace_element!(SUB_REVERSE_CHARS_TRACE_NAME))?;
+        Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }
 
     fn update_field(&self, _name: &str, src: TokenStream) -> TokenStream {

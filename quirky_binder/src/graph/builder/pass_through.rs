@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::BTreeMap};
 
 use truc::record::{
-    definition::{DatumDefinition, DatumId, RecordDefinitionBuilder, RecordVariantId},
+    definition::{DatumId, RecordDefinitionBuilder, RecordVariantId},
     type_resolver::TypeResolver,
 };
 
@@ -38,11 +38,14 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
         sub_stream: NodeSubStream,
         graph: &'g GraphBuilder<R>,
         build: B,
-    ) -> ChainResult<NodeSubStream>
+        trace_name: &str,
+    ) -> ChainResultWithTrace<NodeSubStream>
     where
-        B: FnOnce(&mut SubStreamBuilderForPassThrough<'g, R>),
+        B: FnOnce(&mut SubStreamBuilderForPassThrough<'g, R>) -> ChainResultWithTrace<()>,
     {
-        let record_definition = graph.get_stream(sub_stream.record_type())?;
+        let record_definition = graph
+            .get_stream(sub_stream.record_type())
+            .with_trace_element(trace_element!(trace_name))?;
         let (record_type, variant_id, sub_streams, facts) = sub_stream.destructure();
         let mut builder = SubStreamBuilderForPassThrough {
             record_type,
@@ -51,7 +54,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
             sub_streams,
             facts,
         };
-        build(&mut builder);
+        build(&mut builder)?;
         Ok(builder.close_pass_through())
     }
 
@@ -81,16 +84,16 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
                 .record_definition
                 .borrow()
                 .get_current_datum_definition_by_name(field.name())
-                .map(DatumDefinition::id);
-            if let Some(datum_id) = datum_id {
-                let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
-                let sub_record_definition = graph
-                    .get_stream(sub_stream.record_type())
-                    .with_trace_element(trace_element!(trace_name))?;
-                (datum_id, sub_stream, sub_record_definition)
-            } else {
-                panic!("could not find datum `{}`", field.name());
-            }
+                .ok_or_else(|| ChainError::FieldNotFound {
+                    field: field.name().to_owned(),
+                })
+                .with_trace_element(trace_element!(trace_name))?
+                .id();
+            let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
+            let sub_record_definition = graph
+                .get_stream(sub_stream.record_type())
+                .with_trace_element(trace_element!(trace_name))?;
+            (datum_id, sub_stream, sub_record_definition)
         };
 
         // Then find path input streams
@@ -104,20 +107,20 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
                 let datum_id = record_definition
                     .borrow()
                     .get_current_datum_definition_by_name(field.name())
-                    .map(DatumDefinition::id);
-                if let Some(datum_id) = datum_id {
-                    let sub_stream = stream
-                        .sub_streams_mut()
-                        .remove(&datum_id)
-                        .expect("sub stream");
-                    let sub_record_definition = graph
-                        .get_stream(sub_stream.record_type())
-                        .with_trace_element(trace_element!(trace_name))?;
-                    path_data.push(PathFieldDetails { stream, datum_id });
-                    Ok((path_data, sub_stream, sub_record_definition))
-                } else {
-                    panic!("could not find datum `{}`", field.name());
-                }
+                    .ok_or_else(|| ChainError::FieldNotFound {
+                        field: field.name().to_owned(),
+                    })
+                    .with_trace_element(trace_element!(trace_name))?
+                    .id();
+                let sub_stream = stream
+                    .sub_streams_mut()
+                    .remove(&datum_id)
+                    .expect("sub stream");
+                let sub_record_definition = graph
+                    .get_stream(sub_stream.record_type())
+                    .with_trace_element(trace_element!(trace_name))?;
+                path_data.push(PathFieldDetails { stream, datum_id });
+                Ok((path_data, sub_stream, sub_record_definition))
             },
         )?;
 
@@ -152,7 +155,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
         Ok(leaf_sub_output_stream)
     }
 
-    pub fn set_order_fact<I, F>(&mut self, order_fields: I)
+    pub fn set_order_fact<I, F>(&mut self, order_fields: I) -> ChainResult<()>
     where
         I: IntoIterator<Item = Directed<F>>,
         F: AsRef<str>,
@@ -161,15 +164,15 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
             &mut self.facts,
             order_fields,
             &*self.record_definition.borrow(),
-        );
+        )
     }
 
-    pub fn break_order_fact_at<I, F>(&mut self, fields: I)
+    pub fn break_order_fact_at<I, F>(&mut self, fields: I) -> ChainResult<()>
     where
         I: IntoIterator<Item = F>,
         F: AsRef<str>,
     {
-        break_order_fact_at(&mut self.facts, fields, &*self.record_definition.borrow());
+        break_order_fact_at(&mut self.facts, fields, &*self.record_definition.borrow())
     }
 
     pub fn break_order_fact_at_ids<I>(&mut self, datum_ids: I)
@@ -179,12 +182,12 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
         break_order_fact_at_ids(&mut self.facts, datum_ids);
     }
 
-    pub fn set_distinct_fact(&mut self, distinct_fields: &[&str]) {
+    pub fn set_distinct_fact(&mut self, distinct_fields: &[&str]) -> ChainResult<()> {
         set_distinct_fact(
             &mut self.facts,
             distinct_fields,
             &*self.record_definition.borrow(),
-        );
+        )
     }
 
     pub fn set_distinct_fact_ids<I>(&mut self, distinct_datum_ids: I)
@@ -198,12 +201,12 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
         set_distinct_fact_all_fields(&mut self.facts, &*self.record_definition.borrow());
     }
 
-    pub fn break_distinct_fact_for<I, F>(&mut self, fields: I)
+    pub fn break_distinct_fact_for<I, F>(&mut self, fields: I) -> ChainResult<()>
     where
         I: IntoIterator<Item = F>,
         F: AsRef<str>,
     {
-        break_distinct_fact_for(&mut self.facts, fields, &*self.record_definition.borrow());
+        break_distinct_fact_for(&mut self.facts, fields, &*self.record_definition.borrow())
     }
 
     pub fn break_distinct_fact_for_ids<I>(&mut self, datum_ids: I)
@@ -248,7 +251,7 @@ impl<'g, R: TypeResolver> SubStreamBuilderForPassThrough<'g, R> {
         )
     }
 
-    pub fn set_order_fact<I, F>(&mut self, order_fields: I)
+    pub fn set_order_fact<I, F>(&mut self, order_fields: I) -> ChainResult<()>
     where
         I: IntoIterator<Item = Directed<F>>,
         F: AsRef<str>,
@@ -257,7 +260,7 @@ impl<'g, R: TypeResolver> SubStreamBuilderForPassThrough<'g, R> {
             &mut self.facts,
             order_fields,
             &*self.record_definition.borrow(),
-        );
+        )
     }
 
     pub fn set_distinct_fact_all_fields(&mut self) {

@@ -71,8 +71,8 @@ impl TransformSpec for Unwrap {
         _update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
-    ) -> FactsFullyUpdated<()> {
-        facts_proof.order_facts_updated().distinct_facts_updated()
+    ) -> ChainResultWithTrace<FactsFullyUpdated<()>> {
+        Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }
 
     fn update_field(&self, _name: &str, _src: TokenStream) -> TokenStream {
@@ -192,8 +192,8 @@ impl SubTransformSpec for SubUnwrap {
         _update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
-    ) -> FactsFullyUpdated<()> {
-        facts_proof.order_facts_updated().distinct_facts_updated()
+    ) -> ChainResultWithTrace<FactsFullyUpdated<()>> {
+        Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }
 
     fn update_field(&self, _name: &str, _src: TokenStream) -> TokenStream {

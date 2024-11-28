@@ -82,15 +82,18 @@ impl FunctionProduce {
                     }
                 }
                 if let Some(order_fields) = valid_order_fields.as_ref() {
-                    output_stream.set_order_fact(
-                        order_fields
-                            .iter()
-                            .map(|field| field.as_ref().map(ValidFieldName::name)),
-                    );
+                    output_stream
+                        .set_order_fact(
+                            order_fields
+                                .iter()
+                                .map(|field| field.as_ref().map(ValidFieldName::name)),
+                        )
+                        .with_trace_element(trace_element!(FUNCTION_PRODUCE_TRACE_NAME))?;
                 }
                 if let Some(distinct_fields) = valid_distinct_fields.as_ref() {
                     output_stream
-                        .set_distinct_fact(distinct_fields.iter().map(ValidFieldName::name));
+                        .set_distinct_fact(distinct_fields.iter().map(ValidFieldName::name))
+                        .with_trace_element(trace_element!(FUNCTION_PRODUCE_TRACE_NAME))?;
                 }
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;

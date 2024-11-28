@@ -329,14 +329,14 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R, DerivedExt
         trace_name: &str,
     ) -> ChainResultWithTrace<NodeSubStream>
     where
-        B: FnOnce(&mut SubStreamBuilderForPassThrough<'g, R>),
+        B: FnOnce(&mut SubStreamBuilderForPassThrough<'g, R>) -> ChainResultWithTrace<()>,
     {
         self.pass_through(|output_stream, facts_proof| {
             let path_sub_stream = output_stream.pass_through_path(
                 path_fields,
                 |sub_input_stream, output_stream| {
                     output_stream
-                        .pass_through_sub_stream(sub_input_stream, graph, build)
+                        .pass_through_sub_stream(sub_input_stream, graph, build, trace_name)
                         .with_trace_element(trace_element!(trace_name))
                 },
                 graph,
@@ -437,7 +437,8 @@ pub fn set_order_fact<R: TypeResolver, I, F>(
     facts: &mut StreamFacts,
     order_fields: I,
     record_definition: &RecordDefinitionBuilder<R>,
-) where
+) -> ChainResult<()>
+where
     I: IntoIterator<Item = Directed<F>>,
     F: AsRef<str>,
 {
@@ -445,38 +446,49 @@ pub fn set_order_fact<R: TypeResolver, I, F>(
     let mut seen = BTreeSet::<DatumId>::new();
     let order = order_fields
         .into_iter()
-        .filter_map(|field| {
+        .map(|field| {
             let datum_id = record_definition
                 .get_current_datum_definition_by_name((*field).as_ref())
-                .expect("datum")
+                .ok_or_else(|| ChainError::FieldNotFound {
+                    field: (*field).as_ref().to_owned(),
+                })?
                 .id();
-            (!seen.contains(&datum_id)).then(|| {
+            Ok((!seen.contains(&datum_id)).then(|| {
                 seen.insert(datum_id);
                 field.as_ref().map(|_| datum_id)
-            })
+            }))
         })
-        .collect::<Vec<Directed<DatumId>>>();
+        .filter_map(|res| res.transpose())
+        .collect::<Result<Vec<Directed<DatumId>>, _>>()?;
     assert_eq!(seen.len(), order.len());
     facts.set_order(order);
+    Ok(())
 }
 
 pub fn break_order_fact_at<R: TypeResolver, I, F>(
     facts: &mut StreamFacts,
     fields: I,
     record_definition: &RecordDefinitionBuilder<R>,
-) where
+) -> ChainResult<()>
+where
     I: IntoIterator<Item = F>,
     F: AsRef<str>,
 {
     break_order_fact_at_ids(
         facts,
-        fields.into_iter().map(|field| {
-            record_definition
-                .get_current_datum_definition_by_name(field.as_ref())
-                .expect("datum")
-                .id()
-        }),
+        fields
+            .into_iter()
+            .map(|field| {
+                Ok(record_definition
+                    .get_current_datum_definition_by_name(field.as_ref())
+                    .ok_or_else(|| ChainError::FieldNotFound {
+                        field: field.as_ref().to_owned(),
+                    })?
+                    .id())
+            })
+            .collect::<Result<Vec<_>, _>>()?,
     );
+    Ok(())
 }
 
 pub fn break_order_fact_at_ids<I>(facts: &mut StreamFacts, datum_ids: I)
@@ -589,20 +601,27 @@ pub fn set_distinct_fact<R: TypeResolver, I, F>(
     facts: &mut StreamFacts,
     distinct_fields: I,
     record_definition: &RecordDefinitionBuilder<R>,
-) where
+) -> ChainResult<()>
+where
     I: IntoIterator<Item = F>,
     F: AsRef<str>,
 {
     set_distinct_fact_ids(
         facts,
-        distinct_fields.into_iter().map(|field| {
-            let datum_id = record_definition
-                .get_current_datum_definition_by_name(field.as_ref())
-                .expect("datum")
-                .id();
-            datum_id
-        }),
+        distinct_fields
+            .into_iter()
+            .map(|field| {
+                let datum_id = record_definition
+                    .get_current_datum_definition_by_name(field.as_ref())
+                    .ok_or_else(|| ChainError::FieldNotFound {
+                        field: field.as_ref().to_owned(),
+                    })?
+                    .id();
+                Ok(datum_id)
+            })
+            .collect::<Result<Vec<_>, _>>()?,
     );
+    Ok(())
 }
 
 pub fn set_distinct_fact_ids<I>(facts: &mut StreamFacts, distinct_datum_ids: I)
@@ -628,19 +647,26 @@ pub fn break_distinct_fact_for<R: TypeResolver, I, F>(
     facts: &mut StreamFacts,
     fields: I,
     record_definition: &RecordDefinitionBuilder<R>,
-) where
+) -> ChainResult<()>
+where
     I: IntoIterator<Item = F>,
     F: AsRef<str>,
 {
     break_distinct_fact_for_ids(
         facts,
-        fields.into_iter().map(|field| {
-            record_definition
-                .get_current_datum_definition_by_name(field.as_ref())
-                .expect("datum")
-                .id()
-        }),
+        fields
+            .into_iter()
+            .map(|field| {
+                Ok(record_definition
+                    .get_current_datum_definition_by_name(field.as_ref())
+                    .ok_or_else(|| ChainError::FieldNotFound {
+                        field: field.as_ref().to_owned(),
+                    })?
+                    .id())
+            })
+            .collect::<Result<Vec<_>, _>>()?,
     );
+    Ok(())
 }
 
 pub fn break_distinct_fact_for_ids<I>(facts: &mut StreamFacts, datum_ids: I)

@@ -39,11 +39,13 @@ impl Sort {
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!(SORT_TRACE_NAME))?
             .pass_through(|builder, facts_proof| {
-                builder.set_order_fact(
-                    valid_fields
-                        .iter()
-                        .map(|field| field.as_ref().map(ValidFieldName::name)),
-                );
+                builder
+                    .set_order_fact(
+                        valid_fields
+                            .iter()
+                            .map(|field| field.as_ref().map(ValidFieldName::name)),
+                    )
+                    .with_trace_element(trace_element!(SORT_TRACE_NAME))?;
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
         let outputs = streams
@@ -151,11 +153,14 @@ impl SubSort {
                 graph,
                 &valid_path_fields,
                 |sub_output_stream| {
-                    sub_output_stream.set_order_fact(
-                        valid_fields
-                            .iter()
-                            .map(|field| field.as_ref().map(ValidFieldName::name)),
-                    )
+                    sub_output_stream
+                        .set_order_fact(
+                            valid_fields
+                                .iter()
+                                .map(|field| field.as_ref().map(ValidFieldName::name)),
+                        )
+                        .with_trace_element(trace_element!(SUB_SORT_TRACE_NAME))?;
+                    Ok(())
                 },
                 SUB_SORT_TRACE_NAME,
             )?;
