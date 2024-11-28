@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
-use crate::{prelude::*, trace_filter};
+use crate::{prelude::*, trace_element};
 
 const FUNCTION_TERMINATE_TRACE_NAME: &str = "function_terminate";
 
@@ -28,17 +28,15 @@ impl<const N: usize> FunctionTerminate<N> {
         name: FullyQualifiedName,
         inputs: [NodeStream; N],
         params: FunctionTerminateParams,
-        trace: Trace,
-    ) -> ChainResult<Self> {
-        let valid_body =
-            params
-                .body
-                .parse::<TokenStream>()
-                .map_err(|err| ChainError::InvalidTokenStream {
-                    name: "body".to_owned(),
-                    msg: err.to_string(),
-                    trace: trace_filter!(trace, FUNCTION_TERMINATE_TRACE_NAME),
-                })?;
+    ) -> ChainResultWithTrace<Self> {
+        let valid_body = params
+            .body
+            .parse::<TokenStream>()
+            .map_err(|err| ChainError::InvalidTokenStream {
+                name: "body".to_owned(),
+                msg: err.to_string(),
+            })
+            .with_trace_element(trace_element!(FUNCTION_TERMINATE_TRACE_NAME))?;
 
         Ok(Self {
             name,
@@ -116,7 +114,6 @@ pub fn function_terminate<const N: usize, R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; N],
     params: FunctionTerminateParams,
-    trace: Trace,
-) -> ChainResult<FunctionTerminate<N>> {
-    FunctionTerminate::new(graph, name, inputs, params, trace)
+) -> ChainResultWithTrace<FunctionTerminate<N>> {
+    FunctionTerminate::new(graph, name, inputs, params)
 }

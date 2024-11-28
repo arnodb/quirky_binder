@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
-use crate::{prelude::*, support::eq::fields_eq, trace_filter};
+use crate::{prelude::*, support::eq::fields_eq, trace_element};
 
 const DEDUP_TRACE_NAME: &str = "dedup";
 
@@ -20,16 +20,18 @@ impl Dedup {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
-        trace: Trace,
-    ) -> ChainResult<Self> {
+    ) -> ChainResultWithTrace<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
-            .output_from_input(0, true, graph, || trace_filter!(trace, DEDUP_TRACE_NAME))?
+            .output_from_input(0, true, graph)
+            .with_trace_element(trace_element!(DEDUP_TRACE_NAME))?
             .pass_through(|output_stream, facts_proof| {
                 output_stream.set_distinct_fact_all_fields();
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
-        let outputs = streams.build(|| trace_filter!(trace, DEDUP_TRACE_NAME))?;
+        let outputs = streams
+            .build()
+            .with_trace_element(trace_element!(DEDUP_TRACE_NAME))?;
         Ok(Self {
             name,
             inputs,
@@ -78,9 +80,8 @@ pub fn dedup<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: (),
-    trace: Trace,
-) -> ChainResult<Dedup> {
-    Dedup::new(graph, name, inputs, params, trace)
+) -> ChainResultWithTrace<Dedup> {
+    Dedup::new(graph, name, inputs, params)
 }
 
 const SUB_DEDUP_TRACE_NAME: &str = "sub_dedup";
@@ -109,33 +110,28 @@ impl SubDedup {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SubDedupParams,
-        trace: Trace,
-    ) -> ChainResult<Self> {
-        let (valid_path_fields, _) =
-            params
-                .path_fields
-                .validate_path_on_stream(inputs.single(), graph, || {
-                    trace_filter!(trace, SUB_DEDUP_TRACE_NAME)
-                })?;
+    ) -> ChainResultWithTrace<Self> {
+        let (valid_path_fields, _) = params
+            .path_fields
+            .validate_path_on_stream(inputs.single(), graph)
+            .with_trace_element(trace_element!(SUB_DEDUP_TRACE_NAME))?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         let path_sub_stream = streams
-            .output_from_input(0, true, graph, || {
-                trace_filter!(trace, SUB_DEDUP_TRACE_NAME)
-            })?
+            .output_from_input(0, true, graph)
+            .with_trace_element(trace_element!(SUB_DEDUP_TRACE_NAME))?
             .pass_through(|output_stream, facts_proof| {
                 let path_sub_stream = output_stream.pass_through_path(
                     &valid_path_fields,
                     |sub_input_stream, output_stream| {
-                        output_stream.pass_through_sub_stream(
-                            sub_input_stream,
-                            graph,
-                            |sub_output_stream| sub_output_stream.set_distinct_fact_all_fields(),
-                            || trace_filter!(trace, SUB_DEDUP_TRACE_NAME),
-                        )
+                        output_stream
+                            .pass_through_sub_stream(sub_input_stream, graph, |sub_output_stream| {
+                                sub_output_stream.set_distinct_fact_all_fields()
+                            })
+                            .with_trace_element(trace_element!(SUB_DEDUP_TRACE_NAME))
                     },
                     graph,
-                    || trace_filter!(trace, SUB_DEDUP_TRACE_NAME),
+                    SUB_DEDUP_TRACE_NAME,
                 )?;
                 Ok(facts_proof
                     .order_facts_updated()
@@ -143,7 +139,9 @@ impl SubDedup {
                     .with_output(path_sub_stream))
             })?;
 
-        let outputs = streams.build(|| trace_filter!(trace, SUB_DEDUP_TRACE_NAME))?;
+        let outputs = streams
+            .build()
+            .with_trace_element(trace_element!(SUB_DEDUP_TRACE_NAME))?;
 
         Ok(Self {
             name,
@@ -217,7 +215,6 @@ pub fn sub_dedup<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubDedupParams,
-    trace: Trace,
-) -> ChainResult<SubDedup> {
-    SubDedup::new(graph, name, inputs, params, trace)
+) -> ChainResultWithTrace<SubDedup> {
+    SubDedup::new(graph, name, inputs, params)
 }

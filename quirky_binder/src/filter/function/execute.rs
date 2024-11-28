@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
-use crate::{prelude::*, trace_filter};
+use crate::{prelude::*, trace_element};
 
 const FUNCTION_EXECUTE_TRACE_NAME: &str = "function_execute";
 
@@ -30,17 +30,15 @@ impl FunctionExecute {
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
         params: FunctionExecuteParams,
-        trace: Trace,
-    ) -> ChainResult<Self> {
-        let valid_body =
-            params
-                .body
-                .parse::<TokenStream>()
-                .map_err(|err| ChainError::InvalidTokenStream {
-                    name: "body".to_owned(),
-                    msg: err.to_string(),
-                    trace: trace_filter!(trace, FUNCTION_EXECUTE_TRACE_NAME),
-                })?;
+    ) -> ChainResultWithTrace<Self> {
+        let valid_body = params
+            .body
+            .parse::<TokenStream>()
+            .map_err(|err| ChainError::InvalidTokenStream {
+                name: "body".to_owned(),
+                msg: err.to_string(),
+            })
+            .with_trace_element(trace_element!(FUNCTION_EXECUTE_TRACE_NAME))?;
 
         Ok(Self {
             name,
@@ -88,7 +86,6 @@ pub fn function_execute<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 0],
     params: FunctionExecuteParams,
-    trace: Trace,
-) -> ChainResult<FunctionExecute> {
-    FunctionExecute::new(graph, name, inputs, params, trace)
+) -> ChainResultWithTrace<FunctionExecute> {
+    FunctionExecute::new(graph, name, inputs, params)
 }

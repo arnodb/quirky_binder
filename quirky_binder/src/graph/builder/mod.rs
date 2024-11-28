@@ -14,7 +14,7 @@ use self::{
     params::ParamsBuilder, pass_through::OutputBuilderForPassThrough,
     update::OutputBuilderForUpdate,
 };
-use crate::prelude::*;
+use crate::{prelude::*, trace_element};
 
 pub mod params;
 pub mod pass_through;
@@ -34,14 +34,7 @@ pub struct GraphBuilder<R: TypeResolver + Copy> {
 }
 
 impl<R: TypeResolver + Copy> GraphBuilder<R> {
-    pub fn new_stream<TRACE>(
-        &mut self,
-        record_type: StreamRecordType,
-        trace: TRACE,
-    ) -> ChainResult<()>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    pub fn new_stream(&mut self, record_type: StreamRecordType) -> ChainResult<()> {
         match self.record_definitions.entry(record_type) {
             Entry::Vacant(entry) => {
                 let record_definition_builder = RecordDefinitionBuilder::new(self.type_resolver);
@@ -50,7 +43,6 @@ impl<R: TypeResolver + Copy> GraphBuilder<R> {
             }
             Entry::Occupied(entry) => Err(ChainError::StreamAlreadyExists {
                 stream: entry.key().to_string(),
-                trace: trace(),
             }),
         }
     }
@@ -61,19 +53,14 @@ impl<R: TypeResolver + Copy> GraphBuilder<R> {
         anchor_table_id
     }
 
-    pub fn get_stream<TRACE>(
+    pub fn get_stream(
         &self,
         record_type: &StreamRecordType,
-        trace: TRACE,
-    ) -> ChainResult<&RefCell<RecordDefinitionBuilder<R>>>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    ) -> ChainResult<&RefCell<RecordDefinitionBuilder<R>>> {
         self.record_definitions
             .get(record_type)
             .ok_or_else(|| ChainError::StreamNotFound {
                 stream: record_type.to_string(),
-                trace: trace(),
             })
     }
 
@@ -115,70 +102,50 @@ impl<'a> StreamsBuilder<'a> {
         }
     }
 
-    pub fn new_main_stream<R: TypeResolver + Copy, TRACE>(
+    pub fn new_main_stream<R: TypeResolver + Copy>(
         &mut self,
         graph: &mut GraphBuilder<R>,
-        trace: TRACE,
-    ) -> ChainResult<()>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    ) -> ChainResult<()> {
         let full_name = self.name.clone();
         let record_type = StreamRecordType::from(full_name);
-        graph.new_stream(record_type, trace)
+        graph.new_stream(record_type)
     }
 
-    pub fn new_named_stream<R: TypeResolver + Copy, TRACE>(
+    pub fn new_named_stream<R: TypeResolver + Copy>(
         &mut self,
         name: &str,
         graph: &mut GraphBuilder<R>,
-        trace: TRACE,
-    ) -> ChainResult<()>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    ) -> ChainResult<()> {
         let full_name = self.name.sub(name);
         let record_type = StreamRecordType::from(full_name);
-        graph.new_stream(record_type, trace)
+        graph.new_stream(record_type)
     }
 
-    pub fn new_main_output<'b, 'g, R: TypeResolver + Copy, TRACE>(
+    pub fn new_main_output<'b, 'g, R: TypeResolver + Copy>(
         &'b mut self,
         graph: &'g GraphBuilder<R>,
-        trace: TRACE,
-    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, ()>>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, ()>> {
         let full_name = self.name.clone();
-        self.new_output_internal(graph, full_name, true, trace)
+        self.new_output_internal(graph, full_name, true)
     }
 
-    pub fn new_named_output<'b, 'g, R: TypeResolver + Copy, TRACE>(
+    pub fn new_named_output<'b, 'g, R: TypeResolver + Copy>(
         &'b mut self,
         name: &str,
         graph: &'g GraphBuilder<R>,
-        trace: TRACE,
-    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, ()>>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, ()>> {
         let full_name = self.name.sub(name);
-        self.new_output_internal(graph, full_name, false, trace)
+        self.new_output_internal(graph, full_name, false)
     }
 
-    fn new_output_internal<'b, 'g, R: TypeResolver + Copy, TRACE>(
+    fn new_output_internal<'b, 'g, R: TypeResolver + Copy>(
         &'b mut self,
         graph: &'g GraphBuilder<R>,
         full_name: FullyQualifiedName,
         is_output_main_stream: bool,
-        trace: TRACE,
-    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, ()>>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, ()>> {
         let record_type = StreamRecordType::from(full_name.clone());
-        let record_definition = graph.get_stream(&record_type, trace)?;
+        let record_definition = graph.get_stream(&record_type)?;
         Ok(OutputBuilder {
             streams: self,
             record_type,
@@ -191,25 +158,20 @@ impl<'a> StreamsBuilder<'a> {
         })
     }
 
-    pub fn output_from_input<'b, 'g, R: TypeResolver + Copy, TRACE>(
+    pub fn output_from_input<'b, 'g, R: TypeResolver + Copy>(
         &'b mut self,
         input_index: usize,
         is_output_main_stream: bool,
         graph: &'g GraphBuilder<R>,
-        trace: TRACE,
-    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, DerivedExtra>>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, DerivedExtra>> {
         let input = &self.inputs[input_index];
         if let Some(output_index) = self.in_out_links[input_index] {
             return Err(ChainError::InputAlreadyDerived {
                 input_index,
                 output_index,
-                trace: trace(),
             });
         }
-        let record_definition = graph.get_stream(input.record_type(), trace)?;
+        let record_definition = graph.get_stream(input.record_type())?;
         let output_index = self.outputs.len();
         self.in_out_links[input_index] = Some(output_index);
         let source = self.name.clone().into();
@@ -227,16 +189,12 @@ impl<'a> StreamsBuilder<'a> {
         })
     }
 
-    pub fn build<const OUT: usize, TRACE>(self, trace: TRACE) -> ChainResult<[NodeStream; OUT]>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    pub fn build<const OUT: usize>(self) -> ChainResult<[NodeStream; OUT]> {
         self.outputs
             .try_into()
             .map_err(|err: Vec<_>| ChainError::UnexpectedNumberOfStreams {
                 expected: OUT,
                 actual: err.len(),
-                trace: trace(),
             })
     }
 }
@@ -256,12 +214,12 @@ pub struct OutputBuilder<'a, 'b, 'g, R: TypeResolver, Extra> {
 }
 
 impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilder<'a, 'b, 'g, R, Extra> {
-    pub fn update<B, O>(self, build: B) -> ChainResult<O>
+    pub fn update<B, O>(self, build: B) -> ChainResultWithTrace<O>
     where
         B: FnOnce(
             &mut OutputBuilderForUpdate<'a, 'b, 'g, R, Extra>,
             NoFactsUpdated<()>,
-        ) -> ChainResult<FactsFullyUpdated<O>>,
+        ) -> ChainResultWithTrace<FactsFullyUpdated<O>>,
     {
         let mut builder = OutputBuilderForUpdate {
             streams: self.streams,
@@ -278,26 +236,25 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilder<'a, 'b, 'g, R, Ext
         Ok(output.unwrap())
     }
 
-    pub fn update_path<B, TRACE>(
+    pub fn update_path<B>(
         self,
         graph: &'g GraphBuilder<R>,
         path_fields: &[ValidFieldName],
         build: B,
-        trace: TRACE,
-    ) -> ChainResult<Vec<PathUpdateElement>>
+        trace_name: &str,
+    ) -> ChainResultWithTrace<Vec<PathUpdateElement>>
     where
         B: for<'c, 'd> FnOnce(
             &mut OutputBuilderForUpdate<'c, 'd, 'g, R, Extra>,
             &mut SubStreamBuilderForUpdate<'g, R>,
             NoFactsUpdated<()>,
-        ) -> ChainResult<FactsFullyUpdated<()>>,
-        TRACE: Fn() -> Trace<'static> + Copy,
+        ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
     {
         self.update(|output_stream, facts_proof| {
             let path_streams = output_stream.update_path(
                 path_fields,
                 |sub_input_stream, output_stream| {
-                    output_stream.update_sub_stream(sub_input_stream, graph, build, trace)
+                    output_stream.update_sub_stream(sub_input_stream, graph, build, trace_name)
                 },
                 |field: &str, path_stream, sub_output_stream, facts_proof| {
                     let module_name = graph
@@ -309,7 +266,9 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilder<'a, 'b, 'g, R, Ext
                         module_name = module_name,
                         group_variant_id = sub_output_stream.variant_id(),
                     );
-                    path_stream.replace_vec_datum(field, record, sub_output_stream, trace)?;
+                    path_stream
+                        .replace_vec_datum(field, record, sub_output_stream)
+                        .with_trace_element(trace_element!(trace_name))?;
                     Ok(facts_proof.order_facts_updated().distinct_facts_updated())
                 },
                 |field: &str, output_stream, sub_output_stream| {
@@ -322,11 +281,13 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilder<'a, 'b, 'g, R, Ext
                         module_name = module_name,
                         group_variant_id = sub_output_stream.variant_id(),
                     );
-                    output_stream.replace_vec_datum(field, record, sub_output_stream, trace)?;
+                    output_stream
+                        .replace_vec_datum(field, record, sub_output_stream)
+                        .with_trace_element(trace_element!(trace_name))?;
                     Ok(())
                 },
                 graph,
-                trace,
+                trace_name,
             )?;
 
             Ok(facts_proof
@@ -338,12 +299,12 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilder<'a, 'b, 'g, R, Ext
 }
 
 impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R, DerivedExtra> {
-    pub fn pass_through<B, O>(self, build: B) -> ChainResult<O>
+    pub fn pass_through<B, O>(self, build: B) -> ChainResultWithTrace<O>
     where
         B: FnOnce(
             &mut OutputBuilderForPassThrough<'a, 'b, 'g, R>,
             NoFactsUpdated<()>,
-        ) -> ChainResult<FactsFullyUpdated<O>>,
+        ) -> ChainResultWithTrace<FactsFullyUpdated<O>>,
     {
         let mut builder = OutputBuilderForPassThrough {
             streams: self.streams,
@@ -360,25 +321,26 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R, DerivedExt
         Ok(output.unwrap())
     }
 
-    pub fn pass_through_path<B, TRACE>(
+    pub fn pass_through_path<B>(
         self,
         graph: &'g GraphBuilder<R>,
         path_fields: &[ValidFieldName],
         build: B,
-        trace: TRACE,
-    ) -> ChainResult<NodeSubStream>
+        trace_name: &str,
+    ) -> ChainResultWithTrace<NodeSubStream>
     where
         B: FnOnce(&mut SubStreamBuilderForPassThrough<'g, R>),
-        TRACE: Fn() -> Trace<'static> + Copy,
     {
         self.pass_through(|output_stream, facts_proof| {
             let path_sub_stream = output_stream.pass_through_path(
                 path_fields,
                 |sub_input_stream, output_stream| {
-                    output_stream.pass_through_sub_stream(sub_input_stream, graph, build, trace)
+                    output_stream
+                        .pass_through_sub_stream(sub_input_stream, graph, build)
+                        .with_trace_element(trace_element!(trace_name))
                 },
                 graph,
-                trace,
+                trace_name,
             )?;
             Ok(facts_proof
                 .order_facts_updated()
@@ -445,20 +407,15 @@ fn add_vec_datum_to_record_definition<R: TypeResolver>(
     )
 }
 
-fn replace_vec_datum_in_record_definition<R: TypeResolver, TRACE>(
+fn replace_vec_datum_in_record_definition<R: TypeResolver>(
     record_definition: &mut RecordDefinitionBuilder<R>,
     field: &str,
     record: &str,
-    trace: TRACE,
-) -> ChainResult<(DatumId, DatumId)>
-where
-    TRACE: Fn() -> Trace<'static>,
-{
+) -> ChainResult<(DatumId, DatumId)> {
     let old_datum = record_definition
         .get_current_datum_definition_by_name(field)
         .ok_or_else(|| ChainError::FieldNotFound {
             field: field.to_owned(),
-            trace: trace(),
         })?;
     let old_datum_id = old_datum.id();
     record_definition.remove_datum(old_datum_id);
@@ -530,16 +487,14 @@ where
     facts.break_order_at_ids(&datum_ids);
 }
 
-pub fn check_undirected_order_starts_with<R, TRACE>(
+pub fn check_undirected_order_starts_with<R>(
     expected_order: &[DatumId],
     actual_order: &[Directed<DatumId>],
     record_definition: &RecordDefinitionBuilder<R>,
     more_info: &str,
-    trace: TRACE,
 ) -> ChainResult<()>
 where
     R: TypeResolver,
-    TRACE: Fn() -> Trace<'static>,
 {
     assert!(expected_order.iter().all_unique());
 
@@ -577,23 +532,20 @@ where
             more_info: more_info.to_owned(),
             expected,
             actual,
-            trace: trace(),
         });
     }
 
     Ok(())
 }
 
-pub fn check_directed_order_starts_with<R, TRACE>(
+pub fn check_directed_order_starts_with<R>(
     expected_order: &[DatumId],
     actual_order: &[Directed<DatumId>],
     record_definition: &RecordDefinitionBuilder<R>,
     more_info: &str,
-    trace: TRACE,
 ) -> ChainResult<()>
 where
     R: TypeResolver,
-    TRACE: Fn() -> Trace<'static>,
 {
     assert!(expected_order.iter().all_unique());
 
@@ -627,7 +579,6 @@ where
             more_info: more_info.to_owned(),
             expected,
             actual,
-            trace: trace(),
         });
     }
 
@@ -704,16 +655,14 @@ where
     }
 }
 
-pub fn check_distinct_eq<R, TRACE>(
+pub fn check_distinct_eq<R>(
     expected_distinct: &[DatumId],
     actual_distinct: &[DatumId],
     record_definition: &RecordDefinitionBuilder<R>,
     more_info: &str,
-    trace: TRACE,
 ) -> ChainResult<()>
 where
     R: TypeResolver,
-    TRACE: Fn() -> Trace<'static>,
 {
     assert!(expected_distinct.iter().all_unique());
 
@@ -744,7 +693,6 @@ where
             more_info: more_info.to_owned(),
             expected,
             actual,
-            trace: trace(),
         });
     }
 

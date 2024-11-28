@@ -6,14 +6,7 @@ use truc::record::{
     type_resolver::TypeResolver,
 };
 
-use crate::{
-    chain::{error::ChainError, ChainResult, Trace},
-    prelude::{GraphBuilder, NodeStream},
-    support::{
-        cmp::Directed,
-        valid::{ValidFieldName, ValidFieldType},
-    },
-};
+use crate::{prelude::*, trace_element};
 
 #[derive(Deserialize, Debug, Deref)]
 pub struct FieldsParam<'a>(#[serde(borrow)] Box<[&'a str]>);
@@ -23,10 +16,13 @@ impl<'a> FieldsParam<'a> {
         Self(Default::default())
     }
 
-    pub fn validate<L, TRACE>(self, lookup: L, trace: TRACE) -> ChainResult<Vec<ValidFieldName>>
+    pub fn validate<L>(
+        self,
+        lookup: L,
+        trace_name: &str,
+    ) -> ChainResultWithTrace<Vec<ValidFieldName>>
     where
         L: Fn(&ValidFieldName) -> bool,
-        TRACE: Fn() -> Trace<'static> + Copy,
     {
         self.validate_ext(
             |name| {
@@ -35,55 +31,52 @@ impl<'a> FieldsParam<'a> {
                 } else {
                     Err(ChainError::FieldNotFound {
                         field: name.name().to_owned(),
-                        trace: trace(),
                     })
+                    .with_trace_element(trace_element!(trace_name))
                 }
             },
-            trace,
+            trace_name,
         )
     }
 
-    pub fn validate_ext<L, O, TRACE>(self, lookup: L, trace: TRACE) -> ChainResult<Vec<O>>
+    pub fn validate_ext<L, O>(self, lookup: L, trace_name: &str) -> ChainResultWithTrace<Vec<O>>
     where
-        L: Fn(ValidFieldName) -> ChainResult<O>,
-        TRACE: Fn() -> Trace<'static>,
+        L: Fn(ValidFieldName) -> ChainResultWithTrace<O>,
     {
         let valid_fields = self
             .iter()
             .map(|name| {
-                let valid =
-                    ValidFieldName::try_from(*name).map_err(|_| ChainError::InvalidFieldName {
+                let valid = ValidFieldName::try_from(*name)
+                    .map_err(|_| ChainError::InvalidFieldName {
                         name: (*name).to_owned(),
-                        trace: trace(),
-                    })?;
+                    })
+                    .with_trace_element(trace_element!(trace_name))?;
                 lookup(valid)
             })
             .collect::<Result<Vec<_>, _>>()?;
         Ok(valid_fields)
     }
 
-    pub fn validate_on_record_definition<R, TRACE>(
+    pub fn validate_on_record_definition<R>(
         self,
         def: &RecordDefinitionBuilder<R>,
-        trace: TRACE,
-    ) -> ChainResult<Vec<ValidFieldName>>
+        trace_name: &str,
+    ) -> ChainResultWithTrace<Vec<ValidFieldName>>
     where
         R: TypeResolver,
-        TRACE: Fn() -> Trace<'static> + Copy,
     {
-        self.validate_on_record_definition_ext(def, |name, _datum| Ok(name), trace)
+        self.validate_on_record_definition_ext(def, |name, _datum| Ok(name), trace_name)
     }
 
-    pub fn validate_on_record_definition_ext<R, M, O, TRACE>(
+    pub fn validate_on_record_definition_ext<R, M, O>(
         self,
         def: &RecordDefinitionBuilder<R>,
         try_map: M,
-        trace: TRACE,
-    ) -> ChainResult<Vec<O>>
+        trace_name: &str,
+    ) -> ChainResultWithTrace<Vec<O>>
     where
         R: TypeResolver,
-        M: Fn(ValidFieldName, &DatumDefinition) -> ChainResult<O>,
-        TRACE: Fn() -> Trace<'static> + Copy,
+        M: Fn(ValidFieldName, &DatumDefinition) -> ChainResultWithTrace<O>,
     {
         self.validate_ext(
             |name| {
@@ -92,68 +85,65 @@ impl<'a> FieldsParam<'a> {
                 } else {
                     Err(ChainError::FieldNotFound {
                         field: name.name().to_owned(),
-                        trace: trace(),
                     })
+                    .with_trace_element(trace_element!(trace_name))
                 }
             },
-            trace,
+            trace_name,
         )
     }
 
-    pub fn validate_on_stream<R, TRACE>(
+    pub fn validate_on_stream<R>(
         self,
         stream: &NodeStream,
         graph: &GraphBuilder<R>,
-        trace: TRACE,
-    ) -> ChainResult<Vec<ValidFieldName>>
+        trace_name: &str,
+    ) -> ChainResultWithTrace<Vec<ValidFieldName>>
     where
         R: TypeResolver + Copy,
-        TRACE: Fn() -> Trace<'static> + Copy,
     {
-        self.validate_on_stream_ext(stream, graph, |name, _datum| Ok(name), trace)
+        self.validate_on_stream_ext(stream, graph, |name, _datum| Ok(name), trace_name)
     }
 
-    pub fn validate_on_stream_ext<R, M, O, TRACE>(
+    pub fn validate_on_stream_ext<R, M, O>(
         self,
         stream: &NodeStream,
         graph: &GraphBuilder<R>,
         try_map: M,
-        trace: TRACE,
-    ) -> ChainResult<Vec<O>>
+        trace_name: &str,
+    ) -> ChainResultWithTrace<Vec<O>>
     where
         R: TypeResolver + Copy,
-        M: Fn(ValidFieldName, &DatumDefinition) -> ChainResult<O>,
-        TRACE: Fn() -> Trace<'static> + Copy,
+        M: Fn(ValidFieldName, &DatumDefinition) -> ChainResultWithTrace<O>,
     {
-        let def = graph.get_stream(stream.record_type(), trace)?.borrow();
-        self.validate_on_record_definition_ext(&def, try_map, trace)
+        let def = graph
+            .get_stream(stream.record_type())
+            .with_trace_element(trace_element!(trace_name))?
+            .borrow();
+        self.validate_on_record_definition_ext(&def, try_map, trace_name)
     }
 
-    pub fn validate_path_on_stream<'g, R, TRACE>(
+    pub fn validate_path_on_stream<'g, R>(
         self,
         stream: &NodeStream,
         graph: &'g GraphBuilder<R>,
-        trace: TRACE,
     ) -> ChainResult<(Vec<ValidFieldName>, Ref<'g, RecordDefinitionBuilder<R>>)>
     where
         R: TypeResolver + Copy,
-        TRACE: Fn() -> Trace<'static> + Copy,
     {
         let (valid_first, mut s, mut def) = {
             let valid =
                 ValidFieldName::try_from(self[0]).map_err(|_| ChainError::InvalidFieldName {
                     name: (self[0]).to_owned(),
-                    trace: trace(),
                 })?;
-            let def = graph.get_stream(stream.record_type(), trace)?.borrow();
+            let def = graph.get_stream(stream.record_type())?.borrow();
             let datum = def
                 .get_current_datum_definition_by_name(valid.name())
                 .ok_or_else(|| ChainError::FieldNotFound {
                     field: valid.name().to_owned(),
-                    trace: trace(),
                 })?;
             let s = &stream.sub_streams()[&datum.id()];
-            let def = graph.get_stream(s.record_type(), trace)?.borrow();
+            let def = graph.get_stream(s.record_type())?.borrow();
             (valid, s, def)
         };
         let valid_fields = once(Ok(valid_first))
@@ -161,16 +151,14 @@ impl<'a> FieldsParam<'a> {
                 let valid =
                     ValidFieldName::try_from(*name).map_err(|_| ChainError::InvalidFieldName {
                         name: (*name).to_owned(),
-                        trace: trace(),
                     })?;
                 let datum = def
                     .get_current_datum_definition_by_name(valid.name())
                     .ok_or_else(|| ChainError::FieldNotFound {
                         field: (valid.name()).to_owned(),
-                        trace: trace(),
                     })?;
                 s = &s.sub_streams()[&datum.id()];
-                def = graph.get_stream(s.record_type(), trace)?.borrow();
+                def = graph.get_stream(s.record_type())?.borrow();
                 Ok(valid)
             }))
             .collect::<Result<Vec<_>, _>>()?;
@@ -182,14 +170,9 @@ impl<'a> FieldsParam<'a> {
 pub struct DirectedFieldsParam<'a>(#[serde(borrow)] Box<[Directed<&'a str>]>);
 
 impl<'a> DirectedFieldsParam<'a> {
-    pub fn validate<L, TRACE>(
-        self,
-        lookup: L,
-        trace: TRACE,
-    ) -> ChainResult<Vec<Directed<ValidFieldName>>>
+    pub fn validate<L>(self, lookup: L) -> ChainResult<Vec<Directed<ValidFieldName>>>
     where
         L: Fn(&str) -> bool,
-        TRACE: Fn() -> Trace<'static>,
     {
         let valid_fields = self
             .iter()
@@ -197,13 +180,11 @@ impl<'a> DirectedFieldsParam<'a> {
                 let valid = ValidFieldName::try_from(**dir_name).map_err(|_| {
                     ChainError::InvalidFieldName {
                         name: (**dir_name).to_owned(),
-                        trace: trace(),
                     }
                 })?;
                 if !lookup(valid.name()) {
                     return Err(ChainError::FieldNotFound {
                         field: valid.name().to_owned(),
-                        trace: trace(),
                     });
                 }
                 Ok(dir_name.map(|_name| valid))
@@ -212,33 +193,26 @@ impl<'a> DirectedFieldsParam<'a> {
         Ok(valid_fields)
     }
 
-    pub fn validate_on_record_definition<R, TRACE>(
+    pub fn validate_on_record_definition<R>(
         self,
         def: &RecordDefinitionBuilder<R>,
-        trace: TRACE,
     ) -> ChainResult<Vec<Directed<ValidFieldName>>>
     where
         R: TypeResolver,
-        TRACE: Fn() -> Trace<'static>,
     {
-        self.validate(
-            |field| def.get_current_datum_definition_by_name(field).is_some(),
-            trace,
-        )
+        self.validate(|field| def.get_current_datum_definition_by_name(field).is_some())
     }
 
-    pub fn validate_on_stream<R, TRACE>(
+    pub fn validate_on_stream<R>(
         self,
         stream: &NodeStream,
         graph: &GraphBuilder<R>,
-        trace: TRACE,
     ) -> ChainResult<Vec<Directed<ValidFieldName>>>
     where
         R: TypeResolver + Copy,
-        TRACE: Fn() -> Trace<'static> + Copy,
     {
-        let def = graph.get_stream(stream.record_type(), trace)?.borrow();
-        self.validate_on_record_definition(&def, trace)
+        let def = graph.get_stream(stream.record_type())?.borrow();
+        self.validate_on_record_definition(&def)
     }
 }
 
@@ -246,24 +220,16 @@ impl<'a> DirectedFieldsParam<'a> {
 pub struct TypedFieldsParam<'a>(#[serde(borrow)] Box<[(&'a str, &'a str)]>);
 
 impl<'a> TypedFieldsParam<'a> {
-    pub fn validate_new<TRACE>(
-        self,
-        trace: TRACE,
-    ) -> ChainResult<Vec<(ValidFieldName, ValidFieldType)>>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    pub fn validate_new(self) -> ChainResult<Vec<(ValidFieldName, ValidFieldType)>> {
         self.iter()
             .map(|(name, r#type)| {
                 let valid_name =
                     ValidFieldName::try_from(*name).map_err(|_| ChainError::InvalidFieldName {
                         name: (*name).to_owned(),
-                        trace: trace(),
                     })?;
                 let valid_type = ValidFieldType::try_from(*r#type).map_err(|_| {
                     ChainError::InvalidFieldType {
                         type_name: (*r#type).to_owned(),
-                        trace: trace(),
                     }
                 })?;
                 Ok((valid_name, valid_type))

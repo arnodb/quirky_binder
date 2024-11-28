@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
-use crate::{prelude::*, trace_filter};
+use crate::{prelude::*, trace_element};
 
 const EXTRACT_FIELDS_TRACE_NAME: &str = "extract_fields";
 
@@ -27,23 +27,20 @@ impl ExtractFields {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: ExtractFieldsParams,
-        trace: Trace,
-    ) -> ChainResult<Self> {
-        let valid_fields = params
-            .fields
-            .validate_on_stream(inputs.single(), graph, || {
-                trace_filter!(trace, EXTRACT_FIELDS_TRACE_NAME)
-            })?;
+    ) -> ChainResultWithTrace<Self> {
+        let valid_fields =
+            params
+                .fields
+                .validate_on_stream(inputs.single(), graph, EXTRACT_FIELDS_TRACE_NAME)?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams.new_named_stream("extracted", graph, || {
-            trace_filter!(trace, EXTRACT_FIELDS_TRACE_NAME)
-        })?;
+        streams
+            .new_named_stream("extracted", graph)
+            .with_trace_element(trace_element!(EXTRACT_FIELDS_TRACE_NAME))?;
 
         let output_stream_def = streams
-            .output_from_input(0, true, graph, || {
-                trace_filter!(trace, EXTRACT_FIELDS_TRACE_NAME)
-            })?
+            .output_from_input(0, true, graph)
+            .with_trace_element(trace_element!(EXTRACT_FIELDS_TRACE_NAME))?
             .pass_through(|output_stream, facts_proof| {
                 let record_definition = output_stream.record_definition();
                 Ok(facts_proof
@@ -53,9 +50,8 @@ impl ExtractFields {
             })?;
 
         streams
-            .new_named_output("extracted", graph, || {
-                trace_filter!(trace, EXTRACT_FIELDS_TRACE_NAME)
-            })?
+            .new_named_output("extracted", graph)
+            .with_trace_element(trace_element!(EXTRACT_FIELDS_TRACE_NAME))?
             .update(|output_extracted_stream, facts_proof| {
                 let mut output_extracted_stream_def =
                     output_extracted_stream.record_definition().borrow_mut();
@@ -74,7 +70,9 @@ impl ExtractFields {
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
-        let outputs = streams.build(|| trace_filter!(trace, EXTRACT_FIELDS_TRACE_NAME))?;
+        let outputs = streams
+            .build()
+            .with_trace_element(trace_element!(EXTRACT_FIELDS_TRACE_NAME))?;
 
         Ok(Self {
             name,
@@ -151,7 +149,6 @@ pub fn extract_fields<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: ExtractFieldsParams,
-    trace: Trace,
-) -> ChainResult<ExtractFields> {
-    ExtractFields::new(graph, name, inputs, params, trace)
+) -> ChainResultWithTrace<ExtractFields> {
+    ExtractFields::new(graph, name, inputs, params)
 }

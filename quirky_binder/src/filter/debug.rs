@@ -1,6 +1,6 @@
 use truc::record::{definition::DatumDefinition, type_resolver::TypeResolver};
 
-use crate::{prelude::*, trace_filter};
+use crate::{prelude::*, trace_element};
 
 const DEBUG_TRACE_NAME: &str = "debug";
 
@@ -19,11 +19,11 @@ impl Debug {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
-        trace: Trace,
-    ) -> ChainResult<Self> {
+    ) -> ChainResultWithTrace<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
-            .output_from_input(0, true, graph, || trace_filter!(trace, DEBUG_TRACE_NAME))?
+            .output_from_input(0, true, graph)
+            .with_trace_element(trace_element!(DEBUG_TRACE_NAME))?
             .pass_through(|builder, facts_proof| {
                 let def = builder.record_definition().borrow();
                 eprintln!("=== Filter {}:", name);
@@ -39,12 +39,10 @@ impl Debug {
                     datum: &DatumDefinition,
                     sub_stream: &NodeSubStream,
                     graph: &GraphBuilder<R>,
-                    trace: &Trace,
-                ) -> ChainResult<()> {
+                ) -> ChainResultWithTrace<()> {
                     let def = graph
-                        .get_stream(sub_stream.record_type(), || {
-                            trace_filter!(trace, DEBUG_TRACE_NAME)
-                        })?
+                        .get_stream(sub_stream.record_type())
+                        .with_trace_element(trace_element!(DEBUG_TRACE_NAME))?
                         .borrow();
                     indent(depth);
                     eprintln!("--- Datum {}:", datum.name());
@@ -60,7 +58,6 @@ impl Debug {
                             def.get_datum_definition(datum_id).expect("datum"),
                             sub_stream,
                             graph,
-                            trace,
                         )?;
                     }
                     Ok(())
@@ -71,12 +68,13 @@ impl Debug {
                         def.get_datum_definition(datum_id).expect("datum"),
                         sub_stream,
                         graph,
-                        &trace,
                     )?;
                 }
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
-        let outputs = streams.build(|| trace_filter!(trace, DEBUG_TRACE_NAME))?;
+        let outputs = streams
+            .build()
+            .with_trace_element(trace_element!(DEBUG_TRACE_NAME))?;
         Ok(Self {
             name,
             inputs,
@@ -116,7 +114,6 @@ pub fn debug<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: (),
-    trace: Trace,
-) -> ChainResult<Debug> {
-    Debug::new(graph, name, inputs, params, trace)
+) -> ChainResultWithTrace<Debug> {
+    Debug::new(graph, name, inputs, params)
 }

@@ -173,8 +173,7 @@ fn quirky_binder_graph_definition<'a>(
             name: FullyQualifiedName,
             inputs: [NodeStream; #input_count],
             #params_type_name { #(#params,)* _a }: #params_type_name,
-            trace: Trace,
-        ) -> ChainResult<NodeCluster<#input_count, #output_count>> {
+        ) -> ChainResultWithTrace<NodeCluster<#input_count, #output_count>> {
 
             #setup_handlebars
 
@@ -227,8 +226,7 @@ fn quirky_binder_graph<'a>(
         pub fn #name<R: TypeResolver + Copy>(
             graph: &mut GraphBuilder<R>,
             name: FullyQualifiedName,
-            trace: Trace,
-        ) -> ChainResult<NodeCluster<0, 0>> {
+        ) -> ChainResultWithTrace<NodeCluster<0, 0>> {
             let handlebars = Handlebars::new();
             let handlebars_data = BTreeMap::<&str, &str>::new();
 
@@ -481,9 +479,9 @@ fn quirky_binder_stream_lines<'a>(
                                 name.sub(stringify!(#var_name)),
                                 [#(#inputs,)*],
                                 graph.params().from_ron_str(&ron_params_str).expect("params"),
-                                trace.sub(TraceElement::new(#source.into(), #caller.into(), #filter_location)),
                             )
-                        }?;
+                        }
+                            .with_trace_element(|| TraceElement::new(#source.into(), #caller.into(), #filter_location))?;
                     });
                     ordered_var_names.push(var_name.clone());
                     go_back_on_unstarted = true;
@@ -597,7 +595,7 @@ pub(crate) fn generate_module<'a>(
         quote! {
             pub fn quirky_binder_main<R>(
                 mut graph: GraphBuilder<R>,
-            ) -> ChainResult<Graph>
+            ) -> ChainResultWithTrace<Graph>
             where
                 R: TypeResolver + Copy,
             {
@@ -606,12 +604,10 @@ pub(crate) fn generate_module<'a>(
 
                 let root = FullyQualifiedName::default();
 
-                let trace = Trace::root();
-
                 let entry_nodes: Vec<Box<dyn DynNode>> = vec![
                     #(
                         #main_features
-                        Box::new(__quirky_binder_private::#main_names(&mut graph, root.sub(stringify!(#main_names)), trace.clone())?),
+                        Box::new(__quirky_binder_private::#main_names(&mut graph, root.sub(stringify!(#main_names)))?),
                     )*
                 ];
                 Ok(graph.build(entry_nodes))

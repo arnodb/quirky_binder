@@ -1,4 +1,4 @@
-use quirky_binder::{prelude::*, trace_filter};
+use quirky_binder::{prelude::*, trace_element};
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
@@ -29,13 +29,12 @@ impl WriteCsv {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: WriteCsvParams,
-        trace: Trace,
-    ) -> ChainResult<Self> {
+    ) -> ChainResultWithTrace<Self> {
         if !inputs.single().sub_streams().is_empty() {
             return Err(ChainError::Other {
                 msg: "Sub streams are not supported".to_owned(),
-                trace: trace_filter!(trace, WRITE_CSV_TRACE_NAME),
-            });
+            })
+            .with_trace_element(trace_element!(WRITE_CSV_TRACE_NAME));
         }
 
         Ok(Self {
@@ -145,7 +144,6 @@ pub fn write_csv<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: WriteCsvParams,
-    trace: Trace,
-) -> ChainResult<WriteCsv> {
-    WriteCsv::new(graph, name, inputs, params, trace)
+) -> ChainResultWithTrace<WriteCsv> {
+    WriteCsv::new(graph, name, inputs, params)
 }

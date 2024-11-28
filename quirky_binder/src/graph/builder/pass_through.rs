@@ -13,6 +13,7 @@ use super::{
 use crate::{
     prelude::*,
     stream::{NodeSubStream, StreamFacts},
+    trace_element,
 };
 
 #[derive(Getters, CopyGetters)]
@@ -32,18 +33,16 @@ pub struct OutputBuilderForPassThrough<'a, 'b, 'g, R: TypeResolver + Copy> {
 }
 
 impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g, R> {
-    pub fn pass_through_sub_stream<B, TRACE>(
+    pub fn pass_through_sub_stream<B>(
         &mut self,
         sub_stream: NodeSubStream,
         graph: &'g GraphBuilder<R>,
         build: B,
-        trace: TRACE,
     ) -> ChainResult<NodeSubStream>
     where
         B: FnOnce(&mut SubStreamBuilderForPassThrough<'g, R>),
-        TRACE: Fn() -> Trace<'static>,
     {
-        let record_definition = graph.get_stream(sub_stream.record_type(), trace)?;
+        let record_definition = graph.get_stream(sub_stream.record_type())?;
         let (record_type, variant_id, sub_streams, facts) = sub_stream.destructure();
         let mut builder = SubStreamBuilderForPassThrough {
             record_type,
@@ -56,19 +55,19 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
         Ok(builder.close_pass_through())
     }
 
-    pub fn pass_through_path<PassThroughLeafSubStream, TRACE>(
+    pub fn pass_through_path<PassThroughLeafSubStream>(
         &mut self,
         path_fields: &[ValidFieldName],
         pass_through_leaf_sub_stream: PassThroughLeafSubStream,
         graph: &'g GraphBuilder<R>,
-        trace: TRACE,
-    ) -> ChainResult<NodeSubStream>
+        trace_name: &str,
+    ) -> ChainResultWithTrace<NodeSubStream>
     where
         PassThroughLeafSubStream: for<'c, 'd> FnOnce(
             NodeSubStream,
             &mut OutputBuilderForPassThrough<'c, 'd, 'g, R>,
-        ) -> ChainResult<NodeSubStream>,
-        TRACE: Fn() -> Trace<'static> + Copy,
+        )
+            -> ChainResultWithTrace<NodeSubStream>,
     {
         struct PathFieldDetails {
             stream: NodeSubStream,
@@ -85,7 +84,9 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
                 .map(DatumDefinition::id);
             if let Some(datum_id) = datum_id {
                 let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
-                let sub_record_definition = graph.get_stream(sub_stream.record_type(), trace)?;
+                let sub_record_definition = graph
+                    .get_stream(sub_stream.record_type())
+                    .with_trace_element(trace_element!(trace_name))?;
                 (datum_id, sub_stream, sub_record_definition)
             } else {
                 panic!("could not find datum `{}`", field.name());
@@ -109,8 +110,9 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g,
                         .sub_streams_mut()
                         .remove(&datum_id)
                         .expect("sub stream");
-                    let sub_record_definition =
-                        graph.get_stream(sub_stream.record_type(), trace)?;
+                    let sub_record_definition = graph
+                        .get_stream(sub_stream.record_type())
+                        .with_trace_element(trace_element!(trace_name))?;
                     path_data.push(PathFieldDetails { stream, datum_id });
                     Ok((path_data, sub_stream, sub_record_definition))
                 } else {

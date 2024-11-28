@@ -53,8 +53,7 @@ pub fn to_lowercase<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: TransformStringParams,
-    trace: Trace,
-) -> ChainResult<Transform<ToLowercase>> {
+) -> ChainResultWithTrace<Transform<ToLowercase>> {
     Transform::new(
         ToLowercase,
         graph,
@@ -64,7 +63,6 @@ pub fn to_lowercase<R: TypeResolver + Copy>(
             update_fields: params.fields,
             ..Default::default()
         },
-        trace,
         TO_LOWERCASE_TRACE_NAME,
     )
 }
@@ -100,8 +98,7 @@ pub fn sub_to_lowercase<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubTransformStringParams,
-    trace: Trace,
-) -> ChainResult<SubTransform<SubToLowercase>> {
+) -> ChainResultWithTrace<SubTransform<SubToLowercase>> {
     SubTransform::new(
         SubToLowercase,
         graph,
@@ -112,7 +109,6 @@ pub fn sub_to_lowercase<R: TypeResolver + Copy>(
             update_fields: params.fields,
             ..Default::default()
         },
-        trace,
         SUB_TO_LOWERCASE_TRACE_NAME,
     )
 }
@@ -148,8 +144,7 @@ pub fn reverse_chars<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: TransformStringParams,
-    trace: Trace,
-) -> ChainResult<Transform<ReverseChars>> {
+) -> ChainResultWithTrace<Transform<ReverseChars>> {
     Transform::new(
         ReverseChars,
         graph,
@@ -159,7 +154,6 @@ pub fn reverse_chars<R: TypeResolver + Copy>(
             update_fields: params.fields,
             ..Default::default()
         },
-        trace,
         REVERSE_CHARS_TRACE_NAME,
     )
 }
@@ -195,8 +189,7 @@ pub fn sub_reverse_chars<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubTransformStringParams,
-    trace: Trace,
-) -> ChainResult<SubTransform<SubReverseChars>> {
+) -> ChainResultWithTrace<SubTransform<SubReverseChars>> {
     SubTransform::new(
         SubReverseChars,
         graph,
@@ -207,7 +200,6 @@ pub fn sub_reverse_chars<R: TypeResolver + Copy>(
             update_fields: params.fields,
             ..Default::default()
         },
-        trace,
         SUB_REVERSE_CHARS_TRACE_NAME,
     )
 }

@@ -5,7 +5,7 @@ use truc::record::{definition::DatumDefinition, type_resolver::TypeResolver};
 use super::transform::{
     SubTransform, SubTransformParams, SubTransformSpec, Transform, TransformParams, TransformSpec,
 };
-use crate::{prelude::*, trace_filter};
+use crate::{prelude::*, trace_element};
 
 enum NoneStrategy {
     Skip,
@@ -31,8 +31,7 @@ impl TransformSpec for Unwrap {
         &self,
         name: ValidFieldName,
         datum: &DatumDefinition,
-        trace: Trace,
-    ) -> ChainResult<(ValidFieldName, ValidFieldType)> {
+    ) -> ChainResultWithTrace<(ValidFieldName, ValidFieldType)> {
         let optional_type_name = datum.type_name().to_string();
         let type_name = {
             let s = optional_type_name.trim();
@@ -53,16 +52,16 @@ impl TransformSpec for Unwrap {
                             name.name(),
                             optional_type_name
                         ),
-                        trace: trace_filter!(trace, UNWRAP_TRACE_NAME),
-                    });
+                    })
+                    .with_trace_element(trace_element!(UNWRAP_TRACE_NAME));
                 }
             }
         };
-        let valid_type =
-            ValidFieldType::try_from(type_name).map_err(|_| ChainError::InvalidFieldType {
+        let valid_type = ValidFieldType::try_from(type_name)
+            .map_err(|_| ChainError::InvalidFieldType {
                 type_name: type_name.to_owned(),
-                trace: trace_filter!(trace, UNWRAP_TRACE_NAME),
-            })?;
+            })
+            .with_trace_element(trace_element!(UNWRAP_TRACE_NAME))?;
         Ok((name, valid_type))
     }
 
@@ -111,8 +110,7 @@ pub fn unwrap<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: UnwrapParams,
-    trace: Trace,
-) -> ChainResult<Transform<Unwrap>> {
+) -> ChainResultWithTrace<Transform<Unwrap>> {
     Transform::new(
         Unwrap {
             none_strategy: if params.skip_nones {
@@ -130,7 +128,6 @@ pub fn unwrap<R: TypeResolver + Copy>(
             type_update_fields: params.fields,
             ..Default::default()
         },
-        trace,
         UNWRAP_TRACE_NAME,
     )
 }
@@ -155,8 +152,7 @@ impl SubTransformSpec for SubUnwrap {
         &self,
         name: ValidFieldName,
         datum: &DatumDefinition,
-        trace: Trace,
-    ) -> ChainResult<(ValidFieldName, ValidFieldType)> {
+    ) -> ChainResultWithTrace<(ValidFieldName, ValidFieldType)> {
         let optional_type_name = datum.type_name().to_string();
         let type_name = {
             let s = optional_type_name.trim();
@@ -177,16 +173,16 @@ impl SubTransformSpec for SubUnwrap {
                             name.name(),
                             optional_type_name
                         ),
-                        trace: trace_filter!(trace, SUB_UNWRAP_TRACE_NAME),
-                    });
+                    })
+                    .with_trace_element(trace_element!(SUB_UNWRAP_TRACE_NAME));
                 }
             }
         };
-        let valid_type =
-            ValidFieldType::try_from(type_name).map_err(|_| ChainError::InvalidFieldType {
+        let valid_type = ValidFieldType::try_from(type_name)
+            .map_err(|_| ChainError::InvalidFieldType {
                 type_name: type_name.to_owned(),
-                trace: trace_filter!(trace, SUB_UNWRAP_TRACE_NAME),
-            })?;
+            })
+            .with_trace_element(trace_element!(SUB_UNWRAP_TRACE_NAME))?;
         Ok((name, valid_type))
     }
 
@@ -235,8 +231,7 @@ pub fn sub_unwrap<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubUnwrapParams,
-    trace: Trace,
-) -> ChainResult<SubTransform<SubUnwrap>> {
+) -> ChainResultWithTrace<SubTransform<SubUnwrap>> {
     SubTransform::new(
         SubUnwrap {
             none_strategy: if params.skip_nones {
@@ -255,7 +250,6 @@ pub fn sub_unwrap<R: TypeResolver + Copy>(
             type_update_fields: params.fields,
             ..Default::default()
         },
-        trace,
         SUB_UNWRAP_TRACE_NAME,
     )
 }

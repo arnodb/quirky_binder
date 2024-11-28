@@ -14,6 +14,7 @@ use super::{
 use crate::{
     prelude::*,
     stream::{NodeSubStream, StreamFacts},
+    trace_element,
 };
 
 #[derive(Getters, CopyGetters)]
@@ -32,30 +33,22 @@ pub struct OutputBuilderForUpdate<'a, 'b, 'g, R: TypeResolver + Copy, Extra> {
 }
 
 impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, 'g, R, Extra> {
-    pub fn new_named_sub_stream<TRACE>(
+    pub fn new_named_sub_stream(
         &self,
         name: &str,
         graph: &'g GraphBuilder<R>,
-        trace: TRACE,
-    ) -> ChainResult<SubStreamBuilderForUpdate<'g, R>>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    ) -> ChainResult<SubStreamBuilderForUpdate<'g, R>> {
         let full_name = self.streams.name.sub(name);
-        self.new_sub_stream_internal(graph, full_name, trace)
+        self.new_sub_stream_internal(graph, full_name)
     }
 
-    fn new_sub_stream_internal<TRACE>(
+    fn new_sub_stream_internal(
         &self,
         graph: &'g GraphBuilder<R>,
         full_name: FullyQualifiedName,
-        trace: TRACE,
-    ) -> ChainResult<SubStreamBuilderForUpdate<'g, R>>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    ) -> ChainResult<SubStreamBuilderForUpdate<'g, R>> {
         let record_type = StreamRecordType::from(full_name);
-        let record_definition = graph.get_stream(&record_type, trace)?;
+        let record_definition = graph.get_stream(&record_type)?;
         Ok(SubStreamBuilderForUpdate {
             record_type,
             record_definition,
@@ -65,22 +58,23 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
         })
     }
 
-    pub fn update_sub_stream<B, TRACE>(
+    pub fn update_sub_stream<B>(
         &mut self,
         sub_stream: NodeSubStream,
         graph: &'g GraphBuilder<R>,
         build: B,
-        trace: TRACE,
-    ) -> ChainResult<NodeSubStream>
+        trace_name: &str,
+    ) -> ChainResultWithTrace<NodeSubStream>
     where
         B: FnOnce(
             &mut Self,
             &mut SubStreamBuilderForUpdate<'g, R>,
             NoFactsUpdated<()>,
-        ) -> ChainResult<FactsFullyUpdated<()>>,
-        TRACE: Fn() -> Trace<'static>,
+        ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
     {
-        let record_definition = graph.get_stream(sub_stream.record_type(), trace)?;
+        let record_definition = graph
+            .get_stream(sub_stream.record_type())
+            .with_trace_element(trace_element!(trace_name))?;
         let (record_type, variant_id, sub_streams, facts) = sub_stream.destructure();
         let mut builder = SubStreamBuilderForUpdate {
             record_type,
@@ -93,32 +87,31 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
         Ok(builder.close_record_variant(facts))
     }
 
-    pub fn update_path<UpdateLeafSubStream, UpdatePathStream, UpdateRootStream, TRACE>(
+    pub fn update_path<UpdateLeafSubStream, UpdatePathStream, UpdateRootStream>(
         &mut self,
         path_fields: &[ValidFieldName],
         update_leaf_sub_stream: UpdateLeafSubStream,
         update_path_stream: UpdatePathStream,
         update_root_stream: UpdateRootStream,
         graph: &'g GraphBuilder<R>,
-        trace: TRACE,
-    ) -> ChainResult<Vec<PathUpdateElement>>
+        trace_name: &str,
+    ) -> ChainResultWithTrace<Vec<PathUpdateElement>>
     where
         UpdateLeafSubStream: for<'c, 'd> FnOnce(
             NodeSubStream,
             &mut OutputBuilderForUpdate<'c, 'd, 'g, R, Extra>,
-        ) -> ChainResult<NodeSubStream>,
+        ) -> ChainResultWithTrace<NodeSubStream>,
         UpdatePathStream: Fn(
             &str,
             &mut SubStreamBuilderForUpdate<'g, R>,
             NodeSubStream,
             NoFactsUpdated<()>,
-        ) -> ChainResult<FactsFullyUpdated<()>>,
+        ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
         UpdateRootStream: for<'c, 'd> FnOnce(
             &str,
             &mut OutputBuilderForUpdate<'c, 'd, 'g, R, Extra>,
             NodeSubStream,
-        ) -> ChainResult<()>,
-        TRACE: Fn() -> Trace<'static> + Copy,
+        ) -> ChainResultWithTrace<()>,
     {
         struct PathFieldDetails<'a> {
             stream: NodeSubStream,
@@ -136,13 +129,15 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
                 .map(DatumDefinition::id);
             if let Some(datum_id) = datum_id {
                 let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
-                let sub_record_definition = graph.get_stream(sub_stream.record_type(), trace)?;
+                let sub_record_definition = graph
+                    .get_stream(sub_stream.record_type())
+                    .with_trace_element(trace_element!(trace_name))?;
                 (field, datum_id, sub_stream, sub_record_definition)
             } else {
                 return Err(ChainError::FieldNotFound {
                     field: field.name().to_owned(),
-                    trace: trace(),
-                });
+                })
+                .with_trace_element(trace_element!(trace_name));
             }
         };
 
@@ -163,8 +158,9 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
                         .sub_streams_mut()
                         .remove(&datum_id)
                         .expect("sub stream");
-                    let sub_record_definition =
-                        graph.get_stream(sub_stream.record_type(), trace)?;
+                    let sub_record_definition = graph
+                        .get_stream(sub_stream.record_type())
+                        .with_trace_element(trace_element!(trace_name))?;
                     path_data.push(PathFieldDetails {
                         stream,
                         field,
@@ -174,8 +170,8 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
                 } else {
                     Err(ChainError::FieldNotFound {
                         field: field.name().to_owned(),
-                        trace: trace(),
                     })
+                    .with_trace_element(trace_element!(trace_name))
                 }
             },
         )?;
@@ -214,7 +210,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
                             facts_proof,
                         )
                     },
-                    trace,
+                    trace_name,
                 )?;
 
                 sub_input_stream = Some(field_details.stream);
@@ -254,21 +250,16 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
         }
     }
 
-    pub fn replace_vec_datum<TRACE>(
+    pub fn replace_vec_datum(
         &mut self,
         field: &str,
         record: &str,
         sub_stream: NodeSubStream,
-        trace: TRACE,
-    ) -> ChainResult<()>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    ) -> ChainResult<()> {
         let (old_datum_id, new_datum_id) = replace_vec_datum_in_record_definition(
             &mut self.record_definition.borrow_mut(),
             field,
             record,
-            trace,
         )?;
         let old = self.sub_streams.remove(&old_datum_id);
         if old.is_none() {
@@ -405,21 +396,16 @@ impl<'g, R: TypeResolver> SubStreamBuilderForUpdate<'g, R> {
         }
     }
 
-    pub fn replace_vec_datum<TRACE>(
+    pub fn replace_vec_datum(
         &mut self,
         field: &str,
         record: &str,
         sub_stream: NodeSubStream,
-        trace: TRACE,
-    ) -> ChainResult<()>
-    where
-        TRACE: Fn() -> Trace<'static>,
-    {
+    ) -> ChainResult<()> {
         let (old_datum_id, new_datum_id) = replace_vec_datum_in_record_definition(
             &mut self.record_definition.borrow_mut(),
             field,
             record,
-            trace,
         )?;
         let old = self.sub_streams.remove(&old_datum_id);
         if old.is_none() {

@@ -2,7 +2,7 @@ use quirky_binder_support::AnchorId;
 use serde::Deserialize;
 use truc::record::{definition::DatumDefinitionOverride, type_resolver::TypeResolver};
 
-use crate::{prelude::*, trace_filter};
+use crate::{prelude::*, trace_element};
 
 const ANCHOR_TRACE_NAME: &str = "anchor";
 
@@ -28,21 +28,20 @@ impl Anchor {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: AnchorParams,
-        trace: Trace,
-    ) -> ChainResult<Self> {
-        let valid_anchor_field = ValidFieldName::try_from(params.anchor_field).map_err(|_| {
-            ChainError::InvalidFieldName {
+    ) -> ChainResultWithTrace<Self> {
+        let valid_anchor_field = ValidFieldName::try_from(params.anchor_field)
+            .map_err(|_| ChainError::InvalidFieldName {
                 name: (params.anchor_field).to_owned(),
-                trace: trace_filter!(trace, ANCHOR_TRACE_NAME),
-            }
-        })?;
+            })
+            .with_trace_element(trace_element!(ANCHOR_TRACE_NAME))?;
 
         let anchor_table_id = graph.new_anchor_table();
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
         streams
-            .output_from_input(0, true, graph, || trace_filter!(trace, ANCHOR_TRACE_NAME))?
+            .output_from_input(0, true, graph)
+            .with_trace_element(trace_element!(ANCHOR_TRACE_NAME))?
             .update(|output_stream, facts_proof| {
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
                 output_stream_def.add_datum_override::<AnchorId<0>, _>(
@@ -60,7 +59,9 @@ impl Anchor {
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
-        let outputs = streams.build(|| trace_filter!(trace, ANCHOR_TRACE_NAME))?;
+        let outputs = streams
+            .build()
+            .with_trace_element(trace_element!(ANCHOR_TRACE_NAME))?;
 
         Ok(Self {
             name,
@@ -118,7 +119,6 @@ pub fn anchor<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: AnchorParams,
-    trace: Trace,
-) -> ChainResult<Anchor> {
-    Anchor::new(graph, name, inputs, params, trace)
+) -> ChainResultWithTrace<Anchor> {
+    Anchor::new(graph, name, inputs, params)
 }

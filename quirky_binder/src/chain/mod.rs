@@ -6,12 +6,44 @@ use proc_macro2::TokenStream;
 use quirky_binder_lang::location::Location;
 use serde::Deserialize;
 
-use self::error::ChainError;
+use self::error::{ChainError, ChainErrorWithTrace};
 use crate::prelude::*;
 
 pub mod error;
 
+pub type ChainResultWithTrace<T> = Result<T, ChainErrorWithTrace>;
+
 pub type ChainResult<T> = Result<T, ChainError>;
+
+pub trait WithTraceElement {
+    type WithTraceType;
+
+    fn with_trace_element<Element>(self, element: Element) -> Self::WithTraceType
+    where
+        Element: Fn() -> TraceElement<'static>;
+}
+
+impl<T> WithTraceElement for ChainResult<T> {
+    type WithTraceType = ChainResultWithTrace<T>;
+
+    fn with_trace_element<Element>(self, element: Element) -> Self::WithTraceType
+    where
+        Element: Fn() -> TraceElement<'static>,
+    {
+        self.map_err(|err| err.with_trace_element(element))
+    }
+}
+
+impl<T> WithTraceElement for ChainResultWithTrace<T> {
+    type WithTraceType = ChainResultWithTrace<T>;
+
+    fn with_trace_element<Element>(self, element: Element) -> Self::WithTraceType
+    where
+        Element: Fn() -> TraceElement<'static>,
+    {
+        self.map_err(|err| err.with_trace_element(element))
+    }
+}
 
 #[derive(Debug)]
 struct ChainThread {
@@ -840,19 +872,15 @@ pub struct Trace<'a> {
 }
 
 impl<'a> Trace<'a> {
-    pub fn root() -> Self {
+    pub fn new_leaf(element: TraceElement<'a>) -> Self {
         Trace {
-            elements: Vec::new(),
+            elements: vec![element],
         }
     }
 
-    pub fn sub(&self, element: TraceElement<'a>) -> Self {
-        Self {
-            elements: Some(element)
-                .into_iter()
-                .chain(self.elements.iter().cloned())
-                .collect(),
-        }
+    pub fn push(mut self, element: TraceElement<'a>) -> Self {
+        self.elements.push(element);
+        self
     }
 
     pub fn to_owned(&self) -> Trace<'static> {
@@ -900,20 +928,16 @@ impl<'a> Display for TraceElement<'a> {
 #[macro_export]
 macro_rules! trace_element {
     ($name:expr) => {
-        TraceElement::new(
-            std::file!().into(),
-            ($name).into(),
-            quirky_binder_lang::location::Location::new(
-                std::line!() as usize,
-                std::column!() as usize,
-            ),
-        )
-    };
-}
-
-#[macro_export]
-macro_rules! trace_filter {
-    ($trace:ident, $name:expr) => {
-        $trace.sub($crate::trace_element!($name)).to_owned()
+        || {
+            TraceElement::new(
+                std::file!().into(),
+                ($name).into(),
+                quirky_binder_lang::location::Location::new(
+                    std::line!() as usize,
+                    std::column!() as usize,
+                ),
+            )
+            .to_owned()
+        }
     };
 }

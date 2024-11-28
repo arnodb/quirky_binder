@@ -1,4 +1,4 @@
-use quirky_binder::{prelude::*, trace_filter};
+use quirky_binder::{prelude::*, trace_element};
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
@@ -33,19 +33,18 @@ impl ReadCsv {
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
         params: ReadCsvParams,
-        trace: Trace,
-    ) -> ChainResult<Self> {
+    ) -> ChainResultWithTrace<Self> {
         let valid_fields = params
             .fields
-            .validate_new(|| trace_filter!(trace, READ_CSV_TRACE_NAME))?;
+            .validate_new()
+            .with_trace_element(trace_element!(READ_CSV_TRACE_NAME))?;
 
         let valid_order_fields = params
             .order_fields
             .map(|order_fields| {
-                order_fields.validate(
-                    |name| valid_fields.iter().any(|vf| vf.0.name() == name),
-                    || trace_filter!(trace, READ_CSV_TRACE_NAME),
-                )
+                order_fields
+                    .validate(|name| valid_fields.iter().any(|vf| vf.0.name() == name))
+                    .with_trace_element(trace_element!(READ_CSV_TRACE_NAME))
             })
             .transpose()?;
 
@@ -54,16 +53,19 @@ impl ReadCsv {
             .map(|distinct_fields| {
                 distinct_fields.validate(
                     |name| valid_fields.iter().any(|vf| vf.0.name() == name.name()),
-                    || trace_filter!(trace, READ_CSV_TRACE_NAME),
+                    READ_CSV_TRACE_NAME,
                 )
             })
             .transpose()?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams.new_main_stream(graph, || trace_filter!(trace, READ_CSV_TRACE_NAME))?;
+        streams
+            .new_main_stream(graph)
+            .with_trace_element(trace_element!(READ_CSV_TRACE_NAME))?;
 
         streams
-            .new_main_output(graph, || trace_filter!(trace, READ_CSV_TRACE_NAME))?
+            .new_main_output(graph)
+            .with_trace_element(trace_element!(READ_CSV_TRACE_NAME))?
             .update(|output_stream, facts_proof| {
                 {
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
@@ -85,7 +87,9 @@ impl ReadCsv {
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
-        let outputs = streams.build(|| trace_filter!(trace, READ_CSV_TRACE_NAME))?;
+        let outputs = streams
+            .build()
+            .with_trace_element(trace_element!(READ_CSV_TRACE_NAME))?;
 
         Ok(Self {
             name,
@@ -193,7 +197,6 @@ pub fn read_csv<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 0],
     params: ReadCsvParams,
-    trace: Trace,
-) -> ChainResult<ReadCsv> {
-    ReadCsv::new(graph, name, inputs, params, trace)
+) -> ChainResultWithTrace<ReadCsv> {
+    ReadCsv::new(graph, name, inputs, params)
 }

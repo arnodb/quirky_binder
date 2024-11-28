@@ -5,7 +5,7 @@ extern crate quote;
 
 use std::path::Path;
 
-use quirky_binder::{prelude::*, quirky_binder, trace_filter};
+use quirky_binder::{prelude::*, quirky_binder, trace_element};
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
 
 const TOKENIZE_TRACE_NAME: &str = "tokenize";
@@ -25,12 +25,12 @@ impl Tokenize {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
-        trace: Trace,
-    ) -> ChainResult<Self> {
+    ) -> ChainResultWithTrace<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
         streams
-            .output_from_input(0, true, graph, || trace_filter!(trace, TOKENIZE_TRACE_NAME))?
+            .output_from_input(0, true, graph)
+            .with_trace_element(trace_element!(TOKENIZE_TRACE_NAME))?
             .update(|output_stream, facts_proof| {
                 let input_variant_id = output_stream.input_variant_id();
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
@@ -44,7 +44,9 @@ impl Tokenize {
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
-        let outputs = streams.build(|| trace_filter!(trace, TOKENIZE_TRACE_NAME))?;
+        let outputs = streams
+            .build()
+            .with_trace_element(trace_element!(TOKENIZE_TRACE_NAME))?;
 
         Ok(Self {
             name,
@@ -86,9 +88,8 @@ pub fn tokenize<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: (),
-    trace: Trace,
-) -> ChainResult<Tokenize> {
-    Tokenize::new(graph, name, inputs, params, trace)
+) -> ChainResultWithTrace<Tokenize> {
+    Tokenize::new(graph, name, inputs, params)
 }
 
 fn main() {

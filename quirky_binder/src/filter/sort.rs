@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use truc::record::type_resolver::TypeResolver;
 
-use crate::{prelude::*, support::cmp::fields_cmp, trace_filter};
+use crate::{prelude::*, support::cmp::fields_cmp, trace_element};
 
 const SORT_TRACE_NAME: &str = "sort";
 
@@ -28,17 +28,16 @@ impl Sort {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SortParams,
-        trace: Trace,
-    ) -> ChainResult<Self> {
+    ) -> ChainResultWithTrace<Self> {
         let valid_fields = params
             .fields
-            .validate_on_stream(inputs.single(), graph, || {
-                trace_filter!(trace, SORT_TRACE_NAME)
-            })?;
+            .validate_on_stream(inputs.single(), graph)
+            .with_trace_element(trace_element!(SORT_TRACE_NAME))?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
-            .output_from_input(0, true, graph, || trace_filter!(trace, SORT_TRACE_NAME))?
+            .output_from_input(0, true, graph)
+            .with_trace_element(trace_element!(SORT_TRACE_NAME))?
             .pass_through(|builder, facts_proof| {
                 builder.set_order_fact(
                     valid_fields
@@ -47,7 +46,9 @@ impl Sort {
                 );
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
-        let outputs = streams.build(|| trace_filter!(trace, SORT_TRACE_NAME))?;
+        let outputs = streams
+            .build()
+            .with_trace_element(trace_element!(SORT_TRACE_NAME))?;
         Ok(Self {
             name,
             inputs,
@@ -100,9 +101,8 @@ pub fn sort<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SortParams,
-    trace: Trace,
-) -> ChainResult<Sort> {
-    Sort::new(graph, name, inputs, params, trace)
+) -> ChainResultWithTrace<Sort> {
+    Sort::new(graph, name, inputs, params)
 }
 
 const SUB_SORT_TRACE_NAME: &str = "sub_sort";
@@ -133,21 +133,20 @@ impl SubSort {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SubSortParams,
-        trace: Trace,
-    ) -> ChainResult<Self> {
-        let (valid_path_fields, path_def) =
-            params
-                .path_fields
-                .validate_path_on_stream(inputs.single(), graph, || {
-                    trace_filter!(trace, SUB_SORT_TRACE_NAME)
-                })?;
-        let valid_fields = params.fields.validate_on_record_definition(&path_def, || {
-            trace_filter!(trace, SUB_SORT_TRACE_NAME)
-        })?;
+    ) -> ChainResultWithTrace<Self> {
+        let (valid_path_fields, path_def) = params
+            .path_fields
+            .validate_path_on_stream(inputs.single(), graph)
+            .with_trace_element(trace_element!(SUB_SORT_TRACE_NAME))?;
+        let valid_fields = params
+            .fields
+            .validate_on_record_definition(&path_def)
+            .with_trace_element(trace_element!(SUB_SORT_TRACE_NAME))?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         let path_sub_stream = streams
-            .output_from_input(0, true, graph, || trace_filter!(trace, SUB_SORT_TRACE_NAME))?
+            .output_from_input(0, true, graph)
+            .with_trace_element(trace_element!(SUB_SORT_TRACE_NAME))?
             .pass_through_path(
                 graph,
                 &valid_path_fields,
@@ -158,10 +157,12 @@ impl SubSort {
                             .map(|field| field.as_ref().map(ValidFieldName::name)),
                     )
                 },
-                || trace_filter!(trace, SUB_SORT_TRACE_NAME),
+                SUB_SORT_TRACE_NAME,
             )?;
 
-        let outputs = streams.build(|| trace_filter!(trace, SUB_SORT_TRACE_NAME))?;
+        let outputs = streams
+            .build()
+            .with_trace_element(trace_element!(SUB_SORT_TRACE_NAME))?;
 
         Ok(Self {
             name,
@@ -236,7 +237,6 @@ pub fn sub_sort<R: TypeResolver + Copy>(
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubSortParams,
-    trace: Trace,
-) -> ChainResult<SubSort> {
-    SubSort::new(graph, name, inputs, params, trace)
+) -> ChainResultWithTrace<SubSort> {
+    SubSort::new(graph, name, inputs, params)
 }
