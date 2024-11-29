@@ -9,4 +9,5 @@ pub mod hof;
 pub mod monitor;
 pub mod sort;
 pub mod transform;
+pub mod ungroup;
 pub mod unwrap;

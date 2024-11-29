@@ -9,6 +9,91 @@ use truc::record::{
 use crate::{prelude::*, trace_element};
 
 #[derive(Deserialize, Debug, Deref)]
+pub struct FieldParam<'a>(#[serde(borrow)] &'a str);
+
+impl<'a> FieldParam<'a> {
+    pub fn validate<L>(self, lookup: L) -> ChainResult<ValidFieldName>
+    where
+        L: Fn(&ValidFieldName) -> bool,
+    {
+        self.validate_ext(|name| {
+            if lookup(&name) {
+                Ok(name)
+            } else {
+                Err(ChainError::FieldNotFound {
+                    field: name.name().to_owned(),
+                })
+            }
+        })
+    }
+
+    pub fn validate_ext<L, O>(self, lookup: L) -> ChainResult<O>
+    where
+        L: Fn(ValidFieldName) -> ChainResult<O>,
+    {
+        let valid = ValidFieldName::try_from(*self).map_err(|_| ChainError::InvalidFieldName {
+            name: (*self).to_owned(),
+        })?;
+        lookup(valid)
+    }
+
+    pub fn validate_on_record_definition<R>(
+        self,
+        def: &RecordDefinitionBuilder<R>,
+    ) -> ChainResult<ValidFieldName>
+    where
+        R: TypeResolver,
+    {
+        self.validate_on_record_definition_ext(def, |name, _datum| Ok(name))
+    }
+
+    pub fn validate_on_record_definition_ext<R, M, O>(
+        self,
+        def: &RecordDefinitionBuilder<R>,
+        try_map: M,
+    ) -> ChainResult<O>
+    where
+        R: TypeResolver,
+        M: Fn(ValidFieldName, &DatumDefinition) -> ChainResult<O>,
+    {
+        self.validate_ext(|name| {
+            if let Some(datum) = def.get_current_datum_definition_by_name(name.name()) {
+                try_map(name, datum)
+            } else {
+                Err(ChainError::FieldNotFound {
+                    field: name.name().to_owned(),
+                })
+            }
+        })
+    }
+
+    pub fn validate_on_stream<R>(
+        self,
+        stream: &NodeStream,
+        graph: &GraphBuilder<R>,
+    ) -> ChainResult<ValidFieldName>
+    where
+        R: TypeResolver + Copy,
+    {
+        self.validate_on_stream_ext(stream, graph, |name, _datum| Ok(name))
+    }
+
+    pub fn validate_on_stream_ext<R, M, O>(
+        self,
+        stream: &NodeStream,
+        graph: &GraphBuilder<R>,
+        try_map: M,
+    ) -> ChainResult<O>
+    where
+        R: TypeResolver + Copy,
+        M: Fn(ValidFieldName, &DatumDefinition) -> ChainResult<O>,
+    {
+        let def = graph.get_stream(stream.record_type())?.borrow();
+        self.validate_on_record_definition_ext(&def, try_map)
+    }
+}
+
+#[derive(Deserialize, Debug, Deref)]
 pub struct FieldsParam<'a>(#[serde(borrow)] Box<[&'a str]>);
 
 impl<'a> FieldsParam<'a> {

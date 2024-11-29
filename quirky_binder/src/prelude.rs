@@ -15,7 +15,7 @@ pub use crate::{
         node::{DynNode, NodeCluster},
         Graph,
     },
-    params::{DirectedFieldsParam, FieldsParam, TypedFieldsParam},
+    params::{DirectedFieldsParam, FieldParam, FieldsParam, TypedFieldsParam},
     stream::{
         NodeStream, NodeStreamSource, NodeSubStream, NoneNodeStream, RecordDefinitionFragments,
         SingleNodeStream, StreamFacts, StreamRecordType,

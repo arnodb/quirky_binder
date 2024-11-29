@@ -33,6 +33,10 @@ pub struct OutputBuilderForUpdate<'a, 'b, 'g, R: TypeResolver + Copy, Extra> {
 }
 
 impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, 'g, R, Extra> {
+    pub fn sub_stream(&self, datum_id: DatumId) -> &NodeSubStream {
+        &self.sub_streams[&datum_id]
+    }
+
     pub fn new_named_sub_stream(
         &self,
         name: &str,
@@ -378,6 +382,10 @@ pub struct SubStreamBuilderForUpdate<'g, R: TypeResolver, Extra> {
 }
 
 impl<'g, R: TypeResolver, Extra> SubStreamBuilderForUpdate<'g, R, Extra> {
+    pub fn sub_stream(&self, datum_id: DatumId) -> &NodeSubStream {
+        &self.sub_streams[&datum_id]
+    }
+
     pub fn add_vec_datum(&mut self, field: &str, record: &str, sub_stream: NodeSubStream) {
         let datum_id = add_vec_datum_to_record_definition(
             &mut self.record_definition.borrow_mut(),
@@ -412,6 +420,18 @@ impl<'g, R: TypeResolver, Extra> SubStreamBuilderForUpdate<'g, R, Extra> {
         Ok(())
     }
 
+    pub fn set_order_fact<I, F>(&mut self, order_fields: I) -> ChainResult<()>
+    where
+        I: IntoIterator<Item = Directed<F>>,
+        F: AsRef<str>,
+    {
+        set_order_fact(
+            &mut self.facts,
+            order_fields,
+            &*self.record_definition.borrow(),
+        )
+    }
+
     pub fn break_order_fact_at<I, F>(&mut self, fields: I) -> ChainResult<()>
     where
         I: IntoIterator<Item = F>,
@@ -425,6 +445,18 @@ impl<'g, R: TypeResolver, Extra> SubStreamBuilderForUpdate<'g, R, Extra> {
         I: IntoIterator<Item = DatumId>,
     {
         break_order_fact_at_ids(&mut self.facts, datum_ids);
+    }
+
+    pub fn set_distinct_fact<I, F>(&mut self, distinct_fields: I) -> ChainResult<()>
+    where
+        I: IntoIterator<Item = F>,
+        F: AsRef<str>,
+    {
+        set_distinct_fact(
+            &mut self.facts,
+            distinct_fields,
+            &*self.record_definition.borrow(),
+        )
     }
 
     pub fn set_distinct_fact_ids<I>(&mut self, distinct_datum_ids: I)
