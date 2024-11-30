@@ -519,13 +519,30 @@ impl DynNode for SubGroup {
             (eq_preamble, update_body)
         };
 
+        let preamble = quote! {
+            use truc_runtime::convert::{convert_vec_in_place, VecElementConversionResult};
+
+            #eq_preamble
+        };
+
+        let build_leaf_body = |input_record, record, access, mut_access| {
+            quote! {
+                // TODO optimize this code in truc
+                let converted = convert_vec_in_place::<#input_record, #record, _>(
+                    #access,
+                    #update_body,
+                );
+                *record.#mut_access() = converted;
+            }
+        };
+
         chain.implement_path_update(
             self,
             self.inputs.single(),
             self.outputs.single(),
             &self.path_streams,
-            Some(&eq_preamble),
-            &update_body,
+            Some(&preamble),
+            build_leaf_body,
         );
     }
 }

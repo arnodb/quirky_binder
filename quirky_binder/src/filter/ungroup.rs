@@ -324,23 +324,36 @@ impl DynNode for SubUngroup {
         };
 
         let record_ident = self.identifier_for("record");
-        let flat_map_body = quote! {
-            |mut #record_ident| {
-                let group = std::mem::take(#record_ident.#group_field_mut());
-                group.into_iter().map(move |item| {
-                    let #group_unpacked_record { #grouped_fields } = item.unpack();
-                    (#record_ident.clone(), #unpacked_record_in { #grouped_fields }).into()
-                })
+        let build_leaf_body = |_input_record, _record, access, mut_access| {
+            quote! {
+                let converted = #access
+                    .into_iter()
+                    .flat_map(|mut #record_ident| {
+                        let group = std::mem::take(#record_ident.#group_field_mut());
+                        group.into_iter().map(move |item| {
+                            let #group_unpacked_record { #grouped_fields } = item.unpack();
+                            (#record_ident.clone(), #unpacked_record_in { #grouped_fields }).into()
+                        })
+                    })
+                    .collect::<Vec<_>>();
+                *record.#mut_access() = converted;
             }
         };
 
-        chain.implement_path_flat_map(
+        chain.implement_path_update(
             self,
             self.inputs.single(),
             self.outputs.single(),
             &self.path_streams,
-            None,
-            &flat_map_body,
+            if self.path_streams.len() > 1 {
+                Some(quote! {
+                    use truc_runtime::convert::{convert_vec_in_place, VecElementConversionResult};
+                })
+            } else {
+                None
+            }
+            .as_ref(),
+            build_leaf_body,
         );
     }
 }
