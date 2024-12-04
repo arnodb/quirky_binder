@@ -791,7 +791,8 @@ impl<'a> Chain<'a> {
 
 pub const DEFAULT_CHAIN_ROOT_MODULE_NAME: [&str; 2] = ["crate", "chain"];
 pub const DEFAULT_CHAIN_STREAMS_MODULE_NAME: &str = "streams";
-pub const DEFAULT_CHAIN_ERROR_TYPE: [&str; 2] = ["quirky_binder_support", "QuirkyBinderError"];
+pub const DEFAULT_CHAIN_ERROR_TYPE: [&str; 2] = ["anyhow", "Error"];
+pub const DEFAULT_CHAIN_BAIL_MACRO: [&str; 2] = ["anyhow", "bail"];
 pub const DEFAULT_CHAIN_MAIN_NAME: &str = "main";
 
 pub struct ChainCustomizer {
@@ -799,6 +800,7 @@ pub struct ChainCustomizer {
     pub module_name: FullyQualifiedName,
     pub custom_module_imports: Vec<(String, String)>,
     pub error_type: FullyQualifiedName,
+    pub bail_macro: FullyQualifiedName,
     pub main_name: String,
     pub main_attrs: Vec<String>,
 }
@@ -832,6 +834,7 @@ impl Default for ChainCustomizer {
             module_name: FullyQualifiedName::new_n(DEFAULT_CHAIN_ROOT_MODULE_NAME.iter()),
             custom_module_imports: vec![],
             error_type: FullyQualifiedName::new_n(DEFAULT_CHAIN_ERROR_TYPE.iter()),
+            bail_macro: FullyQualifiedName::new_n(DEFAULT_CHAIN_BAIL_MACRO.iter()),
             main_name: DEFAULT_CHAIN_MAIN_NAME.to_string(),
             main_attrs: Vec::default(),
         }

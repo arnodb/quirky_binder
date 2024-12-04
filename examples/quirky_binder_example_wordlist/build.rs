@@ -29,7 +29,7 @@ use quirky_binder::{
             let mut input = stdin.lock();
             let mut buffer = String::new();
             loop {
-                let read = input.read_line(&mut buffer).map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
+                let read = input.read_line(&mut buffer)?;
                 if read > 0 {
                     let value = std::mem::take(&mut buffer);
                     let value = value.trim_end_matches('\n');

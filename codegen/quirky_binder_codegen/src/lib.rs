@@ -184,8 +184,8 @@ impl ModuleCode {
                 quote! {
                     writeln!(file, r#"
     #[test]
-    fn {}() -> Result<(), QuirkyBinderError> {{
-       main(ChainConfiguration::default())
+    fn {}() {{
+       main(ChainConfiguration::default()).unwrap();
     }}
 "#, #test_name)?;
                 }

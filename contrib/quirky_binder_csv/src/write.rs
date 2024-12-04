@@ -92,8 +92,7 @@ impl DynNode for WriteCsv {
             let variant = &record_definition[self.inputs.single().variant_id()];
             let headers = variant.data().map(|d| record_definition[d].name());
             Some(quote! {{
-                writer.write_record([#(#headers),*])
-                    .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
+                writer.write_record([#(#headers),*])?;
             }})
         } else {
             None
@@ -111,12 +110,10 @@ impl DynNode for WriteCsv {
                 let file_path = Path::new(#output_file);
                 if let Some(parent) = file_path.parent() {
                     if !parent.exists() {
-                        create_dir_all(parent)
-                            .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
+                        create_dir_all(parent)?;
                     }
                 }
-                let file = File::create(file_path)
-                    .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
+                let file = File::create(file_path)?;
 
                 let mut writer = csv::WriterBuilder::new()
                     .has_headers(false)
@@ -125,8 +122,7 @@ impl DynNode for WriteCsv {
                 #write_headers
 
                 while let Some(record) = input.next()? {
-                    writer.serialize(record)
-                        .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
+                    writer.serialize(record)?;
                 }
 
                 Ok(())

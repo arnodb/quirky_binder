@@ -104,6 +104,11 @@ impl FullyQualifiedName {
     pub fn to_name(&self) -> proc_macro2::Ident {
         format_ident!("{}", **self.last().expect("last"))
     }
+
+    pub fn to_path(&self) -> proc_macro2::TokenStream {
+        let segments = self.0.iter().map(|seg| format_ident!("{}", seg.as_ref()));
+        quote! { #(#segments)::* }
+    }
 }
 
 impl Display for FullyQualifiedName {

@@ -5,6 +5,7 @@ edition = "2021"
 rust-version = "1.65.0"
 
 [dependencies]
+anyhow = "1"
 csv = "1"
 fallible-iterator = "0.3"
 more-asserts = "0.3"

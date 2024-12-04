@@ -118,7 +118,7 @@ impl DynNode for ReadCsv {
         &self.outputs
     }
 
-    fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
+    fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.new_threaded_source(
             &self.name,
             ChainThreadType::Regular,
@@ -130,40 +130,42 @@ impl DynNode for ReadCsv {
 
         let has_headers = self.has_headers;
 
-        let read_headers = if has_headers {
-            let header_checks = self
-                .fields
-                .iter()
-                .enumerate()
-                .map(|(index, (field_name, _))| {
-                    let field_name = field_name.name();
-                    quote! {
-                        let header = iter.next();
-                        if let Some(header) = header {
-                            if header != #field_name {
-                                return Err(QuirkyBinderError::Custom(format!(
-                                    "Header mismatch at position {}, expected {} but got {}",
-                                    #index, #field_name, header)));
+        let bail = graph.chain_customizer().bail_macro.to_path();
+
+        let read_headers =
+            if has_headers {
+                let header_checks = self.fields.iter().enumerate().map(
+                    |(index, (field_name, _))| {
+                        let field_name = field_name.name();
+                        quote! {
+                            let header = iter.next();
+                            if let Some(header) = header {
+                                if header != #field_name {
+                                    #bail!(
+                                        "Header mismatch at position {}, expected {} but got {}",
+                                        #index, #field_name, header
+                                    );
+                                }
+                            } else {
+                                #bail!(
+                                    "Missing header at position {}, expected {}",
+                                    #index, #field_name
+                                );
                             }
-                        } else {
-                            return Err(QuirkyBinderError::Custom(format!(
-                                "Missing header at position {}, expected {}",
-                                #index, #field_name)));
                         }
-                    }
-                });
-            Some(quote! {{
-                let headers = reader.headers()
-                    .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
-                let mut iter = headers.into_iter();
-                #(#header_checks)*
-                if let Some(header) = iter.next() {
-                    return Err(QuirkyBinderError::Custom(format!("Unexpected extra header {}", header)));
-                };
-            }})
-        } else {
-            None
-        };
+                    },
+                );
+                Some(quote! {{
+                    let headers = reader.headers()?;
+                    let mut iter = headers.into_iter();
+                    #(#header_checks)*
+                    if let Some(header) = iter.next() {
+                        #bail!("Unexpected extra header {}", header);
+                    };
+                }})
+            } else {
+                None
+            };
 
         let thread_body = quote! {
             let output = thread_control.output_0.take().expect("output 0");
@@ -171,8 +173,7 @@ impl DynNode for ReadCsv {
                 use std::fs::File;
                 use std::io::BufReader;
 
-                let file = File::open(#input_file)
-                    .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
+                let file = File::open(#input_file)?;
 
                 let mut reader = csv::ReaderBuilder::new()
                     .has_headers(#has_headers)
@@ -181,8 +182,7 @@ impl DynNode for ReadCsv {
                 #read_headers
 
                 for result in reader.deserialize() {
-                    let record = result
-                        .map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
+                    let record = result?;
                     output.send(Some(record))?;
                 }
                 output.send(None)?;

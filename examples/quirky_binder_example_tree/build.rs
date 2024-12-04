@@ -38,7 +38,7 @@ use quirky_binder::{
             let mut full_name_index = BTreeMap::<PathBuf, usize>::new();
 
             for (id, entry) in WalkDir::new(thread_control.chain_configuration.variables["root"].clone()).into_iter().enumerate() {
-                let entry = entry.map_err(|err| QuirkyBinderError::Custom(err.to_string()))?;
+                let entry = entry?;
 
                 let parent_id = entry.path().parent()
                     .and_then(|parent_path| {
@@ -50,7 +50,7 @@ use quirky_binder::{
                         vacant.insert(id);
                     },
                     Entry::Occupied(occupied) => {
-                        return Err(QuirkyBinderError::Custom(format!("Already seen file {}", occupied.key().to_string_lossy())));
+                        anyhow::bail!("Already seen file {}", occupied.key().to_string_lossy());
                     },
                 }
 
