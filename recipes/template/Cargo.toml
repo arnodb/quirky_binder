@@ -1,0 +1,28 @@
+[package]
+name = "{{project-name}}"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+fallible-iterator = "0.3"
+quirky_binder_support = { path = "../../quirky_binder_support" }
+serde = "1"
+static_assertions = "1"
+truc_runtime = { git = "https://github.com/arnodb/truc.git" }
+
+# quirky_binder_monitor
+chrono = { version = "0.4", optional = true }
+self-meter = { version = "0.6", optional = true }
+tracking-allocator = { version = "0.4", optional = true }
+
+[features]
+default = []
+quirky_binder_monitor = ["chrono", "self-meter", "tracking-allocator"]
+
+[build-dependencies]
+handlebars = "4"
+quirky_binder = { path = "../../quirky_binder" }
+quirky_binder_lang = { path = "../../quirky_binder_lang" }
+serde = { version = "1", features = ["derive"] }
+truc = { git = "https://github.com/arnodb/truc.git" }

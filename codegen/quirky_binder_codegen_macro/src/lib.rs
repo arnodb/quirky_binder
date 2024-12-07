@@ -4,7 +4,8 @@ use annotate_snippets::display_list::DisplayList;
 use proc_macro2::Ident;
 use proc_macro_error::{abort_if_dirty, emit_error, proc_macro_error};
 use quirky_binder_codegen::{
-    parse_and_generate_glob_modules, parse_and_generate_module, CodegenError, ErrorEmitter,
+    parse_and_generate_file_module, parse_and_generate_glob_modules, parse_and_generate_module,
+    CodegenError, ErrorEmitter,
 };
 use quirky_binder_lang::snippet::snippet_for_input_and_part;
 use quote::format_ident;
@@ -73,6 +74,9 @@ enum Definition {
     Inline {
         qb: String,
     },
+    Include {
+        file: String,
+    },
     IncludeGlob {
         src: String,
         pattern: String,
@@ -81,6 +85,7 @@ enum Definition {
 }
 
 const INLINE_DEFINITION: &str = "inline";
+const INCLUDE_DEFINITION: &str = "include";
 const INCLUDE_GLOB_DEFINITION: &str = "include_glob";
 const INCLUDE_GLOB_TEST_DEFINITION: &str = "include_glob_test";
 
@@ -98,6 +103,11 @@ fn parse_def(input: ParseStream) -> Result<(Definition, Ident), Error> {
             parenthesized!(content in input);
             Definition::parse_include_glob(&content, false)?
         }
+        INCLUDE_DEFINITION => {
+            let content;
+            parenthesized!(content in input);
+            Definition::parse_include(&content)?
+        }
         INCLUDE_GLOB_TEST_DEFINITION => {
             let content;
             parenthesized!(content in input);
@@ -108,7 +118,12 @@ fn parse_def(input: ParseStream) -> Result<(Definition, Ident), Error> {
                 def_type.span(),
                 format!(
                     "expected [{}]",
-                    [INLINE_DEFINITION, INCLUDE_GLOB_DEFINITION].join(", ")
+                    [
+                        INLINE_DEFINITION,
+                        INCLUDE_DEFINITION,
+                        INCLUDE_GLOB_DEFINITION
+                    ]
+                    .join(", ")
                 ),
             ));
         }
@@ -117,6 +132,11 @@ fn parse_def(input: ParseStream) -> Result<(Definition, Ident), Error> {
 }
 
 impl Definition {
+    fn parse_include(content: ParseStream) -> Result<Definition, Error> {
+        let file: LitStr = content.parse()?;
+        Ok(Definition::Include { file: file.value() })
+    }
+
     fn parse_include_glob(content: ParseStream, test: bool) -> Result<Definition, Error> {
         let src: LitStr = content.parse()?;
         content.parse::<token::Comma>()?;
@@ -150,6 +170,11 @@ fn quirky_binder_1(
         Definition::Inline { qb } => {
             let result =
                 parse_and_generate_module(&qb, None, quirky_binder_crate, &mut error_emitter);
+            error_emitter.handle_codegen_result(result).into()
+        }
+        Definition::Include { file } => {
+            let result =
+                parse_and_generate_file_module(&file, quirky_binder_crate, &mut error_emitter);
             error_emitter.handle_codegen_result(result).into()
         }
         Definition::IncludeGlob { src, pattern, test } => {

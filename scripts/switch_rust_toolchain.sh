@@ -73,6 +73,7 @@ done
 
 echo "Removing \`Cargo.lock\`..."
 rm -f "$WORKSPACE_DIR/Cargo.lock"
+rm -f "$WORKSPACE_DIR/recipes/Cargo.lock"
 rm -f "$WORKSPACE_DIR/codegen/quirky_binder_codegen_wasm/Cargo.lock"
 
 if [ x"$RUST_TOOLCHAIN" = x ]

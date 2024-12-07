@@ -225,6 +225,17 @@ impl ModuleCode {
     }
 }
 
+pub fn parse_and_generate_file_module(
+    file: &str,
+    quirky_binder_crate: &Ident,
+    error_emitter: &mut dyn ErrorEmitter,
+) -> Result<TokenStream, CodegenError> {
+    let path =
+        Path::new(&std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR")).join(file);
+    let src = std::fs::read_to_string(path).map_err(|err| CodegenError::Error(err.to_string()))?;
+    parse_and_generate_module(&src, Some(file), quirky_binder_crate, error_emitter)
+}
+
 pub fn parse_and_generate_glob_modules(
     src: &str,
     pattern: &str,

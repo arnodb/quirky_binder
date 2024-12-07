@@ -1,0 +1,36 @@
+use quirky_binder::{
+    filter::{
+        function::{
+            produce::function_produce,
+            terminate::function_terminate,
+        },
+    },
+};
+
+{
+  (
+      function_produce(
+        fields: [("hello", "String")],
+        body: r#"{
+            let record = new_record("world".to_string());
+            output.send(Some(record))?;
+            output.send(None)?;
+            Ok(())
+        }"#,
+      )
+    - function_terminate(
+        body: r#"
+            let record = input.next()?.unwrap();
+            println!("Hello {}!", record.hello());
+            assert!(input.next()?.is_none());
+            Ok(())
+"#,
+      )
+  )
+}
+
+#(
+    name: "quirky_binder_monitor",
+    feature: "quirky_binder_monitor",
+)
+{ ( quirky_binder::filter::monitor::monitor() ) }

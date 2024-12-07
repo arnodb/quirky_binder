@@ -15,4 +15,5 @@ members = [
 ]
 exclude = [
     "codegen/quirky_binder_codegen_wasm",
+    "recipes",
 ]
