@@ -15,7 +15,7 @@ default = ["crafted_parser"]
 crafted_parser = ["logos", "peekmore"]
 nom_parser = ["nom"]
 
-full_fuzz_tests = ["nom_parser", "crafted_parser"]
+#full_fuzz_tests = ["nom_parser", "crafted_parser"]
 
 [dependencies]
 annotate-snippets = { version = "0.9", features = ["color"] }

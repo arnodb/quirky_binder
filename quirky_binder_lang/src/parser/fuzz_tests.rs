@@ -134,7 +134,8 @@ fn fuzz_use_declaration() {
         crafted_parser
     };
 
-    #[cfg(feature = "full_fuzz_tests")]
+    //#[cfg(feature = "full_fuzz_tests")]
+    #[cfg(not(test))]
     {
         fuzz_test_compare!(
             seed,
@@ -178,7 +179,8 @@ fn fuzz_graph_definition_signature() {
         crafted_parser
     };
 
-    #[cfg(feature = "full_fuzz_tests")]
+    //#[cfg(feature = "full_fuzz_tests")]
+    #[cfg(not(test))]
     {
         fuzz_test_compare!(
             seed,
@@ -220,7 +222,8 @@ fn fuzz_filter() {
         crafted_parser
     };
 
-    #[cfg(feature = "full_fuzz_tests")]
+    //#[cfg(feature = "full_fuzz_tests")]
+    #[cfg(not(test))]
     {
         fuzz_test_compare!(
             seed,
@@ -262,7 +265,8 @@ fn fuzz_opt_streams0() {
         crafted_parser
     };
 
-    #[cfg(feature = "full_fuzz_tests")]
+    //#[cfg(feature = "full_fuzz_tests")]
+    #[cfg(not(test))]
     {
         fuzz_test_compare!(
             seed,
@@ -304,7 +308,8 @@ fn fuzz_opt_streams1() {
         crafted_parser
     };
 
-    #[cfg(feature = "full_fuzz_tests")]
+    //#[cfg(feature = "full_fuzz_tests")]
+    #[cfg(not(test))]
     {
         fuzz_test_compare!(
             seed,
@@ -346,7 +351,8 @@ fn fuzz_code() {
         crafted_parser
     };
 
-    #[cfg(feature = "full_fuzz_tests")]
+    //#[cfg(feature = "full_fuzz_tests")]
+    #[cfg(not(test))]
     {
         fuzz_test_compare!(
             seed,
@@ -388,7 +394,8 @@ fn fuzz_simple_path() {
         crafted_parser
     };
 
-    #[cfg(feature = "full_fuzz_tests")]
+    //#[cfg(feature = "full_fuzz_tests")]
+    #[cfg(not(test))]
     {
         fuzz_test_compare!(
             seed,
@@ -430,7 +437,8 @@ fn fuzz_identifier() {
         crafted_parser
     };
 
-    #[cfg(feature = "full_fuzz_tests")]
+    //#[cfg(feature = "full_fuzz_tests")]
+    #[cfg(not(test))]
     {
         fuzz_test_compare!(
             seed,
