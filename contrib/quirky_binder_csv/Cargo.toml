@@ -7,7 +7,7 @@ license-file = "../LICENSE"
 description = "Quirky Binder - CSV"
 documentation = "https://docs.rs/quirky_binder_csv"
 repository = "https://github.com/arnodb/quirky_binder"
-readme = "../README.md"
+readme = "README.md"
 
 [dependencies]
 getset = "0.1"

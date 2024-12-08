@@ -1,0 +1,21 @@
+use quirky_binder_csv::{read_csv, write_csv};
+
+{
+  (
+      read_csv(
+        input_file: "input/hello_universe.csv",
+        fields: [("hello", "String"), ("universe", "usize")],
+        has_headers: true,
+      )
+    - write_csv(
+        output_file: "output/hello_universe.csv",
+        has_headers: true,
+      )
+  )
+}
+
+#(
+    name: "quirky_binder_monitor",
+    feature: "quirky_binder_monitor",
+)
+{ ( quirky_binder::filter::monitor::monitor() ) }
