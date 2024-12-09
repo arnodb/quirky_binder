@@ -1,0 +1,82 @@
+use quirky_binder::{
+    filter::{
+        function::{
+            produce::function_produce,
+            terminate::function_terminate,
+        },
+    },
+};
+
+{
+  (
+      function_produce(
+        fields: [("hello", "String"), ("universe", "Option<i32>")],
+        body: r#"{
+            use postgres::{Client, NoTls};
+
+            let mut client = Client::connect("host=localhost port=5433 user=postgres password=postgres", NoTls)?;
+
+            client.batch_execute("
+                CREATE TEMP TABLE my_table (
+                    hello TEXT NOT NULL,
+                    universe INTEGER NULL
+                )
+            ")?;
+
+            client.execute(
+                "INSERT INTO my_table (hello, universe) VALUES ($1, $2)",
+                &[&"world", &42],
+            )?;
+
+            client.execute(
+                "INSERT INTO my_table (hello, universe) VALUES ($1, $2)",
+                &[&"none", &None::<i32>],
+            )?;
+
+            for row in client.query("SELECT hello, universe FROM my_table", &[])? {
+                let hello: String = row.get(0);
+                let universe: Option<i32> = row.get(1);
+
+                let record = new_record(hello, universe);
+                output.send(Some(record))?;
+            }
+            output.send(None)?;
+            Ok(())
+        }"#,
+      )
+    - function_terminate(
+        body: r#"{
+            use postgres::{Client, NoTls};
+
+            let mut client = Client::connect("host=localhost port=5433 user=postgres password=postgres", NoTls)?;
+
+            client.batch_execute("
+                CREATE TEMP TABLE my_other_table (
+                    hello TEXT NOT NULL,
+                    universe INTEGER NULL
+                )
+            ")?;
+
+            while let Some(record) = input.next()? {
+                println!("Hello {}! Universe {:?}!", record.hello(), record.universe());
+
+                client.execute(
+                    "INSERT INTO my_other_table (hello, universe) VALUES ($1, $2)",
+                    &[record.hello(), record.universe()],
+                )?;
+            }
+
+            let count: i64 = client.query("SELECT COUNT(*) FROM my_other_table", &[])?.pop().unwrap().get(0);
+            assert_eq!(count, 2);
+
+            Ok(())
+        }"#,
+      )
+  )
+}
+
+#(
+    name: "quirky_binder_monitor",
+    feature: "quirky_binder_monitor",
+)
+{ ( quirky_binder::filter::monitor::monitor() ) }

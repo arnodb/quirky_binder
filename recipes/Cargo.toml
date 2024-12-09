@@ -3,4 +3,5 @@ resolver = "2"
 members = [
     "csv",
     "hello_world",
+    "postgres",
 ]
