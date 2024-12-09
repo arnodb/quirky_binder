@@ -649,7 +649,9 @@ impl<'a> Chain<'a> {
         let fn_def = quote! {
               pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
                   #input
-                  #inline_body
+                  {
+                      #inline_body
+                  }
               }
         };
 

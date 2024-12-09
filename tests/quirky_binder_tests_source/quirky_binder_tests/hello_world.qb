@@ -11,12 +11,12 @@ use quirky_binder::{
   (
       function_produce(
         fields: [("hello", "String")],
-        body: r#"{
+        body: r#"
             let record = new_record("world".to_string());
             output.send(Some(record))?;
             output.send(None)?;
             Ok(())
-        }"#,
+"#,
       )
     - function_terminate(
         body: r#"

@@ -29,7 +29,7 @@ use quirky_binder::{
         fields: [("id", "usize"), ("file_name", "String"), ("path", "String"), ("parent_id", "Option<usize>")],
         order_fields: Some(["id"]),
         distinct_fields: Some(["id"]),
-        body: r#"{
+        body: r#"
             use std::collections::BTreeMap;
             use std::collections::btree_map::Entry;
             use std::path::PathBuf;
@@ -64,7 +64,7 @@ use quirky_binder::{
             }
             output.send(None)?;
             Ok(())
-        }"#,
+"#,
       )
     - extract_fields(fields: ["id", "parent_id"]) [extracted]
     - accumulate()

@@ -22,7 +22,7 @@ use quirky_binder::{
   (
       function_produce#read_token(
         fields: [("token", "Box<str>")],
-        body: r#"{
+        body: r#"
             use std::io::BufRead;
 
             let stdin = std::io::stdin();
@@ -40,7 +40,7 @@ use quirky_binder::{
                     return Ok(());
                 }
             }
-        }"#,
+"#,
       )
     - sort#sort_token(fields: ["token"])
     - dedup#dedup_token()

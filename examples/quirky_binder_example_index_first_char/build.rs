@@ -111,7 +111,7 @@ use super::tokenize;
   (
       function_produce#read_input(
         fields: [("words", "Box<str>")],
-        body: r#"{
+        body: r#"
             use std::io::BufRead;
 
             let stdin = std::io::stdin();
@@ -129,7 +129,7 @@ use super::tokenize;
                     return Ok(());
                 }
             }
-        }"#,
+"#,
       )
     - tokenize#tokenize()
     - sort#sort(fields: ["first_char", "word"])

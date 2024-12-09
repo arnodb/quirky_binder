@@ -19,9 +19,9 @@ use quirky_binder::{
         fields: [("id", "usize"), ("file_name", "String"), ("path", "String"), ("parent_id", "Option<usize>")],
         order_fields: Some(["id"]),
         distinct_fields: Some(["id"]),
-        function: r#"{
+        function: r#"
             todo!();
-        }"#,
+"#,
       )
     - extract_fields(fields: ["id", "parent_id"]) [extracted]
     - accumulate()

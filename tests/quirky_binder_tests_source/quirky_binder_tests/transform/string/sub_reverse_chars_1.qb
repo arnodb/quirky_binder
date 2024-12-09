@@ -13,12 +13,12 @@ use quirky_binder::{
   (
       function_produce(
         fields: [("value", "String")],
-        body: r#"{
+        body: r#"
             let record = new_record("BoîTe".to_string());
             output.send(Some(record))?;
             output.send(None)?;
             Ok(())
-        }"#,
+"#,
       )
     - group(group_field: "group", fields: ["value"])
     - sub_reverse_chars(path_fields: ["group"], fields: ["value"])

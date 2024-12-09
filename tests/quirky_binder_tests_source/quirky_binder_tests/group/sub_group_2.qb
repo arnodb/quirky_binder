@@ -15,7 +15,7 @@ use quirky_binder::{
   (
       function_produce(
         fields: [("num", "u8"), ("lsb2", "u8"), ("lsb4", "u8"), ("lsb6", "u8")],
-        body: r#"{
+        body: r#"
             use rand::Rng;
             use rand_chacha::rand_core::SeedableRng;
 
@@ -30,7 +30,7 @@ use quirky_binder::{
             }
             output.send(None)?;
             Ok(())
-        }"#,
+"#,
       )
     - sort(fields: ["lsb2", "lsb4", "lsb6"])
     - group(group_field: "group", fields: ["num", "lsb4", "lsb6"])

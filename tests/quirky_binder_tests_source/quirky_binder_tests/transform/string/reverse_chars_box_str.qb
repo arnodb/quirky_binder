@@ -12,12 +12,12 @@ use quirky_binder::{
   (
       function_produce(
         fields: [("value", "Box<str>")],
-        body: r#"{
+        body: r#"
             let record = new_record("BoîTe".into());
             output.send(Some(record))?;
             output.send(None)?;
             Ok(())
-        }"#,
+"#,
       )
     - reverse_chars(fields: ["value"])
     - function_terminate(

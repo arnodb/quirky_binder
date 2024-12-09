@@ -12,7 +12,7 @@ use quirky_binder::{
   (
       function_produce(
         fields: [("num", "u8")],
-        body: r#"{
+        body: r#"
             use rand::Rng;
             use rand_chacha::rand_core::SeedableRng;
 
@@ -28,7 +28,7 @@ use quirky_binder::{
             }
             output.send(None)?;
             Ok(())
-        }"#,
+"#,
       )
     - dedup()
     - function_terminate(

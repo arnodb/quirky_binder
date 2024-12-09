@@ -12,7 +12,7 @@ use quirky_binder::{
   (
       function_produce(
         fields: [("num", "i8")],
-        body: r#"{
+        body: r#"
             use std::collections::BTreeSet;
 
             use rand::Rng;
@@ -30,7 +30,7 @@ use quirky_binder::{
             }
             output.send(None)?;
             Ok(())
-        }"#,
+"#,
         order_fields: Some(["num"]),
         distinct_fields: Some(["num"]),
       )
@@ -40,7 +40,7 @@ use quirky_binder::{
   (
       function_produce(
         fields: [("other_num", "i8")],
-        body: r#"{
+        body: r#"
             use std::collections::BTreeSet;
 
             use rand::Rng;
@@ -58,7 +58,7 @@ use quirky_binder::{
             }
             output.send(None)?;
             Ok(())
-        }"#,
+"#,
         order_fields: Some(["other_num"]),
         distinct_fields: Some(["other_num"]),
       )

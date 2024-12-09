@@ -13,7 +13,7 @@ use quirky_binder::{
   (
       function_produce(
         fields: [("num", "i8")],
-        body: r#"{
+        body: r#"
             use rand::Rng;
             use rand_chacha::rand_core::SeedableRng;
 
@@ -28,7 +28,7 @@ use quirky_binder::{
             }
             output.send(None)?;
             Ok(())
-        }"#,
+"#,
       )
     - sort(fields: ["num"])
     - function_update(

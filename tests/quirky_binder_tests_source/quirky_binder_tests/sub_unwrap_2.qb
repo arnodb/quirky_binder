@@ -13,14 +13,14 @@ use quirky_binder::{
   (
       function_produce(
         fields: [("value", "Option<String>")],
-        body: r#"{
+        body: r#"
             let record = new_record(None);
             output.send(Some(record))?;
             let record = new_record(Some("some".to_string()));
             output.send(Some(record))?;
             output.send(None)?;
             Ok(())
-        }"#,
+"#,
       )
     - group(group_field: "group", fields: ["value"])
     - sub_group(path_fields: ["group"], group_field: "sub_group", fields: ["value"])

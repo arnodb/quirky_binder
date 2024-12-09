@@ -12,12 +12,12 @@ use quirky_binder::{
   (
       function_produce(
         fields: [("value", "String")],
-        body: r#"{
+        body: r#"
             let record = new_record("some value".to_string());
             output.send(Some(record))?;
             output.send(None)?;
             Ok(())
-        }"#,
+"#,
       )
     - extract_fields(fields: ["value"]) [extracted]
     - function_terminate(

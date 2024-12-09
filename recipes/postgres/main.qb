@@ -11,7 +11,7 @@ use quirky_binder::{
   (
       function_produce(
         fields: [("hello", "String"), ("universe", "Option<i32>")],
-        body: r#"{
+        body: r#"
             use postgres::{Client, NoTls};
 
             let mut client = Client::connect("host=localhost port=5433 user=postgres password=postgres", NoTls)?;
@@ -42,10 +42,10 @@ use quirky_binder::{
             }
             output.send(None)?;
             Ok(())
-        }"#,
+"#,
       )
     - function_terminate(
-        body: r#"{
+        body: r#"
             use postgres::{Client, NoTls};
 
             let mut client = Client::connect("host=localhost port=5433 user=postgres password=postgres", NoTls)?;
@@ -70,7 +70,7 @@ use quirky_binder::{
             assert_eq!(count, 2);
 
             Ok(())
-        }"#,
+"#,
       )
   )
 }
