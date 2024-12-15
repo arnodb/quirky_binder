@@ -541,19 +541,21 @@ impl<Spec: SubTransformSpec> DynNode for SubTransform<Spec> {
             quote! { mut record }
         };
 
+        let error_type = graph.chain_customizer().error_type.to_full_name();
+
         let build_leaf_body = |input_record, record, access, mut_access| {
             quote! {
                 // TODO optimize this code in truc
-                let converted = convert_vec_in_place::<#input_record, #record, _>(
+                let converted = try_convert_vec_in_place::<#input_record, #record, _, #error_type>(
                     #access,
-                    |#record_param, _prev_record| {
+                    |#record_param, _prev_record| -> Result<_, #error_type> {
                         #updates
 
                         #new_variant_body
 
-                        VecElementConversionResult::Converted(record)
+                        Ok(VecElementConversionResult::Converted(record))
                     }
-                );
+                )?;
                 *record.#mut_access() = converted;
             }
         };
@@ -563,9 +565,7 @@ impl<Spec: SubTransformSpec> DynNode for SubTransform<Spec> {
             self.inputs.single(),
             self.outputs.single(),
             &self.path_streams,
-            Some(&quote! {
-                use truc_runtime::convert::{convert_vec_in_place, VecElementConversionResult};
-            }),
+            None,
             build_leaf_body,
         );
     }

@@ -9,7 +9,7 @@ use crate::{prelude::*, trace_element};
 
 enum NoneStrategy {
     Skip,
-    Fail { error_type: syn::Ident },
+    Fail { bail: proc_macro2::TokenStream },
 }
 
 const UNWRAP_TRACE_NAME: &str = "unwrap";
@@ -86,11 +86,9 @@ impl TransformSpec for Unwrap {
                     return Ok(None);
                 }
             }
-            NoneStrategy::Fail { error_type } => {
+            NoneStrategy::Fail { bail } => {
                 quote! {
-                    return Err(#error_type::custom(
-                        format!("found None for field `{}`", #name)
-                    ));
+                    #bail!("found None for field `{}`", #name);
                 }
             }
         };
@@ -117,7 +115,7 @@ pub fn unwrap<R: TypeResolver + Copy>(
                 NoneStrategy::Skip
             } else {
                 NoneStrategy::Fail {
-                    error_type: graph.chain_customizer().error_type.to_name(),
+                    bail: graph.chain_customizer().bail_macro.to_full_name(),
                 }
             },
         },
@@ -204,14 +202,12 @@ impl SubTransformSpec for SubUnwrap {
         let error = match &self.none_strategy {
             NoneStrategy::Skip => {
                 quote! {
-                    return VecElementConversionResult::Abandonned;
+                    return Ok(VecElementConversionResult::Abandonned);
                 }
             }
-            NoneStrategy::Fail { error_type } => {
+            NoneStrategy::Fail { bail } => {
                 quote! {
-                    return Err(#error_type::custom(
-                        format!("found None for field `{}`", #name)
-                    ));
+                    #bail!("found None for field `{}`", #name);
                 }
             }
         };
@@ -238,7 +234,7 @@ pub fn sub_unwrap<R: TypeResolver + Copy>(
                 NoneStrategy::Skip
             } else {
                 NoneStrategy::Fail {
-                    error_type: graph.chain_customizer().error_type.to_name(),
+                    bail: graph.chain_customizer().bail_macro.to_full_name(),
                 }
             },
         },

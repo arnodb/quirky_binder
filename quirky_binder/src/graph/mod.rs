@@ -86,10 +86,6 @@ impl Graph {
 
         {
             let mut scope = Scope::new();
-            scope.import(
-                &self.chain_customizer.error_type_path(),
-                &self.chain_customizer.error_type_name(),
-            );
             for (path, ty) in &self.chain_customizer.custom_module_imports {
                 scope.import(path, ty);
             }

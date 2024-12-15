@@ -345,14 +345,7 @@ impl DynNode for SubUngroup {
             self.inputs.single(),
             self.outputs.single(),
             &self.path_streams,
-            if self.path_streams.len() > 1 {
-                Some(quote! {
-                    use truc_runtime::convert::{convert_vec_in_place, VecElementConversionResult};
-                })
-            } else {
-                None
-            }
-            .as_ref(),
+            None,
             build_leaf_body,
         );
     }

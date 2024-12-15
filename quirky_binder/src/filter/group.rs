@@ -441,6 +441,8 @@ impl DynNode for SubGroup {
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
+        let error_type = graph.chain_customizer().error_type.to_full_name();
+
         let def_group = chain.sub_stream_definition_fragments(&self.group_stream);
 
         let group_record = def_group.record();
@@ -491,7 +493,7 @@ impl DynNode for SubGroup {
             let prev_record_ident = self.identifier_for("prev_record");
             let group_record_ident = self.identifier_for("group_record");
             let update_body = quote! {
-                |#record_ident, #prev_record_ident| {
+                |#record_ident, #prev_record_ident| -> Result<_, #error_type> {
                     let #record_and_unpacked_out {
                         record: mut #record_ident,
                         #fields
@@ -505,33 +507,27 @@ impl DynNode for SubGroup {
                                 #group_unpacked_record { #fields }
                             );
                             #prev_record_ident.#mut_group_field().push(#group_record_ident);
-                            return VecElementConversionResult::Abandonned;
+                            return Ok(VecElementConversionResult::Abandonned);
                         }
                     }
                     let #group_record_ident = #group_record::new(
                         #group_unpacked_record { #fields }
                     );
                     #record_ident.#mut_group_field().push(#group_record_ident);
-                    VecElementConversionResult::Converted(#record_ident)
+                    Ok(VecElementConversionResult::Converted(#record_ident))
                 }
             };
 
             (eq_preamble, update_body)
         };
 
-        let preamble = quote! {
-            use truc_runtime::convert::{convert_vec_in_place, VecElementConversionResult};
-
-            #eq_preamble
-        };
-
         let build_leaf_body = |input_record, record, access, mut_access| {
             quote! {
                 // TODO optimize this code in truc
-                let converted = convert_vec_in_place::<#input_record, #record, _>(
+                let converted = try_convert_vec_in_place::<#input_record, #record, _, #error_type>(
                     #access,
                     #update_body,
-                );
+                )?;
                 *record.#mut_access() = converted;
             }
         };
@@ -541,7 +537,7 @@ impl DynNode for SubGroup {
             self.inputs.single(),
             self.outputs.single(),
             &self.path_streams,
-            Some(&preamble),
+            Some(&eq_preamble),
             build_leaf_body,
         );
     }

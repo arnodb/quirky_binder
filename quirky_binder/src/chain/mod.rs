@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, fmt::Display, ops::Deref};
+use std::{borrow::Cow, collections::HashMap, fmt::Display};
 
 use codegen::{Module, Scope};
 use itertools::Itertools;
@@ -91,7 +91,7 @@ impl ChainSourceThread {
             }
         } else {
             let input = format_ident!("input_{}", self.stream_index);
-            let error_type = customizer.error_type.to_name();
+            let error_type = customizer.error_type.to_full_name();
             quote! {
                 let #mutable_input input = {
                     let rx = thread_control.#input.take().expect("input {stream_index}");
@@ -307,7 +307,7 @@ impl<'a> Chain<'a> {
             import_scope.add_import("fallible_iterator", "FallibleIterator");
 
             {
-                let error_type = self.customizer.error_type.to_name();
+                let error_type = self.customizer.error_type.to_full_name();
 
                 let input = source_thread.format_input(source, self.customizer, true);
 
@@ -330,7 +330,7 @@ impl<'a> Chain<'a> {
             thread.output_pipes = Some(Box::new([pipe]));
             thread.main = Some(FullyQualifiedName::new(name).sub("quirky_binder_pipe"));
         }
-        import_scope.import(scope, self.customizer);
+        import_scope.import(scope);
         pipe
     }
 
@@ -425,7 +425,7 @@ impl<'a> Chain<'a> {
         }
 
         {
-            let error_type = self.customizer.error_type.to_name();
+            let error_type = self.customizer.error_type.to_full_name();
 
             let channels = (0..self.pipe_count).map(|pipe| {
                 let tx = format_ident!("tx_{}", pipe);
@@ -642,7 +642,7 @@ impl<'a> Chain<'a> {
 
         let fn_name = format_ident!("{}", **name.last().expect("local name"));
         let thread_module = format_ident!("thread_{}", thread.thread_id);
-        let error_type = self.customizer.error_type.to_name();
+        let error_type = self.customizer.error_type.to_full_name();
 
         let input = thread.format_input(input.source(), self.customizer, false);
 
@@ -655,8 +655,6 @@ impl<'a> Chain<'a> {
               }
         };
 
-        let customizer = self.customizer;
-
         let mut import_scope = ImportScope::default();
         import_scope.add_import("fallible_iterator", "FallibleIterator");
 
@@ -668,7 +666,7 @@ impl<'a> Chain<'a> {
 
         scope.raw(&fn_def.to_string());
 
-        import_scope.import(scope, customizer);
+        import_scope.import(scope);
     }
 
     pub fn implement_node_thread(
@@ -681,15 +679,13 @@ impl<'a> Chain<'a> {
 
         let fn_name = format_ident!("{}", **name.last().expect("local name"));
         let thread_module = format_ident!("thread_{}", thread_id);
-        let error_type = self.customizer.error_type.to_name();
+        let error_type = self.customizer.error_type.to_full_name();
 
         let fn_def = quote! {
             pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
                 #thread_body
             }
         };
-
-        let customizer = self.customizer;
 
         let mut import_scope = ImportScope::default();
         if !node.inputs().is_empty() {
@@ -704,7 +700,7 @@ impl<'a> Chain<'a> {
 
         scope.raw(&fn_def.to_string());
 
-        import_scope.import(scope, customizer);
+        import_scope.import(scope);
     }
 
     pub fn implement_path_update(
@@ -716,6 +712,15 @@ impl<'a> Chain<'a> {
         preamble: Option<&TokenStream>,
         build_leaf_body: impl FnOnce(Type, Type, Ident, Ident) -> TokenStream,
     ) {
+        let preamble = quote! {
+            #[allow(unused)]
+            use truc_runtime::convert::{try_convert_vec_in_place, VecElementConversionResult};
+
+            #preamble
+        };
+
+        let error_type = self.customizer.error_type.to_full_name();
+
         let mut iter = path_streams.iter().rev();
 
         let leaf_body = {
@@ -749,9 +754,9 @@ impl<'a> Chain<'a> {
             let mut_access = path_stream.field.mut_ident();
             let body = quote! {
                 // TODO optimize this code in truc
-                let converted = convert_vec_in_place::<#input_record, #record, _>(
+                let converted = try_convert_vec_in_place::<#input_record, #record, _, #error_type>(
                     #access,
-                    |record, _| {
+                    |record, _| -> Result<_, #error_type> {
                         let #record_and_unpacked_out {
                             mut record,
                             #sub_access,
@@ -760,9 +765,9 @@ impl<'a> Chain<'a> {
                             #unpacked_record_in { #sub_access: Vec::new() },
                         ));
                         #tail
-                        VecElementConversionResult::Converted(record)
+                        Ok(VecElementConversionResult::Converted(record))
                     },
-                );
+                )?;
                 *record.#mut_access() = converted;
             };
             (body, access)
@@ -807,24 +812,6 @@ pub struct ChainCustomizer {
     pub main_attrs: Vec<String>,
 }
 
-impl ChainCustomizer {
-    pub fn error_type_path(&self) -> String {
-        self.error_type
-            .iter()
-            .take(self.error_type.len() - 1)
-            .map(Deref::deref)
-            .collect()
-    }
-
-    pub fn error_type_name(&self) -> String {
-        self.error_type
-            .iter()
-            .last()
-            .expect("error_type last")
-            .to_string()
-    }
-}
-
 impl Default for ChainCustomizer {
     fn default() -> Self {
         Self {
@@ -854,8 +841,7 @@ impl ImportScope {
         self.fixed.push((path.to_string(), ty.to_string()));
     }
 
-    pub fn import(mut self, scope: &mut Scope, customizer: &ChainCustomizer) {
-        scope.import(&customizer.error_type_path(), &customizer.error_type_name());
+    pub fn import(mut self, scope: &mut Scope) {
         for (path, ty) in &self.fixed {
             scope.import(path, ty);
         }

@@ -130,7 +130,7 @@ impl DynNode for ReadCsv {
 
         let has_headers = self.has_headers;
 
-        let bail = graph.chain_customizer().bail_macro.to_path();
+        let bail = graph.chain_customizer().bail_macro.to_full_name();
 
         let read_headers =
             if has_headers {

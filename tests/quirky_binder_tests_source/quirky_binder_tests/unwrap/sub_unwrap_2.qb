@@ -1,0 +1,74 @@
+use quirky_binder::{
+    filter::{
+        function::{
+            produce::function_produce,
+            terminate::function_terminate,
+        },
+        group::{group, sub_group},
+        unwrap::sub_unwrap,
+    },
+};
+
+{
+  (
+      function_produce(
+        fields: [("value", "Option<String>")],
+        body: r#"
+            let record = new_record(None);
+            output.send(Some(record))?;
+            let record = new_record(Some("some".to_string()));
+            output.send(Some(record))?;
+            output.send(None)?;
+            Ok(())
+"#,
+      )
+    - group(group_field: "group", fields: ["value"])
+    - sub_group(path_fields: ["group"], group_field: "sub_group", fields: ["value"])
+    - sub_unwrap(path_fields: ["group", "sub_group"], fields: ["value"], skip_nones: true)
+    - function_terminate(
+        body: r#"
+            let record = input.next()?.unwrap();
+            assert_eq!(
+                record
+                    .group().first().unwrap()
+                    .sub_group().first().unwrap()
+                    .value().as_str(),
+                "some"
+            );
+            assert!(input.next()?.is_none());
+            Ok(())
+"#,
+      )
+  )
+}
+
+{
+  (
+      function_produce(
+        fields: [("value", "Option<String>")],
+        body: r#"
+            let record = new_record(Some("some".to_string()));
+            output.send(Some(record))?;
+            output.send(None)?;
+            Ok(())
+"#,
+      )
+    - group(group_field: "group", fields: ["value"])
+    - sub_group(path_fields: ["group"], group_field: "sub_group", fields: ["value"])
+    - sub_unwrap(path_fields: ["group", "sub_group"], fields: ["value"], skip_nones: false)
+    - function_terminate(
+        body: r#"
+            let record = input.next()?.unwrap();
+            assert_eq!(
+                record
+                    .group().first().unwrap()
+                    .sub_group().first().unwrap()
+                    .value().as_str(),
+                "some"
+            );
+            assert!(input.next()?.is_none());
+            Ok(())
+"#,
+      )
+  )
+}
