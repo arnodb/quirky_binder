@@ -50,7 +50,7 @@ use quirky_binder::{
                         vacant.insert(id);
                     },
                     Entry::Occupied(occupied) => {
-                        anyhow::bail!("Already seen file {}", occupied.key().to_string_lossy());
+                        return Err(anyhow::anyhow!("Already seen file {}", occupied.key().to_string_lossy()));
                     },
                 }
 

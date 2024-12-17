@@ -130,7 +130,7 @@ impl DynNode for ReadCsv {
 
         let has_headers = self.has_headers;
 
-        let bail = graph.chain_customizer().bail_macro.to_full_name();
+        let error = graph.chain_customizer().error_macro.to_full_name();
 
         let read_headers =
             if has_headers {
@@ -141,16 +141,16 @@ impl DynNode for ReadCsv {
                             let header = iter.next();
                             if let Some(header) = header {
                                 if header != #field_name {
-                                    #bail!(
+                                    return Err(#error!(
                                         "Header mismatch at position {}, expected {} but got {}",
                                         #index, #field_name, header
-                                    );
+                                    ));
                                 }
                             } else {
-                                #bail!(
+                                return Err(#error!(
                                     "Missing header at position {}, expected {}",
                                     #index, #field_name
-                                );
+                                ));
                             }
                         }
                     },
@@ -160,7 +160,7 @@ impl DynNode for ReadCsv {
                     let mut iter = headers.into_iter();
                     #(#header_checks)*
                     if let Some(header) = iter.next() {
-                        #bail!("Unexpected extra header {}", header);
+                        return Err(#error!("Unexpected extra header {}", header));
                     };
                 }})
             } else {

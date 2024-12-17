@@ -9,7 +9,7 @@ use crate::{prelude::*, trace_element};
 
 enum NoneStrategy {
     Skip,
-    Fail { bail: proc_macro2::TokenStream },
+    Fail { error: proc_macro2::TokenStream },
 }
 
 const UNWRAP_TRACE_NAME: &str = "unwrap";
@@ -86,9 +86,9 @@ impl TransformSpec for Unwrap {
                     return Ok(None);
                 }
             }
-            NoneStrategy::Fail { bail } => {
+            NoneStrategy::Fail { error } => {
                 quote! {
-                    #bail!("found None for field `{}`", #name);
+                    return Err(#error!("found None for field `{}`", #name));
                 }
             }
         };
@@ -115,7 +115,7 @@ pub fn unwrap<R: TypeResolver + Copy>(
                 NoneStrategy::Skip
             } else {
                 NoneStrategy::Fail {
-                    bail: graph.chain_customizer().bail_macro.to_full_name(),
+                    error: graph.chain_customizer().error_macro.to_full_name(),
                 }
             },
         },
@@ -205,9 +205,9 @@ impl SubTransformSpec for SubUnwrap {
                     return Ok(VecElementConversionResult::Abandonned);
                 }
             }
-            NoneStrategy::Fail { bail } => {
+            NoneStrategy::Fail { error } => {
                 quote! {
-                    #bail!("found None for field `{}`", #name);
+                    return Err(#error!("found None for field `{}`", #name));
                 }
             }
         };
@@ -234,7 +234,7 @@ pub fn sub_unwrap<R: TypeResolver + Copy>(
                 NoneStrategy::Skip
             } else {
                 NoneStrategy::Fail {
-                    bail: graph.chain_customizer().bail_macro.to_full_name(),
+                    error: graph.chain_customizer().error_macro.to_full_name(),
                 }
             },
         },
