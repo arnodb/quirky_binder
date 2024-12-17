@@ -86,8 +86,20 @@ impl ChainSourceThread {
                 customizer.module_name, source_name
             ))
             .expect("chain_module");
+            let state_key = source_name.to_string();
+            let error = customizer.error_macro.to_full_name();
             quote! {
-                let #mutable_input input = #input(thread_control);
+                let thread_state = thread_control.state.clone();
+                let #mutable_input input = {
+                    let input = #input(thread_control);
+                    quirky_binder_support::management::state::inline_stream_state_update(
+                        input,
+                        thread_state,
+                        #state_key,
+                        |err| {
+                            #error!("{}", err)
+                        })
+                };
             }
         } else {
             let input = format_ident!("input_{}", self.stream_index);
@@ -368,10 +380,15 @@ impl<'a> Chain<'a> {
                 .expect("thread module")
                 .scope();
             scope.import("std::sync", "Arc");
+            if thread.thread_type == ChainThreadType::Background {
+                scope.import("std::sync", "Condvar");
+            }
+            scope.import("std::sync", "Mutex");
             scope.import(
                 "quirky_binder_support::chain::configuration",
                 "ChainConfiguration",
             );
+            scope.import("quirky_binder_support::management::state", "ThreadState");
             if thread.input_streams.len() > 0 {
                 scope.import("std::sync::mpsc", "Receiver");
             }
@@ -404,18 +421,20 @@ impl<'a> Chain<'a> {
             let interrupt = match thread.thread_type {
                 ChainThreadType::Regular => None,
                 ChainThreadType::Background => Some(quote! {
-                    pub interrupt: std::sync::Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>,
+                    pub interrupt: Arc<(Mutex<bool>, Condvar)>,
                 }),
             };
             let struct_def = quote! {
 
                 pub struct ThreadOuterControl {
                     #interrupt
+                    pub state: Arc<Mutex<ThreadState>>,
                 }
 
                 pub struct ThreadControl {
                     pub chain_configuration: Arc<ChainConfiguration>,
                     #interrupt
+                    pub state: Arc<Mutex<ThreadState>>,
                     #(pub #inputs: Option<Receiver<Option<#input_types>>>,)*
                     #(pub #outputs: Option<SyncSender<Option<#output_types>>>,)*
                 }
@@ -435,29 +454,27 @@ impl<'a> Chain<'a> {
                 }
             });
 
+            let mut need_condvar = false;
             let thread_controls = self
                 .threads
                 .iter()
                 .enumerate()
                 .map(|(thread_index, thread)| {
-                    let thread_outer_control = format_ident!(
-                        "{}thread_outer_control_{}",
-                        match thread.thread_type {
-                            ChainThreadType::Regular => "_",
-                            ChainThreadType::Background => "",
-                        },
-                        thread.id
-                    );
+                    let thread_outer_control = format_ident!("thread_outer_control_{}", thread.id);
                     let thread_control = format_ident!("thread_control_{}", thread.id);
                     let thread_module = format_ident!("thread_{}", thread.id);
+                    let thread_state = format_ident!("thread_state_{}", thread.id);
                     let interrupt = match thread.thread_type {
                         ChainThreadType::Regular => None,
-                        ChainThreadType::Background => Some(quote! {
-                            interrupt: std::sync::Arc::new((
-                                std::sync::Mutex::new(false),
-                                std::sync::Condvar::new(),
-                            )),
-                        }),
+                        ChainThreadType::Background => {
+                            need_condvar = true;
+                            Some(quote! {
+                                interrupt: Arc::new((
+                                    Mutex::new(false),
+                                    Condvar::new(),
+                                )),
+                            })
+                        }
                     };
                     let interrupt_clone = interrupt.is_some().then(|| {
                         quote! {
@@ -498,17 +515,22 @@ impl<'a> Chain<'a> {
                         }
                     };
                     quote! {
+                        let #thread_state = Arc::new(Mutex::new(ThreadState::default()));
+
                         let #thread_outer_control = #thread_module::ThreadOuterControl {
                             #interrupt
+                            state: #thread_state
                         };
                         let #thread_control = #thread_module::ThreadControl {
                             #config_assignment
                             #interrupt_clone
+                            state: #thread_outer_control.state,
                             #(#inputs)*
                             #(#outputs)*
                         };
                     }
-                });
+                })
+                .collect::<Vec<_>>();
 
             let spawn_threads = self.threads.iter().map(|thread| {
                 let join_thread = format_ident!("join_{}", thread.id);
@@ -557,10 +579,16 @@ impl<'a> Chain<'a> {
                 });
 
             self.scope.import("std::sync", "Arc");
+            if need_condvar {
+                self.scope.import("std::sync", "Condvar");
+            }
+            self.scope.import("std::sync", "Mutex");
             self.scope.import(
                 "quirky_binder_support::chain::configuration",
                 "ChainConfiguration",
             );
+            self.scope
+                .import("quirky_binder_support::management::state", "ThreadState");
 
             let main_attrs = if !self.customizer.main_attrs.is_empty() {
                 let attrs = &self

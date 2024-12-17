@@ -16,6 +16,7 @@ pub use quirky_binder_codegen_macro::{tracking_allocator_main, tracking_allocato
 pub mod chain;
 pub mod data;
 pub mod iterator;
+pub mod management;
 
 use serde::{Deserialize, Serialize};
 
