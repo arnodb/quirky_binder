@@ -11,7 +11,7 @@ use crate::{prelude::*, trace_element};
 #[derive(Deserialize, Debug, Deref)]
 pub struct FieldParam<'a>(#[serde(borrow)] &'a str);
 
-impl<'a> FieldParam<'a> {
+impl FieldParam<'_> {
     pub fn validate<L>(self, lookup: L) -> ChainResult<ValidFieldName>
     where
         L: Fn(&ValidFieldName) -> bool,
@@ -96,7 +96,7 @@ impl<'a> FieldParam<'a> {
 #[derive(Deserialize, Debug, Deref)]
 pub struct FieldsParam<'a>(#[serde(borrow)] Box<[&'a str]>);
 
-impl<'a> FieldsParam<'a> {
+impl FieldsParam<'_> {
     pub fn empty() -> Self {
         Self(Default::default())
     }
@@ -254,7 +254,7 @@ impl<'a> FieldsParam<'a> {
 #[derive(Deserialize, Debug, Deref)]
 pub struct DirectedFieldsParam<'a>(#[serde(borrow)] Box<[Directed<&'a str>]>);
 
-impl<'a> DirectedFieldsParam<'a> {
+impl DirectedFieldsParam<'_> {
     pub fn validate<L>(self, lookup: L) -> ChainResult<Vec<Directed<ValidFieldName>>>
     where
         L: Fn(&str) -> bool,
@@ -304,7 +304,7 @@ impl<'a> DirectedFieldsParam<'a> {
 #[derive(Deserialize, Debug, Deref)]
 pub struct TypedFieldsParam<'a>(#[serde(borrow)] Box<[(&'a str, &'a str)]>);
 
-impl<'a> TypedFieldsParam<'a> {
+impl TypedFieldsParam<'_> {
     pub fn validate_new(self) -> ChainResult<Vec<(ValidFieldName, ValidFieldType)>> {
         self.iter()
             .map(|(name, r#type)| {

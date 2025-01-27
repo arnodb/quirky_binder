@@ -13,7 +13,7 @@ pub struct TransformParams<'a> {
     pub type_update_fields: FieldsParam<'a>,
 }
 
-impl<'a> Default for TransformParams<'a> {
+impl Default for TransformParams<'_> {
     fn default() -> Self {
         Self {
             update_fields: FieldsParam::empty(),
@@ -279,7 +279,7 @@ pub struct SubTransformParams<'a> {
     pub type_update_fields: FieldsParam<'a>,
 }
 
-impl<'a> Default for SubTransformParams<'a> {
+impl Default for SubTransformParams<'_> {
     fn default() -> Self {
         Self {
             path_fields: FieldsParam::empty(),

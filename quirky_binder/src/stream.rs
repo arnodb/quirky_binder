@@ -154,7 +154,7 @@ pub struct RecordDefinitionFragments<'a> {
     module_prefix: &'a FullyQualifiedName,
 }
 
-impl<'a> RecordDefinitionFragments<'a> {
+impl RecordDefinitionFragments<'_> {
     pub fn record(&self) -> syn::Type {
         syn::parse_str::<syn::Type>(&format!(
             "{}::{}::Record{}",

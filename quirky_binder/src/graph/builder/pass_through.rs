@@ -32,7 +32,7 @@ pub struct OutputBuilderForPassThrough<'a, 'b, 'g, R: TypeResolver + Copy> {
     pub(super) facts: StreamFacts,
 }
 
-impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'a, 'b, 'g, R> {
+impl<'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'_, '_, 'g, R> {
     pub fn pass_through_sub_stream<B>(
         &mut self,
         sub_stream: NodeSubStream,
@@ -241,7 +241,7 @@ pub struct SubStreamBuilderForPassThrough<'g, R: TypeResolver> {
     facts: StreamFacts,
 }
 
-impl<'g, R: TypeResolver> SubStreamBuilderForPassThrough<'g, R> {
+impl<R: TypeResolver> SubStreamBuilderForPassThrough<'_, R> {
     pub fn close_pass_through(self) -> NodeSubStream {
         NodeSubStream::new(
             self.record_type,

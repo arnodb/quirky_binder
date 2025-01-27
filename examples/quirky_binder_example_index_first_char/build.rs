@@ -164,7 +164,7 @@ use super::tokenize;
 
     let type_resolver = {
         let mut resolver = StaticTypeResolver::new();
-        resolver.add_std_types();
+        resolver.add_all_types();
         resolver
     };
 

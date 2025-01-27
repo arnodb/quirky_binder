@@ -32,7 +32,7 @@ pub struct OutputBuilderForUpdate<'a, 'b, 'g, R: TypeResolver + Copy, Extra> {
     pub(super) extra: Extra,
 }
 
-impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, 'g, R, Extra> {
+impl<'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'_, '_, 'g, R, Extra> {
     pub fn sub_stream(&self, datum_id: DatumId) -> &NodeSubStream {
         &self.sub_streams[&datum_id]
     }
@@ -357,7 +357,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'a, 'b, '
     }
 }
 
-impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilderForUpdate<'a, 'b, 'g, R, DerivedExtra> {
+impl<R: TypeResolver + Copy> OutputBuilderForUpdate<'_, '_, '_, R, DerivedExtra> {
     pub fn input_variant_id(&self) -> RecordVariantId {
         self.extra.input_variant_id
     }
@@ -381,7 +381,7 @@ pub struct SubStreamBuilderForUpdate<'g, R: TypeResolver, Extra> {
     extra: Extra,
 }
 
-impl<'g, R: TypeResolver, Extra> SubStreamBuilderForUpdate<'g, R, Extra> {
+impl<R: TypeResolver, Extra> SubStreamBuilderForUpdate<'_, R, Extra> {
     pub fn sub_stream(&self, datum_id: DatumId) -> &NodeSubStream {
         &self.sub_streams[&datum_id]
     }
@@ -480,7 +480,7 @@ impl<'g, R: TypeResolver, Extra> SubStreamBuilderForUpdate<'g, R, Extra> {
     }
 }
 
-impl<'g, R: TypeResolver> SubStreamBuilderForUpdate<'g, R, DerivedExtra> {
+impl<R: TypeResolver> SubStreamBuilderForUpdate<'_, R, DerivedExtra> {
     pub fn input_variant_id(&self) -> RecordVariantId {
         self.extra.input_variant_id
     }

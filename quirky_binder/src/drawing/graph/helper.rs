@@ -38,9 +38,7 @@ pub struct DrawingHelper<'a, PortKey: Ord + Debug, PathKey: Ord + Debug> {
     pub next_color: usize,
 }
 
-impl<'a, PortKey: Ord + Debug, PathKey: Ord + Debug> Default
-    for DrawingHelper<'a, PortKey, PathKey>
-{
+impl<PortKey: Ord + Debug, PathKey: Ord + Debug> Default for DrawingHelper<'_, PortKey, PathKey> {
     fn default() -> Self {
         Self {
             columns: Default::default(),

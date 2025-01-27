@@ -312,7 +312,7 @@ enum NamedStreamState<'a> {
     Connected,
 }
 
-impl<'a> NamedStreamState<'a> {
+impl NamedStreamState<'_> {
     fn connect(&mut self) -> Result<TokenStream, ConnectError> {
         let mut swapped = NamedStreamState::Connected;
         std::mem::swap(self, &mut swapped);

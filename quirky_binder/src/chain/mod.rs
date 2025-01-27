@@ -879,7 +879,7 @@ impl<'a> Trace<'a> {
     }
 }
 
-impl<'a> Display for Trace<'a> {
+impl Display for Trace<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (index, element) in self.elements.iter().enumerate() {
             f.write_fmt(format_args!("{:4}: {}", index, element))?;
@@ -895,7 +895,7 @@ pub struct TraceElement<'a> {
     location: Location,
 }
 
-impl<'a> TraceElement<'a> {
+impl TraceElement<'_> {
     pub fn to_owned(&self) -> TraceElement<'static> {
         TraceElement {
             source: self.source.clone().into_owned().into(),
@@ -905,7 +905,7 @@ impl<'a> TraceElement<'a> {
     }
 }
 
-impl<'a> Display for TraceElement<'a> {
+impl Display for TraceElement<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!(
             "{}\n             at {}:{}:{}\n",

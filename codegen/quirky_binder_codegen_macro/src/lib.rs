@@ -22,7 +22,7 @@ struct ProcMacroErrorEmitter<'a> {
     dirty: bool,
 }
 
-impl<'a> ProcMacroErrorEmitter<'a> {
+impl ProcMacroErrorEmitter<'_> {
     fn handle_codegen_result<T>(&mut self, result: Result<T, CodegenError>) -> T {
         match result {
             Ok(res) => {
@@ -44,7 +44,7 @@ impl<'a> ProcMacroErrorEmitter<'a> {
     }
 }
 
-impl<'a> ErrorEmitter for ProcMacroErrorEmitter<'a> {
+impl ErrorEmitter for ProcMacroErrorEmitter<'_> {
     fn emit_error(&mut self, error: Cow<str>) -> CodegenError {
         emit_error!(self.span, "{}", error);
         self.dirty = true;
