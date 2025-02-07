@@ -1,6 +1,5 @@
 use std::{borrow::Cow, collections::HashMap, fmt::Display};
 
-use codegen::{Module, Scope};
 use itertools::Itertools;
 use proc_macro2::TokenStream;
 use quirky_binder_lang::location::Location;
@@ -8,7 +7,7 @@ use serde::Deserialize;
 use syn::{Ident, Type};
 
 use self::error::{ChainError, ChainErrorWithTrace};
-use crate::prelude::*;
+use crate::{codegen::Module, prelude::*};
 
 pub mod error;
 
@@ -105,7 +104,7 @@ impl ChainSourceThread {
 #[derive(new)]
 pub struct Chain<'a> {
     customizer: &'a ChainCustomizer,
-    scope: &'a mut Scope,
+    module: &'a mut Module,
     #[new(default)]
     threads: Vec<ChainThread>,
     #[new(default)]
@@ -192,7 +191,7 @@ impl<'a> Chain<'a> {
             output_pipes,
         });
         let name = format!("thread_{}", thread_id);
-        let module = self.scope.new_module(&name).vis("pub").scope();
+        let module = self.module.get_or_new_module(&name);
         for (path, ty) in &self.customizer.custom_module_imports {
             module.import(path, ty);
         }
@@ -296,11 +295,7 @@ impl<'a> Chain<'a> {
         let pipe = self.new_pipe();
         let thread = &mut self.threads[source_thread.thread_id];
         let name = format!("thread_{}", source_thread.thread_id);
-        let scope = self
-            .scope
-            .get_module_mut(&name)
-            .expect("thread module")
-            .scope();
+        let module = self.module.get_module(&name).expect("thread module");
         let mut import_scope = ImportScope::default();
         if thread.output_pipes.is_none() {
             assert_eq!(thread.output_streams.len(), 1);
@@ -324,13 +319,13 @@ impl<'a> Chain<'a> {
                         }
                     }
                 };
-                scope.raw(&pipe_def.to_string());
+                module.fragment(pipe_def.to_string());
             }
 
             thread.output_pipes = Some(Box::new([pipe]));
             thread.main = Some(FullyQualifiedName::new(name).sub("quirky_binder_pipe"));
         }
-        import_scope.import(scope);
+        import_scope.import(module);
         pipe
     }
 
@@ -362,21 +357,17 @@ impl<'a> Chain<'a> {
     pub fn gen_chain(&mut self) {
         for thread in &self.threads {
             let name = format!("thread_{}", thread.id);
-            let scope = self
-                .scope
-                .get_module_mut(&name)
-                .expect("thread module")
-                .scope();
-            scope.import("std::sync", "Arc");
-            scope.import(
+            let module = self.module.get_module(&name).expect("thread module");
+            module.import("std::sync", "Arc");
+            module.import(
                 "quirky_binder_support::chain::configuration",
                 "ChainConfiguration",
             );
             if thread.input_streams.len() > 0 {
-                scope.import("std::sync::mpsc", "Receiver");
+                module.import("std::sync::mpsc", "Receiver");
             }
             if thread.output_pipes.is_some() && thread.output_streams.len() > 0 {
-                scope.import("std::sync::mpsc", "SyncSender");
+                module.import("std::sync::mpsc", "SyncSender");
             }
             let inputs = (0..thread.input_streams.len()).map(|i| format_ident!("input_{}", i));
             let input_types = thread.input_streams.iter().map(|input_stream| {
@@ -421,7 +412,7 @@ impl<'a> Chain<'a> {
                 }
 
             };
-            scope.raw(&struct_def.to_string());
+            module.fragment(struct_def.to_string());
         }
 
         {
@@ -556,8 +547,8 @@ impl<'a> Chain<'a> {
                     }
                 });
 
-            self.scope.import("std::sync", "Arc");
-            self.scope.import(
+            self.module.import("std::sync", "Arc");
+            self.module.import(
                 "quirky_binder_support::chain::configuration",
                 "ChainConfiguration",
             );
@@ -595,35 +586,34 @@ impl<'a> Chain<'a> {
                     Ok(())
                 }
             };
-            self.scope.raw(&main_def.to_string());
+            self.module.fragment(main_def.to_string());
         }
     }
 
-    fn get_or_new_module_scope<'i>(
+    fn get_or_new_module<'i>(
         &mut self,
         path: impl IntoIterator<Item = &'i Box<str>>,
         chain_customizer: &ChainCustomizer,
         thread_id: usize,
-    ) -> &mut Scope {
+    ) -> &mut Module {
         let mut iter = path.into_iter();
         let customize_module = |module: &mut Module| {
             for (path, ty) in &chain_customizer.custom_module_imports {
-                module.scope().import(path, ty);
+                module.import(path, ty);
             }
             let thread_module = format!("thread_{}", thread_id);
-            module.scope().import("super", &thread_module).vis("pub");
+            module.import("super", &thread_module);
         };
         if let Some(first) = iter.next() {
-            let module = self.scope.get_or_new_module(first);
+            let module = self.module.get_or_new_module(first);
             (customize_module)(module);
             iter.fold(module, |m, n| {
-                let module = m.get_or_new_module(n).vis("pub");
+                let module = m.get_or_new_module(n);
                 (customize_module)(module);
                 module
             })
-            .scope()
         } else {
-            self.scope
+            self.module
         }
     }
 
@@ -658,15 +648,15 @@ impl<'a> Chain<'a> {
         let mut import_scope = ImportScope::default();
         import_scope.add_import("fallible_iterator", "FallibleIterator");
 
-        let scope = self.get_or_new_module_scope(
+        let module = self.get_or_new_module(
             name.iter().take(name.len() - 1),
             self.customizer,
             thread.thread_id,
         );
 
-        scope.raw(&fn_def.to_string());
+        module.fragment(fn_def.to_string());
 
-        import_scope.import(scope);
+        import_scope.import(module);
     }
 
     pub fn implement_node_thread(
@@ -692,15 +682,12 @@ impl<'a> Chain<'a> {
             import_scope.add_import("fallible_iterator", "FallibleIterator");
         }
 
-        let scope = self.get_or_new_module_scope(
-            name.iter().take(name.len() - 1),
-            self.customizer,
-            thread_id,
-        );
+        let module =
+            self.get_or_new_module(name.iter().take(name.len() - 1), self.customizer, thread_id);
 
-        scope.raw(&fn_def.to_string());
+        module.fragment(fn_def.to_string());
 
-        import_scope.import(scope);
+        import_scope.import(module);
     }
 
     pub fn implement_path_update(
@@ -841,9 +828,9 @@ impl ImportScope {
         self.fixed.push((path.to_string(), ty.to_string()));
     }
 
-    pub fn import(mut self, scope: &mut Scope) {
+    pub fn import(mut self, module: &mut Module) {
         for (path, ty) in &self.fixed {
-            scope.import(path, ty);
+            module.import(path, ty);
         }
         self.used = true;
     }

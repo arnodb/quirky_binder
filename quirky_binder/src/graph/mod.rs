@@ -1,6 +1,5 @@
 use std::{collections::BTreeMap, fs::File, path::Path};
 
-use codegen::Scope;
 use truc::{
     generator::{
         config::GeneratorConfig,
@@ -9,7 +8,7 @@ use truc::{
     record::definition::RecordDefinition,
 };
 
-use crate::prelude::*;
+use crate::{codegen::Module, prelude::*};
 
 pub mod builder;
 pub mod error;
@@ -64,15 +63,15 @@ impl Graph {
 
         {
             let mut file = File::create(output.join("streams.rs")).unwrap();
-            let mut scope = Scope::new();
+            let mut root_module = Module::default();
             for (record_type, definition) in &self.record_definitions {
-                let module = scope.get_or_new_module(&record_type[0]).vis("pub");
                 let module = record_type
                     .iter()
                     .skip(1)
-                    .fold(module, |m, n| m.get_or_new_module(n).vis("pub"))
-                    .scope();
-                module.raw(&truc::generator::generate(
+                    .fold(root_module.get_or_new_module(&record_type[0]), |m, n| {
+                        m.get_or_new_module(n)
+                    });
+                module.fragment(truc::generator::generate(
                     definition,
                     &GeneratorConfig::default_with_custom_generators([
                         Box::new(CloneImplGenerator) as Box<dyn FragmentGenerator>,
@@ -80,19 +79,19 @@ impl Graph {
                     ]),
                 ));
             }
-            write!(file, "{}", scope.to_string()).unwrap();
+            write!(file, "{}", root_module).unwrap();
         }
         rustfmt_generated_file(output.join("streams.rs").as_path());
 
         {
-            let mut scope = Scope::new();
+            let mut root_module = Module::default();
             for (path, ty) in &self.chain_customizer.custom_module_imports {
-                scope.import(path, ty);
+                root_module.import(path, ty);
             }
 
-            scope.raw("mod streams;");
+            root_module.fragment("mod streams;");
 
-            let mut chain = Chain::new(&self.chain_customizer, &mut scope);
+            let mut chain = Chain::new(&self.chain_customizer, &mut root_module);
 
             for node in &self.entry_nodes {
                 node.gen_chain(self, &mut chain);
@@ -101,7 +100,7 @@ impl Graph {
             chain.gen_chain();
 
             let mut file = File::create(output.join("chain.rs")).unwrap();
-            write!(file, "{}", scope.to_string()).unwrap();
+            write!(file, "{}", root_module).unwrap();
         }
         rustfmt_generated_file(output.join("chain.rs").as_path());
 

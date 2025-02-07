@@ -12,6 +12,7 @@ extern crate quote;
 extern crate thiserror;
 
 pub mod chain;
+pub mod codegen;
 pub mod drawing;
 pub mod filter;
 pub mod graph;
