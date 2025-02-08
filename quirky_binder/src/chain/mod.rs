@@ -398,10 +398,45 @@ impl<'a> Chain<'a> {
                     pub interrupt: std::sync::Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>,
                 }),
             };
+            let outer_interrupt_impl = match thread.thread_type {
+                ChainThreadType::Regular => None,
+                ChainThreadType::Background => Some(quote! {
+                    pub fn interrupt(&self) {
+                        let mut is_interrupted = self.interrupt.0.lock().unwrap();
+                        *is_interrupted = true;
+                        self.interrupt.1.notify_all();
+                    }
+                }),
+            };
+            let interrupt_impl = match thread.thread_type {
+                ChainThreadType::Regular => None,
+                ChainThreadType::Background => Some(quote! {
+                    pub fn wait_until_interrupted(&self) {
+                        let is_interrupted = self.interrupt.1.wait_while(
+                            self.interrupt.0.lock().unwrap(),
+                            |is_interrupted| !*is_interrupted,
+                        ).unwrap();
+                        debug_assert!(*is_interrupted);
+                    }
+
+                    pub fn wait_timeout_until_interrupted(&self, dur: std::time::Duration) -> bool {
+                        let is_interrupted = self.interrupt.1.wait_timeout_while(
+                            self.interrupt.0.lock().unwrap(),
+                            dur,
+                            |is_interrupted| !*is_interrupted,
+                        ).unwrap().0;
+                        *is_interrupted
+                    }
+                }),
+            };
             let struct_def = quote! {
 
                 pub struct ThreadOuterControl {
                     #interrupt
+                }
+
+                impl ThreadOuterControl {
+                    #outer_interrupt_impl
                 }
 
                 pub struct ThreadControl {
@@ -409,6 +444,10 @@ impl<'a> Chain<'a> {
                     #interrupt
                     #(pub #inputs: Option<Receiver<Option<#input_types>>>,)*
                     #(pub #outputs: Option<SyncSender<Option<#output_types>>>,)*
+                }
+
+                impl ThreadControl {
+                    #interrupt_impl
                 }
 
             };
@@ -530,9 +569,7 @@ impl<'a> Chain<'a> {
                 .map(|thread| {
                     let thread_outer_control = format_ident!("thread_outer_control_{}", thread.id);
                     quote! {{
-                        let mut is_interrupted = #thread_outer_control.interrupt.0.lock().unwrap();
-                        *is_interrupted = true;
-                        #thread_outer_control.interrupt.1.notify_all();
+                        #thread_outer_control.interrupt();
                     }}
                 });
 

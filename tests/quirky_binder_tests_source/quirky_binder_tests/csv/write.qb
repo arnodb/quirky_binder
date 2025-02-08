@@ -1,6 +1,9 @@
 use quirky_binder::{
     filter::{
-        function::produce::function_produce,
+        function::{
+            execute::function_execute,
+            produce::function_produce,
+        },
     },
 };
 use quirky_binder_csv::write_csv;
@@ -19,6 +22,23 @@ use quirky_binder_csv::write_csv;
     - write_csv(
         output_file: "output/hello_universe.csv",
         has_headers: true,
+      )
+  )
+
+  (
+      function_execute#assert_output(
+        thread_type: Background,
+        body: r###"
+            // Wait until the end of the execution to read the output and assert its content
+            thread_control.wait_until_interrupted();
+
+            let actual = std::fs::read_to_string("output/hello_universe.csv").expect("actual");
+            assert_eq!(actual, r#"hello,universe
+world,42
+"#);
+
+            Ok(())
+        "###,
       )
   )
 }
