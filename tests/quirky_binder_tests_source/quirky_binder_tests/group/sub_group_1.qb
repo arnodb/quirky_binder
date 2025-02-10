@@ -4,7 +4,6 @@ use quirky_binder::{
         function::{
             produce::function_produce,
             terminate::function_terminate,
-            update::function_update,
         },
         group::{group, sub_group},
         sort::{sort, sub_sort},

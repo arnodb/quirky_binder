@@ -9,6 +9,8 @@ const FUNCTION_UPDATE_TRACE_NAME: &str = "function_update";
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct FunctionUpdateParams<'a> {
+    remove_fields: Option<FieldsParam<'a>>,
+    add_fields: Option<TypedFieldsParam<'a>>,
     body: &'a str,
 }
 
@@ -29,6 +31,19 @@ impl FunctionUpdate {
         inputs: [NodeStream; 1],
         params: FunctionUpdateParams,
     ) -> ChainResultWithTrace<Self> {
+        let valid_remove_fields = params
+            .remove_fields
+            .map(|fields| {
+                fields.validate_on_stream(inputs.single(), graph, FUNCTION_UPDATE_TRACE_NAME)
+            })
+            .transpose()?;
+
+        let valid_add_fields = params
+            .add_fields
+            .map(|fields| fields.validate_new())
+            .transpose()
+            .with_trace_element(trace_element!(FUNCTION_UPDATE_TRACE_NAME))?;
+
         let valid_body = params
             .body
             .parse::<TokenStream>()
@@ -42,7 +57,23 @@ impl FunctionUpdate {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!(FUNCTION_UPDATE_TRACE_NAME))?
-            .pass_through(|_, facts_proof| {
+            .update(|output_stream, facts_proof| {
+                if let Some(remove_fields) = valid_remove_fields {
+                    let mut output_stream_def = output_stream.record_definition().borrow_mut();
+                    for name in remove_fields.iter() {
+                        let datum_id = output_stream_def
+                            .get_current_datum_definition_by_name(name.name())
+                            .expect("datum")
+                            .id();
+                        output_stream_def.remove_datum(datum_id);
+                    }
+                }
+                if let Some(add_fields) = valid_add_fields {
+                    let mut output_stream_def = output_stream.record_definition().borrow_mut();
+                    for (name, r#type) in add_fields.iter() {
+                        output_stream_def.add_dynamic_datum(name.name(), r#type.type_name());
+                    }
+                }
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
         let outputs = streams
