@@ -25,16 +25,23 @@ pub struct WriteCsv {
 
 impl WriteCsv {
     fn new<R: TypeResolver + Copy>(
-        _graph: &mut GraphBuilder<R>,
+        graph: &mut GraphBuilder<R>,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: WriteCsvParams,
     ) -> ChainResultWithTrace<Self> {
-        if !inputs.single().sub_streams().is_empty() {
-            return Err(ChainError::Other {
-                msg: "Sub streams are not supported".to_owned(),
-            })
-            .with_trace_element(trace_element!(WRITE_CSV_TRACE_NAME));
+        let input = inputs.single();
+        let input_stream_def = graph
+            .get_stream(input.record_type())
+            .with_trace_element(trace_element!(WRITE_CSV_TRACE_NAME))?
+            .borrow();
+        for d in input_stream_def.get_current_data() {
+            if input.sub_streams().contains_key(&d) {
+                return Err(ChainError::Other {
+                    msg: "Sub streams are not supported".to_owned(),
+                })
+                .with_trace_element(trace_element!(WRITE_CSV_TRACE_NAME));
+            }
         }
 
         Ok(Self {
