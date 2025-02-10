@@ -344,7 +344,8 @@ impl<'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'_, '_, 'g, R, Ex
     }
 
     pub fn build(self) -> &'g RefCell<RecordDefinitionBuilder<R>> {
-        let variant_id = self.record_definition.borrow_mut().close_record_variant();
+        let variant_id = close_record_variant_internal(&mut self.record_definition.borrow_mut());
+
         self.streams.outputs.push(NodeStream::new(
             self.record_type,
             variant_id,
@@ -353,6 +354,7 @@ impl<'g, R: TypeResolver + Copy, Extra> OutputBuilderForUpdate<'_, '_, 'g, R, Ex
             self.is_output_main_stream,
             self.facts,
         ));
+
         self.record_definition
     }
 }
@@ -475,7 +477,8 @@ impl<R: TypeResolver, Extra> SubStreamBuilderForUpdate<'_, R, Extra> {
     }
 
     pub fn close_record_variant(self, _facts: FactsFullyUpdated<()>) -> NodeSubStream {
-        let variant_id = self.record_definition.borrow_mut().close_record_variant();
+        let variant_id = close_record_variant_internal(&mut self.record_definition.borrow_mut());
+
         NodeSubStream::new(self.record_type, variant_id, self.sub_streams, self.facts)
     }
 }
@@ -484,4 +487,24 @@ impl<R: TypeResolver> SubStreamBuilderForUpdate<'_, R, DerivedExtra> {
     pub fn input_variant_id(&self) -> RecordVariantId {
         self.extra.input_variant_id
     }
+}
+
+fn close_record_variant_internal<R>(builder: &mut RecordDefinitionBuilder<R>) -> RecordVariantId
+where
+    R: TypeResolver,
+{
+    #[cfg(not(feature = "fuzz_data_order"))]
+    let variant_id = builder.close_record_variant();
+
+    #[cfg(feature = "fuzz_data_order")]
+    let variant_id = match std::env::var("FUZZ_DATA_ORDER") {
+        Ok(_) => {
+            use truc::record::definition::builder::variant::append_data_reverse;
+            // With this one, it is almost assured that record data have an unexpected order
+            builder.close_record_variant_with(append_data_reverse)
+        }
+        Err(_) => builder.close_record_variant(),
+    };
+
+    variant_id
 }

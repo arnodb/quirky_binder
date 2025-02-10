@@ -27,5 +27,8 @@ thiserror = "1"
 truc = { git = "https://github.com/arnodb/truc.git" }
 which = "4"
 
+[features]
+fuzz_data_order = []
+
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage,coverage_nightly)'] }

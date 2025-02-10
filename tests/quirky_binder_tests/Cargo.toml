@@ -18,3 +18,6 @@ truc_runtime = { git = "https://github.com/arnodb/truc.git" }
 
 [build-dependencies]
 quirky_binder_tests_source = { path = "../quirky_binder_tests_source" }
+
+[features]
+fuzz_data_order = ["quirky_binder_tests_source/fuzz_data_order"]

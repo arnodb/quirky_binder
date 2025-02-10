@@ -12,3 +12,6 @@ quirky_binder_csv = { path = "../../contrib/quirky_binder_csv" }
 quirky_binder_lang = { path = "../../quirky_binder_lang" }
 serde = { version = "1", features = ["derive"] }
 truc = { git = "https://github.com/arnodb/truc.git" }
+
+[features]
+fuzz_data_order = ["quirky_binder/fuzz_data_order"]
