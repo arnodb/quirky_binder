@@ -90,7 +90,7 @@ impl DynNode for WriteCsv {
         let write_headers = if has_headers {
             let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
             let variant = &record_definition[self.inputs.single().variant_id()];
-            let headers = variant.data().map(|d| record_definition[d].name());
+            let headers = variant.data_sorted().map(|d| record_definition[d].name());
             Some(quote! {{
                 writer.write_record([#(#headers),*])?;
             }})

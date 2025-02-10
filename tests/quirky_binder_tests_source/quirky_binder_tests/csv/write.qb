@@ -3,6 +3,7 @@ use quirky_binder::{
         function::{
             execute::function_execute,
             produce::function_produce,
+            update::function_update,
         },
     },
 };
@@ -26,6 +27,37 @@ use quirky_binder_csv::write_csv;
   )
 
   (
+      function_produce(
+        fields: [("hello", "String"), ("universe", "usize")],
+        body: r#"
+            let record = new_record("world".to_string(), 42);
+            output.send(Some(record))?;
+            output.send(None)?;
+            Ok(())
+"#,
+      )
+    - function_update(
+        remove_fields: ["hello"],
+        add_fields: [("hello", "String")],
+        body: r#"
+            input.map(|record| {
+                use crate::all_chains::csv::write::streams::quirky_binder_main_0::
+                    quirky_binder_filter_1_0::{UnpackedRecord0, Record1, UnpackedRecord1};
+                let UnpackedRecord0 { hello, universe } = record.unpack();
+                Ok(Record1::new(UnpackedRecord1 {
+                    universe: universe ^ 0b1111,
+                    hello: hello.chars().rev().collect::<String>(),
+                }))
+            })
+"#
+    )
+    - write_csv(
+        output_file: "output/hello_universe_2.csv",
+        has_headers: true,
+      )
+  )
+
+  (
       function_execute#assert_output(
         thread_type: Background,
         body: r###"
@@ -35,6 +67,11 @@ use quirky_binder_csv::write_csv;
             let actual = std::fs::read_to_string("output/hello_universe.csv").expect("actual");
             assert_eq!(actual, r#"hello,universe
 world,42
+"#);
+
+            let actual = std::fs::read_to_string("output/hello_universe_2.csv").expect("actual");
+            assert_eq!(actual, r#"universe,hello
+37,dlrow
 "#);
 
             Ok(())
