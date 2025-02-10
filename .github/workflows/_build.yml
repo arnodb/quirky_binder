@@ -93,3 +93,7 @@ jobs:
           cd recipes
           cargo build ${{ inputs.rust_features }} --verbose
 
+      - id: wasm-build
+        name: Compile WASM modules
+        run: cd codegen/quirky_binder_codegen_wasm && wasm-pack build
+
