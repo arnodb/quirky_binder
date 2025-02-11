@@ -1,3 +1,6 @@
+pub use handlebars::Handlebars;
+pub use serde::Deserialize;
+
 pub use crate::{
     chain::{
         error::{ChainError, ChainErrorWithTrace},

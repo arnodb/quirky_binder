@@ -637,13 +637,10 @@ pub(crate) fn generate_module<'a>(
     });
     error_emitter.error()?;
     Ok(quote! {
-        use handlebars::Handlebars;
         use std::collections::BTreeMap;
 
         mod __quirky_binder_private {
             use #quirky_binder_crate::prelude::*;
-            use handlebars::Handlebars;
-            use serde::Deserialize;
             use std::collections::BTreeMap;
             use truc::record::type_resolver::TypeResolver;
 

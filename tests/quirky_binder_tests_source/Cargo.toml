@@ -6,8 +6,6 @@ rust-version = "1.65.0"
 
 [dependencies]
 anyhow = "1"
-handlebars = "4"
 quirky_binder = { path = "../../quirky_binder" }
 quirky_binder_csv = { path = "../../contrib/quirky_binder_csv" }
-serde = { version = "1", features = ["derive"] }
 truc = { git = "https://github.com/arnodb/truc.git" }

@@ -24,8 +24,6 @@ quirky_binder_monitor = ["chrono", "self-meter", "tracking-allocator"]
 
 [build-dependencies]
 getset = "0.1"
-handlebars = "4"
 quirky_binder = { path = "../../quirky_binder" }
 quote = "1"
-serde = { version = "1", features = ["derive"] }
 truc = { git = "https://github.com/arnodb/truc.git" }
