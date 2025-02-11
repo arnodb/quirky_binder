@@ -89,7 +89,7 @@ use quirky_binder::{
   ( < extracted
     - unwrap(fields: ["parent_id"], skip_nones: true)
     - sort(fields: ["parent_id", "id"])
-    - group(fields: ["id"], group_field: "children")
+    - group(by_fields: ["parent_id"], group_field: "children")
     -> children
   )
 }

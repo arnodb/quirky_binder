@@ -133,7 +133,7 @@ use super::tokenize;
       )
     - tokenize#tokenize()
     - sort#sort(fields: ["first_char", "word"])
-    - group#group(fields: ["word"], group_field: "words")
+    - group#group(by_fields: ["first_char"], group_field: "words")
     - function_terminate#term(
         body: r#"
             use itertools::Itertools;

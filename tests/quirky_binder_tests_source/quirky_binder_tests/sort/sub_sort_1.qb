@@ -31,7 +31,7 @@ use quirky_binder::{
             Ok(())
 "#,
       )
-    - group(group_field: "group", fields: ["num"])
+    - group(by_fields: [], group_field: "group")
     - sub_sort(path_fields: ["group"], fields: ["num"])
     - function_update(
         body: r#"

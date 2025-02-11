@@ -36,7 +36,7 @@ use crate::{
   ( < extracted
     - to_lowercase#lowercase_token(fields: ["{{token_field}}"])
     - sort#sort_token(fields: ["{{token_field}}", "{{reference_field}}"])
-    - group#group(fields: ["{{reference_field}}"], group_field: "{{refs_field}}")
+    - group#group(by_fields: ["{{token_field}}"], group_field: "{{refs_field}}")
     -> case_insensitive
   )
 }

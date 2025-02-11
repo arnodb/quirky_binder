@@ -32,9 +32,9 @@ use quirky_binder::{
 "#,
       )
     - sort(fields: ["lsb2", "lsb4", "lsb6"])
-    - group(group_field: "sub_sub_group", fields: ["num"])
-    - group(group_field: "sub_group", fields: ["lsb6", "sub_sub_group"])
-    - group(group_field: "group", fields: ["lsb4", "sub_group"])
+    - group(by_fields: ["lsb2", "lsb4", "lsb6"], group_field: "sub_sub_group")
+    - group(by_fields: ["lsb2", "lsb4"], group_field: "sub_group")
+    - group(by_fields: ["lsb2"], group_field: "group")
     - debug()
     - function_terminate(
         body: r#"

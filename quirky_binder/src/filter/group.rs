@@ -15,7 +15,7 @@ const GROUP_TRACE_NAME: &str = "group";
 #[derive(Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
 pub struct GroupParams<'a> {
-    fields: FieldsParam<'a>,
+    by_fields: FieldsParam<'a>,
     group_field: &'a str,
 }
 
@@ -26,9 +26,9 @@ pub struct Group {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
+    by_fields: Vec<ValidFieldName>,
     group_field: ValidFieldName,
     group_stream: NodeSubStream,
-    fields: Vec<ValidFieldName>,
 }
 
 impl Group {
@@ -38,9 +38,9 @@ impl Group {
         inputs: [NodeStream; 1],
         params: GroupParams,
     ) -> ChainResultWithTrace<Group> {
-        let valid_fields =
+        let valid_by_fields =
             params
-                .fields
+                .by_fields
                 .validate_on_stream(inputs.single(), graph, GROUP_TRACE_NAME)?;
         let valid_group_field = ValidFieldName::try_from(params.group_field)
             .map_err(|_| ChainError::InvalidFieldName {
@@ -67,13 +67,14 @@ impl Group {
                     let mut group_stream_def = group_stream.record_definition().borrow_mut();
 
                     let variant = &output_stream_def[variant_id];
-                    let mut group_by_datum_ids =
-                        Vec::with_capacity(variant.data_len() - valid_fields.len());
-                    let mut group_data = Vec::with_capacity(valid_fields.len());
-                    let mut group_datum_ids = Vec::with_capacity(valid_fields.len());
+                    let mut group_by_datum_ids = Vec::with_capacity(valid_by_fields.len());
+                    let mut group_data =
+                        Vec::with_capacity(variant.data_len() - valid_by_fields.len());
+                    let mut group_datum_ids =
+                        Vec::with_capacity(variant.data_len() - valid_by_fields.len());
                     for datum_id in variant.data() {
                         let datum = &output_stream_def[datum_id];
-                        if valid_fields
+                        if !valid_by_fields
                             .iter()
                             .any(|field| field.name() == datum.name())
                         {
@@ -152,9 +153,9 @@ impl Group {
             name: name.clone(),
             inputs,
             outputs,
+            by_fields: valid_by_fields,
             group_field: valid_group_field,
             group_stream,
-            fields: valid_fields,
         })
     }
 }
@@ -184,37 +185,29 @@ impl DynNode for Group {
         let group_unpacked_record = def_group.unpacked_record();
 
         let fields = {
-            let names = self
-                .fields
-                .iter()
-                .map(ValidFieldName::ident)
-                .collect::<Vec<_>>();
-            quote!(#(#names),*)
+            let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
+            let variant = &record_definition[self.inputs.single().variant_id()];
+            let idents = variant.data().filter_map(|d| {
+                let datum = &record_definition[d];
+                if !self
+                    .by_fields
+                    .iter()
+                    .any(|field| field.name() == datum.name())
+                {
+                    Some(format_ident!("{}", datum.name()))
+                } else {
+                    None
+                }
+            });
+            quote!(#(#idents),*)
         };
 
         let group_field = self.group_field.ident();
         let mut_group_field = self.group_field.mut_ident();
 
-        let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
-        let variant = &record_definition[self.inputs.single().variant_id()];
         let eq = {
-            let fields = variant
-                .data()
-                .filter_map(|d| {
-                    let datum = &record_definition[d];
-                    if !self.fields.iter().any(|field| field.name() == datum.name()) {
-                        Some(datum.name())
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            fields_eq_ab(
-                &def.record(),
-                fields.iter(),
-                &def_input.record(),
-                fields.iter(),
-            )
+            let fields = self.by_fields.iter().map(ValidFieldName::name);
+            fields_eq_ab(&def.record(), fields.clone(), &def_input.record(), fields)
         };
 
         let rec_ident = self.identifier_for("rec");
@@ -267,7 +260,7 @@ const SUB_GROUP_TRACE_NAME: &str = "sub_group";
 #[serde(deny_unknown_fields)]
 pub struct SubGroupParams<'a> {
     path_fields: FieldsParam<'a>,
-    fields: FieldsParam<'a>,
+    by_fields: FieldsParam<'a>,
     group_field: &'a str,
 }
 
@@ -279,9 +272,9 @@ pub struct SubGroup {
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     path_streams: Vec<PathUpdateElement>,
+    by_fields: Vec<ValidFieldName>,
     group_field: ValidFieldName,
     group_stream: NodeSubStream,
-    fields: Vec<ValidFieldName>,
 }
 
 impl SubGroup {
@@ -300,8 +293,8 @@ impl SubGroup {
                 name: params.group_field.to_owned(),
             })
             .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
-        let valid_fields = params
-            .fields
+        let valid_by_fields = params
+            .by_fields
             .validate_on_record_definition(&path_def, SUB_GROUP_TRACE_NAME)?;
         drop(path_def);
 
@@ -330,13 +323,14 @@ impl SubGroup {
                         let mut group_stream_def = group_stream.record_definition().borrow_mut();
 
                         let variant = &output_stream_def[variant_id];
-                        let mut group_by_datum_ids =
-                            Vec::with_capacity(variant.data_len() - valid_fields.len());
-                        let mut group_data = Vec::with_capacity(valid_fields.len());
-                        let mut group_datum_ids = Vec::with_capacity(valid_fields.len());
+                        let mut group_by_datum_ids = Vec::with_capacity(valid_by_fields.len());
+                        let mut group_data =
+                            Vec::with_capacity(variant.data_len() - valid_by_fields.len());
+                        let mut group_datum_ids =
+                            Vec::with_capacity(variant.data_len() - valid_by_fields.len());
                         for datum_id in variant.data() {
                             let datum = &output_stream_def[datum_id];
-                            if valid_fields
+                            if !valid_by_fields
                                 .iter()
                                 .any(|field| field.name() == datum.name())
                             {
@@ -418,9 +412,9 @@ impl SubGroup {
             inputs,
             outputs,
             path_streams,
+            by_fields: valid_by_fields,
             group_field: valid_group_field,
             group_stream: created_group_stream.expect("group stream"),
-            fields: valid_fields,
         })
     }
 }
@@ -446,15 +440,6 @@ impl DynNode for SubGroup {
         let group_record = def_group.record();
         let group_unpacked_record = def_group.unpacked_record();
 
-        let fields = {
-            let names = self
-                .fields
-                .iter()
-                .map(ValidFieldName::ident)
-                .collect::<Vec<_>>();
-            quote!(#(#names),*)
-        };
-
         let group_field = self.group_field.ident();
         let mut_group_field = self.group_field.mut_ident();
 
@@ -465,19 +450,24 @@ impl DynNode for SubGroup {
                 &graph.record_definitions()[path_stream.sub_input_stream.record_type()];
             let variant = &leaf_record_definition[path_stream.sub_input_stream.variant_id()];
 
+            let fields = {
+                let idents = variant.data().filter_map(|d| {
+                    let datum = &leaf_record_definition[d];
+                    if !self.by_fields.iter().any(|f| f.name() == datum.name()) {
+                        Some(format_ident!("{}", datum.name()))
+                    } else {
+                        None
+                    }
+                });
+                quote!(#(#idents),*)
+            };
+
             let out_record_definition =
                 chain.sub_stream_definition_fragments(&path_stream.sub_output_stream);
 
             let eq = fields_eq(
                 &out_record_definition.record(),
-                variant.data().filter_map(|d| {
-                    let datum = &leaf_record_definition[d];
-                    if !self.fields.iter().any(|f| f.name() == datum.name()) {
-                        Some(datum.name())
-                    } else {
-                        None
-                    }
-                }),
+                self.by_fields.iter().map(ValidFieldName::name),
             );
             let eq_ident = self.identifier_for("eq");
             let eq_preamble = quote! { let #eq_ident = #eq; };

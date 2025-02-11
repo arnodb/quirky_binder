@@ -32,7 +32,7 @@ use quirky_binder::{
 "#,
       )
     - sort(fields: ["lsb2"])
-    - group(group_field: "group", fields: ["num"])
+    - group(by_fields: ["lsb2"], group_field: "group")
     - debug()
     - function_terminate(
         body: r#"

@@ -20,7 +20,7 @@ use quirky_binder::{
             Ok(())
 "#,
       )
-    - group(group_field: "group", fields: ["value"])
+    - group(by_fields: [], group_field: "group")
     - sub_to_lowercase(path_fields: ["group"], fields: ["value"])
     - function_terminate(
         body: r#"

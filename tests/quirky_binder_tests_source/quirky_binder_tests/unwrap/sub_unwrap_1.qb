@@ -22,7 +22,7 @@ use quirky_binder::{
             Ok(())
 "#,
       )
-    - group(group_field: "group", fields: ["value"])
+    - group(by_fields: [], group_field: "group")
     - sub_unwrap(path_fields: ["group"], fields: ["value"], skip_nones: true)
     - function_terminate(
         body: r#"
@@ -51,7 +51,7 @@ use quirky_binder::{
             Ok(())
 "#,
       )
-    - group(group_field: "group", fields: ["value"])
+    - group(by_fields: [], group_field: "group")
     - sub_unwrap(path_fields: ["group"], fields: ["value"], skip_nones: false)
     - function_terminate(
         body: r#"
