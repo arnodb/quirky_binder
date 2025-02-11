@@ -2,7 +2,7 @@ use std::{borrow::Cow, collections::HashMap, fmt::Display};
 
 use itertools::Itertools;
 use proc_macro2::TokenStream;
-use quirky_binder_lang::location::Location;
+pub use quirky_binder_lang::location::Location;
 use serde::Deserialize;
 use syn::{Ident, Type};
 
@@ -945,10 +945,7 @@ macro_rules! trace_element {
             TraceElement::new(
                 std::file!().into(),
                 ($name).into(),
-                quirky_binder_lang::location::Location::new(
-                    std::line!() as usize,
-                    std::column!() as usize,
-                ),
+                $crate::chain::Location::new(std::line!() as usize, std::column!() as usize),
             )
             .to_owned()
         }

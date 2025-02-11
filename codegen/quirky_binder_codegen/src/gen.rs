@@ -77,6 +77,7 @@ fn quirky_binder_use_declaration(use_declaration: &UseDeclaration) -> TokenStrea
 
 fn quirky_binder_graph_definition<'a>(
     graph_definition: &'a GraphDefinition,
+    quirky_binder_crate: &Ident,
     error_emitter: &mut QuirkyBinderErrorEmitter<'a>,
 ) -> TokenStream {
     let name = format_ident!("{}", graph_definition.signature.name);
@@ -112,6 +113,7 @@ fn quirky_binder_graph_definition<'a>(
     let (body, ordered_var_names, main_stream, mut named_streams) = quirky_binder_stream_lines(
         graph_definition.signature.name,
         &graph_definition.stream_lines,
+        quirky_binder_crate,
         error_emitter,
     );
     let outputs = match graph_definition.signature.outputs.as_ref() {
@@ -194,6 +196,7 @@ fn quirky_binder_graph_definition<'a>(
 fn quirky_binder_graph<'a>(
     graph: &'a Graph<'a>,
     graph_names: &mut GraphNames,
+    quirky_binder_crate: &Ident,
     error_emitter: &mut QuirkyBinderErrorEmitter<'a>,
 ) -> TokenStream {
     let Graph {
@@ -213,7 +216,7 @@ fn quirky_binder_graph<'a>(
     };
     let name = format_ident!("{}", name_str);
     let (body, ordered_var_names, main_stream, named_streams) =
-        quirky_binder_stream_lines(&name_str, stream_lines, error_emitter);
+        quirky_binder_stream_lines(&name_str, stream_lines, quirky_binder_crate, error_emitter);
     named_streams.check_all_streams_connected(error_emitter);
     if let Some((_, anchor)) = main_stream {
         error_emitter.emit_error(anchor, "main stream cannot be connected".into());
@@ -327,6 +330,7 @@ impl NamedStreamState<'_> {
 fn quirky_binder_stream_lines<'a>(
     caller: &str,
     stream_lines: &'a [StreamLine<'a>],
+    quirky_binder_crate: &Ident,
     error_emitter: &mut QuirkyBinderErrorEmitter<'a>,
 ) -> (
     TokenStream,
@@ -469,7 +473,7 @@ fn quirky_binder_stream_lines<'a>(
                     let filter_location = {
                         let Location { line, col } =
                             error_emitter.part_to_location(filter.filter.name);
-                        quote! { quirky_binder_lang::location::Location::new(#line, #col) }
+                        quote! { #quirky_binder_crate::chain::Location::new(#line, #col) }
                     };
                     body.push(quote! {
                         let #var_name = {
@@ -562,9 +566,11 @@ pub(crate) fn generate_module<'a>(
             quirky_binder_use_declaration(use_declaration)
         }
         ModuleItem::GraphDefinition(graph_definition) => {
-            quirky_binder_graph_definition(graph_definition, error_emitter)
+            quirky_binder_graph_definition(graph_definition, quirky_binder_crate, error_emitter)
         }
-        ModuleItem::Graph(graph) => quirky_binder_graph(graph, &mut graph_names, error_emitter),
+        ModuleItem::Graph(graph) => {
+            quirky_binder_graph(graph, &mut graph_names, quirky_binder_crate, error_emitter)
+        }
     }));
     let exports = TokenStream::from_iter(
         module
