@@ -202,9 +202,7 @@ impl DynNode for Group {
                 .data()
                 .filter_map(|d| {
                     let datum = &record_definition[d];
-                    if !self.fields.iter().any(|field| field.name() == datum.name())
-                        && datum.name() != self.group_field.name()
-                    {
+                    if !self.fields.iter().any(|field| field.name() == datum.name()) {
                         Some(datum.name())
                     } else {
                         None
@@ -474,9 +472,7 @@ impl DynNode for SubGroup {
                 &out_record_definition.record(),
                 variant.data().filter_map(|d| {
                     let datum = &leaf_record_definition[d];
-                    if !self.fields.iter().any(|f| f.name() == datum.name())
-                        && datum.name() != self.group_field.name()
-                    {
+                    if !self.fields.iter().any(|f| f.name() == datum.name()) {
                         Some(datum.name())
                     } else {
                         None
