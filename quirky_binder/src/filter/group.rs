@@ -1,7 +1,6 @@
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
-use truc::record::{definition::DatumId, type_resolver::TypeResolver};
 
 use crate::{
     graph::builder::check_undirected_order_starts_with,
@@ -32,8 +31,8 @@ pub struct Group {
 }
 
 impl Group {
-    pub fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    pub fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: GroupParams,
@@ -88,18 +87,22 @@ impl Group {
                     check_undirected_order_starts_with(
                         &group_by_datum_ids,
                         output_stream.facts().order(),
-                        &*output_stream_def,
+                        &output_stream_def,
                         "main stream",
                     )
                     .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
 
-                    let mut map = BTreeMap::<DatumId, DatumId>::new();
+                    let mut map = BTreeMap::<QuirkyDatumId, QuirkyDatumId>::new();
                     for datum in &group_data {
-                        let new_id = group_stream_def.copy_datum(datum);
+                        let new_id = group_stream_def
+                            .copy_datum(datum)
+                            .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
                         map.insert(datum.id(), new_id);
                     }
                     for datum_id in &group_datum_ids {
-                        output_stream_def.remove_datum(*datum_id);
+                        output_stream_def
+                            .remove_datum(*datum_id)
+                            .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
                     }
 
                     let group_order = output_stream.facts().order()[group_by_datum_ids.len()..]
@@ -122,19 +125,14 @@ impl Group {
                     facts_proof.order_facts_updated().distinct_facts_updated(),
                 );
 
-                let module_name = graph
-                    .chain_customizer()
-                    .streams_module_name
-                    .sub_n(&***group_stream.record_type());
-                output_stream.add_vec_datum(
-                    params.group_field,
-                    &format!(
-                        "{module_name}::Record{group_variant_id}",
-                        module_name = module_name,
-                        group_variant_id = group_stream.variant_id(),
-                    ),
-                    group_stream.clone(),
-                );
+                output_stream
+                    .add_vec_datum(
+                        params.group_field,
+                        group_stream.record_type().clone(),
+                        group_stream.variant_id(),
+                        group_stream.clone(),
+                    )
+                    .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
 
                 output_stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
                 output_stream.set_distinct_fact_ids(group_by_datum_ids);
@@ -245,8 +243,8 @@ impl DynNode for Group {
     }
 }
 
-pub fn group<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn group(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: GroupParams,
@@ -278,8 +276,8 @@ pub struct SubGroup {
 }
 
 impl SubGroup {
-    pub fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    pub fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SubGroupParams,
@@ -349,13 +347,17 @@ impl SubGroup {
                         )
                         .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
 
-                        let mut map = BTreeMap::<DatumId, DatumId>::new();
+                        let mut map = BTreeMap::<QuirkyDatumId, QuirkyDatumId>::new();
                         for datum in &group_data {
-                            let new_id = group_stream_def.copy_datum(datum);
+                            let new_id = group_stream_def
+                                .copy_datum(datum)
+                                .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
                             map.insert(datum.id(), new_id);
                         }
                         for datum_id in &group_datum_ids {
-                            output_stream_def.remove_datum(*datum_id);
+                            output_stream_def
+                                .remove_datum(*datum_id)
+                                .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
                         }
 
                         let group_order = sub_output_stream.facts().order()
@@ -379,19 +381,14 @@ impl SubGroup {
                         facts_proof.order_facts_updated().distinct_facts_updated(),
                     );
 
-                    let module_name = graph
-                        .chain_customizer()
-                        .streams_module_name
-                        .sub_n(&***group_stream.record_type());
-                    sub_output_stream.add_vec_datum(
-                        params.group_field,
-                        &format!(
-                            "{module_name}::Record{group_variant_id}",
-                            module_name = module_name,
-                            group_variant_id = group_stream.variant_id(),
-                        ),
-                        group_stream.clone(),
-                    );
+                    sub_output_stream
+                        .add_vec_datum(
+                            params.group_field,
+                            group_stream.record_type().clone(),
+                            group_stream.variant_id(),
+                            group_stream.clone(),
+                        )
+                        .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
 
                     created_group_stream = Some(group_stream);
 
@@ -529,8 +526,8 @@ impl DynNode for SubGroup {
     }
 }
 
-pub fn sub_group<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn sub_group(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubGroupParams,

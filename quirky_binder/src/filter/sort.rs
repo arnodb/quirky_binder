@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
 
 use crate::{prelude::*, support::cmp::fields_cmp, trace_element};
 
@@ -23,8 +22,8 @@ pub struct Sort {
 }
 
 impl Sort {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SortParams,
@@ -98,8 +97,8 @@ impl DynNode for Sort {
     }
 }
 
-pub fn sort<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn sort(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SortParams,
@@ -130,8 +129,8 @@ pub struct SubSort {
 }
 
 impl SubSort {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SubSortParams,
@@ -237,8 +236,8 @@ impl DynNode for SubSort {
     }
 }
 
-pub fn sub_sort<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn sub_sort(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubSortParams,

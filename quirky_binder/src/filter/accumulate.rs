@@ -1,5 +1,3 @@
-use truc::record::type_resolver::TypeResolver;
-
 use crate::{prelude::*, trace_element};
 
 const ACCUMULATE_TRACE_NAME: &str = "accumulate";
@@ -14,8 +12,8 @@ pub struct Accumulate {
 }
 
 impl Accumulate {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
@@ -66,8 +64,8 @@ impl DynNode for Accumulate {
     }
 }
 
-pub fn accumulate<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn accumulate(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: (),

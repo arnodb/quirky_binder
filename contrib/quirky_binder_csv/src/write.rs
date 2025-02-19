@@ -1,6 +1,5 @@
 use quirky_binder::{prelude::*, trace_element};
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
 
 const WRITE_CSV_TRACE_NAME: &str = "write_csv";
 
@@ -24,8 +23,8 @@ pub struct WriteCsv {
 }
 
 impl WriteCsv {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: WriteCsvParams,
@@ -97,7 +96,7 @@ impl DynNode for WriteCsv {
         let write_headers = if has_headers {
             let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
             let variant = &record_definition[self.inputs.single().variant_id()];
-            let headers = variant.data_sorted().map(|d| record_definition[d].name());
+            let headers = variant.data().map(|d| record_definition[d].name());
             Some(quote! {{
                 writer.write_record([#(#headers),*])?;
             }})
@@ -142,8 +141,8 @@ impl DynNode for WriteCsv {
     }
 }
 
-pub fn write_csv<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn write_csv(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: WriteCsvParams,

@@ -1,5 +1,3 @@
-use truc::record::definition::DatumId;
-
 use super::{
     super::Graph,
     helper::{drawing_source_node_name, DrawingHelper, NodePortsBuilder},
@@ -11,8 +9,8 @@ use crate::{
     stream::StreamRecordType,
 };
 
-pub type RecordsPortKey<'a> = (&'a [Box<str>], &'a StreamRecordType, DatumId);
-pub type RecordsPathKey<'a> = (&'a StreamRecordType, DatumId);
+pub type RecordsPortKey<'a> = (&'a [Box<str>], &'a StreamRecordType, QuirkyDatumId);
+pub type RecordsPathKey<'a> = (&'a StreamRecordType, QuirkyDatumId);
 
 pub type RecordsDrawingHelper<'a> = DrawingHelper<'a, RecordsPortKey<'a>, RecordsPathKey<'a>>;
 

@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
 use quirky_binder::{prelude::*, quirky_binder};
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
@@ -12,14 +12,11 @@ fn main() {
         resolver
     };
 
-    let graph = quirky_binder_main(GraphBuilder::new(
-        &type_resolver,
-        ChainCustomizer::default(),
-    ))
-    .unwrap_or_else(|err| {
-        panic!("{}", err);
-    });
+    let graph =
+        quirky_binder_main(GraphBuilder::new(ChainCustomizer::default())).unwrap_or_else(|err| {
+            panic!("{}", err);
+        });
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
-    graph.generate(Path::new(&out_dir)).unwrap();
+    graph.generate(Path::new(&out_dir), &type_resolver).unwrap();
 }

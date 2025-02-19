@@ -1,6 +1,5 @@
 use proc_macro2::TokenStream;
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
 
 use super::{
     SubTransform, SubTransformParams, SubTransformSpec, Transform, TransformParams, TransformSpec,
@@ -27,9 +26,9 @@ const TO_LOWERCASE_TRACE_NAME: &str = "to_lowercase";
 pub struct ToLowercase;
 
 impl TransformSpec for ToLowercase {
-    fn update_facts<R: TypeResolver + Copy>(
+    fn update_facts(
         &self,
-        output_stream: &mut OutputBuilderForUpdate<R, DerivedExtra>,
+        output_stream: &mut OutputBuilderForUpdate<DerivedExtra>,
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
@@ -52,8 +51,8 @@ impl TransformSpec for ToLowercase {
     }
 }
 
-pub fn to_lowercase<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn to_lowercase(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: TransformStringParams,
@@ -76,9 +75,9 @@ const SUB_TO_LOWERCASE_TRACE_NAME: &str = "sub_to_lowercase";
 pub struct SubToLowercase;
 
 impl SubTransformSpec for SubToLowercase {
-    fn update_facts<R: TypeResolver + Copy>(
+    fn update_facts(
         &self,
-        output_stream: &mut SubStreamBuilderForUpdate<R, DerivedExtra>,
+        output_stream: &mut SubStreamBuilderForUpdate<DerivedExtra>,
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
@@ -101,8 +100,8 @@ impl SubTransformSpec for SubToLowercase {
     }
 }
 
-pub fn sub_to_lowercase<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn sub_to_lowercase(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubTransformStringParams,
@@ -126,9 +125,9 @@ const REVERSE_CHARS_TRACE_NAME: &str = "reverse_chars";
 pub struct ReverseChars;
 
 impl TransformSpec for ReverseChars {
-    fn update_facts<R: TypeResolver + Copy>(
+    fn update_facts(
         &self,
-        output_stream: &mut OutputBuilderForUpdate<R, DerivedExtra>,
+        output_stream: &mut OutputBuilderForUpdate<DerivedExtra>,
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
@@ -149,8 +148,8 @@ impl TransformSpec for ReverseChars {
     }
 }
 
-pub fn reverse_chars<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn reverse_chars(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: TransformStringParams,
@@ -173,9 +172,9 @@ const SUB_REVERSE_CHARS_TRACE_NAME: &str = "sub_reverse_chars";
 pub struct SubReverseChars;
 
 impl SubTransformSpec for SubReverseChars {
-    fn update_facts<R: TypeResolver + Copy>(
+    fn update_facts(
         &self,
-        output_stream: &mut SubStreamBuilderForUpdate<R, DerivedExtra>,
+        output_stream: &mut SubStreamBuilderForUpdate<DerivedExtra>,
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
@@ -196,8 +195,8 @@ impl SubTransformSpec for SubReverseChars {
     }
 }
 
-pub fn sub_reverse_chars<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn sub_reverse_chars(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubTransformStringParams,

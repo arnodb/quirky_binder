@@ -1,6 +1,5 @@
 use proc_macro2::TokenStream;
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
 
 use crate::{prelude::*, trace_element};
 
@@ -23,8 +22,8 @@ pub struct FunctionTerminate<const N: usize> {
 }
 
 impl<const N: usize> FunctionTerminate<N> {
-    fn new<R: TypeResolver + Copy>(
-        _graph: &mut GraphBuilder<R>,
+    fn new(
+        _graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; N],
         params: FunctionTerminateParams,
@@ -109,8 +108,8 @@ impl<const N: usize> DynNode for FunctionTerminate<N> {
     }
 }
 
-pub fn function_terminate<const N: usize, R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn function_terminate<const N: usize>(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; N],
     params: FunctionTerminateParams,

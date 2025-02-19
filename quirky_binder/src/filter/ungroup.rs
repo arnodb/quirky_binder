@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
 
 use crate::{prelude::*, trace_element};
 
@@ -25,8 +24,8 @@ pub struct Ungroup {
 }
 
 impl Ungroup {
-    pub fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    pub fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: UngroupParams,
@@ -58,7 +57,9 @@ impl Ungroup {
 
                     let group_stream = output_stream.sub_stream(group_datum_id).clone();
 
-                    output_stream_def.remove_datum(group_datum_id);
+                    output_stream_def
+                        .remove_datum(group_datum_id)
+                        .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?;
 
                     let sub_stream_def = graph
                         .get_stream(group_stream.record_type())
@@ -68,10 +69,12 @@ impl Ungroup {
                         .get_current_data()
                         .map(|d| {
                             let datum = &sub_stream_def[d];
-                            output_stream_def.copy_datum(datum);
-                            datum.name().to_owned()
+                            output_stream_def
+                                .copy_datum(datum)
+                                .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?;
+                            Ok(datum.name().to_owned())
                         })
-                        .collect::<Vec<_>>();
+                        .collect::<Result<Vec<_>, _>>()?;
 
                     (group_stream, grouped_fields)
                 };
@@ -159,8 +162,8 @@ impl DynNode for Ungroup {
     }
 }
 
-pub fn ungroup<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn ungroup(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: UngroupParams,
@@ -192,8 +195,8 @@ pub struct SubUngroup {
 }
 
 impl SubUngroup {
-    pub fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    pub fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SubUngroupParams,
@@ -236,7 +239,9 @@ impl SubUngroup {
 
                         let group_stream = sub_output_stream.sub_stream(group_datum_id).clone();
 
-                        output_stream_def.remove_datum(group_datum_id);
+                        output_stream_def
+                            .remove_datum(group_datum_id)
+                            .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?;
 
                         let sub_stream_def = graph
                             .get_stream(group_stream.record_type())
@@ -246,10 +251,12 @@ impl SubUngroup {
                             .get_current_data()
                             .map(|d| {
                                 let datum = &sub_stream_def[d];
-                                output_stream_def.copy_datum(datum);
-                                datum.name().to_owned()
+                                output_stream_def
+                                    .copy_datum(datum)
+                                    .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?;
+                                Ok(datum.name().to_owned())
                             })
-                            .collect::<Vec<_>>();
+                            .collect::<Result<Vec<_>, _>>()?;
 
                         (group_stream, grouped_fields)
                     };
@@ -351,8 +358,8 @@ impl DynNode for SubUngroup {
     }
 }
 
-pub fn sub_ungroup<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn sub_ungroup(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubUngroupParams,

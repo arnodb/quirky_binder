@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
 
 use crate::{prelude::*, trace_element};
 
@@ -22,8 +21,8 @@ pub struct ExtractFields {
 }
 
 impl ExtractFields {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: ExtractFieldsParams,
@@ -56,15 +55,17 @@ impl ExtractFields {
                 let mut output_extracted_stream_def =
                     output_extracted_stream.record_definition().borrow_mut();
                 for field in valid_fields.iter() {
-                    output_extracted_stream_def.copy_datum(
-                        output_stream_def
-                            .borrow()
-                            .get_variant_datum_definition_by_name(
-                                inputs.single().variant_id(),
-                                field.name(),
-                            )
-                            .unwrap_or_else(|| panic!(r#"datum "{}""#, field.name())),
-                    );
+                    output_extracted_stream_def
+                        .copy_datum(
+                            output_stream_def
+                                .borrow()
+                                .get_variant_datum_definition_by_name(
+                                    inputs.single().variant_id(),
+                                    field.name(),
+                                )
+                                .unwrap_or_else(|| panic!(r#"datum "{}""#, field.name())),
+                        )
+                        .with_trace_element(trace_element!(EXTRACT_FIELDS_TRACE_NAME))?;
                 }
                 // XXX That is actually not true, let's see what we can do later.
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
@@ -103,14 +104,11 @@ impl DynNode for ExtractFields {
         let record_definition = &graph.record_definitions()[self.outputs[1].record_type()];
         let variant = &record_definition[self.outputs[1].variant_id()];
         let datum_clones = variant.data().map(|d| {
-            let datum = &record_definition[d];
-            syn::parse_str::<syn::Stmt>(&format!(
-                "let {name} = {deref}record.{name}(){clone};",
-                name = datum.name(),
-                deref = if datum.allow_uninit() { "*" } else { "" },
-                clone = if datum.allow_uninit() { "" } else { ".clone()" },
-            ))
-            .expect("clone")
+            let name = format_ident!("{}", record_definition[d].name());
+            quote! {
+                #[allow(clippy::clone_on_copy)]
+                let #name = record.#name().clone();
+            }
         });
 
         let output_record_1 = def_output_1.record();
@@ -144,8 +142,8 @@ impl DynNode for ExtractFields {
     }
 }
 
-pub fn extract_fields<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn extract_fields(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: ExtractFieldsParams,

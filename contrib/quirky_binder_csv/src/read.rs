@@ -1,6 +1,5 @@
 use quirky_binder::{prelude::*, trace_element};
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
 
 const READ_CSV_TRACE_NAME: &str = "read_csv";
 
@@ -28,8 +27,8 @@ pub struct ReadCsv {
 }
 
 impl ReadCsv {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
         params: ReadCsvParams,
@@ -70,7 +69,14 @@ impl ReadCsv {
                 {
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
                     for (name, r#type) in valid_fields.iter() {
-                        output_stream_def.add_dynamic_datum(name.name(), r#type.type_name());
+                        output_stream_def
+                            .add_datum(
+                                name.name(),
+                                QuirkyDatumType::Simple {
+                                    type_name: r#type.type_name().to_owned(),
+                                },
+                            )
+                            .with_trace_element(trace_element!(READ_CSV_TRACE_NAME))?;
                     }
                 }
                 if let Some(order_fields) = valid_order_fields.as_ref() {
@@ -195,8 +201,8 @@ impl DynNode for ReadCsv {
     }
 }
 
-pub fn read_csv<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn read_csv(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 0],
     params: ReadCsvParams,

@@ -1,10 +1,6 @@
 use std::{cell::Ref, iter::once};
 
 use serde::Deserialize;
-use truc::record::{
-    definition::{DatumDefinition, RecordDefinitionBuilder},
-    type_resolver::TypeResolver,
-};
 
 use crate::{prelude::*, trace_element};
 
@@ -37,24 +33,20 @@ impl FieldParam<'_> {
         lookup(valid)
     }
 
-    pub fn validate_on_record_definition<R>(
+    pub fn validate_on_record_definition(
         self,
-        def: &RecordDefinitionBuilder<R>,
-    ) -> ChainResult<ValidFieldName>
-    where
-        R: TypeResolver,
-    {
+        def: &QuirkyRecordDefinitionBuilder,
+    ) -> ChainResult<ValidFieldName> {
         self.validate_on_record_definition_ext(def, |name, _datum| Ok(name))
     }
 
-    pub fn validate_on_record_definition_ext<R, M, O>(
+    pub fn validate_on_record_definition_ext<M, O>(
         self,
-        def: &RecordDefinitionBuilder<R>,
+        def: &QuirkyRecordDefinitionBuilder,
         try_map: M,
     ) -> ChainResult<O>
     where
-        R: TypeResolver,
-        M: Fn(ValidFieldName, &DatumDefinition) -> ChainResult<O>,
+        M: Fn(ValidFieldName, &QuirkyDatumDefinition) -> ChainResult<O>,
     {
         self.validate_ext(|name| {
             if let Some(datum) = def.get_current_datum_definition_by_name(name.name()) {
@@ -67,26 +59,22 @@ impl FieldParam<'_> {
         })
     }
 
-    pub fn validate_on_stream<R>(
+    pub fn validate_on_stream(
         self,
         stream: &NodeStream,
-        graph: &GraphBuilder<R>,
-    ) -> ChainResult<ValidFieldName>
-    where
-        R: TypeResolver + Copy,
-    {
+        graph: &GraphBuilder,
+    ) -> ChainResult<ValidFieldName> {
         self.validate_on_stream_ext(stream, graph, |name, _datum| Ok(name))
     }
 
-    pub fn validate_on_stream_ext<R, M, O>(
+    pub fn validate_on_stream_ext<M, O>(
         self,
         stream: &NodeStream,
-        graph: &GraphBuilder<R>,
+        graph: &GraphBuilder,
         try_map: M,
     ) -> ChainResult<O>
     where
-        R: TypeResolver + Copy,
-        M: Fn(ValidFieldName, &DatumDefinition) -> ChainResult<O>,
+        M: Fn(ValidFieldName, &QuirkyDatumDefinition) -> ChainResult<O>,
     {
         let def = graph.get_stream(stream.record_type())?.borrow();
         self.validate_on_record_definition_ext(&def, try_map)
@@ -142,26 +130,22 @@ impl FieldsParam<'_> {
         Ok(valid_fields)
     }
 
-    pub fn validate_on_record_definition<R>(
+    pub fn validate_on_record_definition(
         self,
-        def: &RecordDefinitionBuilder<R>,
+        def: &QuirkyRecordDefinitionBuilder,
         trace_name: &str,
-    ) -> ChainResultWithTrace<Vec<ValidFieldName>>
-    where
-        R: TypeResolver,
-    {
+    ) -> ChainResultWithTrace<Vec<ValidFieldName>> {
         self.validate_on_record_definition_ext(def, |name, _datum| Ok(name), trace_name)
     }
 
-    pub fn validate_on_record_definition_ext<R, M, O>(
+    pub fn validate_on_record_definition_ext<M, O>(
         self,
-        def: &RecordDefinitionBuilder<R>,
+        def: &QuirkyRecordDefinitionBuilder,
         try_map: M,
         trace_name: &str,
     ) -> ChainResultWithTrace<Vec<O>>
     where
-        R: TypeResolver,
-        M: Fn(ValidFieldName, &DatumDefinition) -> ChainResultWithTrace<O>,
+        M: Fn(ValidFieldName, &QuirkyDatumDefinition) -> ChainResultWithTrace<O>,
     {
         self.validate_ext(
             |name| {
@@ -178,28 +162,24 @@ impl FieldsParam<'_> {
         )
     }
 
-    pub fn validate_on_stream<R>(
+    pub fn validate_on_stream(
         self,
         stream: &NodeStream,
-        graph: &GraphBuilder<R>,
+        graph: &GraphBuilder,
         trace_name: &str,
-    ) -> ChainResultWithTrace<Vec<ValidFieldName>>
-    where
-        R: TypeResolver + Copy,
-    {
+    ) -> ChainResultWithTrace<Vec<ValidFieldName>> {
         self.validate_on_stream_ext(stream, graph, |name, _datum| Ok(name), trace_name)
     }
 
-    pub fn validate_on_stream_ext<R, M, O>(
+    pub fn validate_on_stream_ext<M, O>(
         self,
         stream: &NodeStream,
-        graph: &GraphBuilder<R>,
+        graph: &GraphBuilder,
         try_map: M,
         trace_name: &str,
     ) -> ChainResultWithTrace<Vec<O>>
     where
-        R: TypeResolver + Copy,
-        M: Fn(ValidFieldName, &DatumDefinition) -> ChainResultWithTrace<O>,
+        M: Fn(ValidFieldName, &QuirkyDatumDefinition) -> ChainResultWithTrace<O>,
     {
         let def = graph
             .get_stream(stream.record_type())
@@ -208,14 +188,11 @@ impl FieldsParam<'_> {
         self.validate_on_record_definition_ext(&def, try_map, trace_name)
     }
 
-    pub fn validate_path_on_stream<'g, R>(
+    pub fn validate_path_on_stream<'g>(
         self,
         stream: &NodeStream,
-        graph: &'g GraphBuilder<R>,
-    ) -> ChainResult<(Vec<ValidFieldName>, Ref<'g, RecordDefinitionBuilder<R>>)>
-    where
-        R: TypeResolver + Copy,
-    {
+        graph: &'g GraphBuilder,
+    ) -> ChainResult<(Vec<ValidFieldName>, Ref<'g, QuirkyRecordDefinitionBuilder>)> {
         let (valid_first, mut s, mut def) = {
             let valid =
                 ValidFieldName::try_from(self[0]).map_err(|_| ChainError::InvalidFieldName {
@@ -278,24 +255,18 @@ impl DirectedFieldsParam<'_> {
         Ok(valid_fields)
     }
 
-    pub fn validate_on_record_definition<R>(
+    pub fn validate_on_record_definition(
         self,
-        def: &RecordDefinitionBuilder<R>,
-    ) -> ChainResult<Vec<Directed<ValidFieldName>>>
-    where
-        R: TypeResolver,
-    {
+        def: &QuirkyRecordDefinitionBuilder,
+    ) -> ChainResult<Vec<Directed<ValidFieldName>>> {
         self.validate(|field| def.get_current_datum_definition_by_name(field).is_some())
     }
 
-    pub fn validate_on_stream<R>(
+    pub fn validate_on_stream(
         self,
         stream: &NodeStream,
-        graph: &GraphBuilder<R>,
-    ) -> ChainResult<Vec<Directed<ValidFieldName>>>
-    where
-        R: TypeResolver + Copy,
-    {
+        graph: &GraphBuilder,
+    ) -> ChainResult<Vec<Directed<ValidFieldName>>> {
         let def = graph.get_stream(stream.record_type())?.borrow();
         self.validate_on_record_definition(&def)
     }

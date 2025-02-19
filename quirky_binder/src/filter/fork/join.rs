@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
 
 use crate::{
     graph::builder::{check_directed_order_starts_with, check_distinct_eq},
@@ -31,8 +30,8 @@ pub struct Join {
 }
 
 impl Join {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 2],
         params: JoinParams,
@@ -102,13 +101,18 @@ impl Join {
                             .iter()
                             .any(|field| field.name() == datum.name())
                         {
-                            output_stream_def.copy_datum(datum);
-                            Some(datum.name().to_owned())
+                            if let Err(err) = output_stream_def
+                                .copy_datum(datum)
+                                .with_trace_element(trace_element!(JOIN_TRACE_NAME))
+                            {
+                                return Some(Err(err));
+                            };
+                            Some(Ok(datum.name().to_owned()))
                         } else {
                             None
                         }
                     })
-                    .collect::<Vec<String>>();
+                    .collect::<Result<Vec<String>, _>>()?;
 
                 // XXX That is actually not true, let's see what we can do later.
                 Ok(facts_proof
@@ -253,8 +257,8 @@ impl DynNode for Join {
     }
 }
 
-pub fn join<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn join(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 2],
     params: JoinParams,

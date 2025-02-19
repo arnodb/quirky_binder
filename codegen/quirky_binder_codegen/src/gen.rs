@@ -170,8 +170,8 @@ fn quirky_binder_graph_definition<'a>(
             _a: std::marker::PhantomData<&'a ()>,
         }
 
-        pub fn #name<R: TypeResolver + Copy>(
-            graph: &mut GraphBuilder<R>,
+        pub fn #name(
+            graph: &mut GraphBuilder,
             name: FullyQualifiedName,
             inputs: [NodeStream; #input_count],
             #params_type_name { #(#params,)* _a }: #params_type_name,
@@ -226,8 +226,8 @@ fn quirky_binder_graph<'a>(
         .map(|feature| quote![#[cfg(feature = #feature)]]);
     quote! {
         #feature_gate
-        pub fn #name<R: TypeResolver + Copy>(
-            graph: &mut GraphBuilder<R>,
+        pub fn #name(
+            graph: &mut GraphBuilder,
             name: FullyQualifiedName,
         ) -> ChainResultWithTrace<NodeCluster<0, 0>> {
             let handlebars = Handlebars::new();
@@ -599,11 +599,9 @@ pub(crate) fn generate_module<'a>(
                  .as_ref()
                  .map(|feature|quote![#[cfg(feature = #feature)]]));
         quote! {
-            pub fn quirky_binder_main<R>(
-                mut graph: GraphBuilder<R>,
+            pub fn quirky_binder_main(
+                mut graph: GraphBuilder,
             ) -> ChainResultWithTrace<Graph>
-            where
-                R: TypeResolver + Copy,
             {
                 let handlebars = Handlebars::new();
                 let handlebars_data = BTreeMap::<&str, &str>::new();
@@ -621,15 +619,16 @@ pub(crate) fn generate_module<'a>(
 
             pub fn quirky_binder_generate<R, NGB>(
                 out_dir: &Path,
+                type_resolver: R,
                 new_graph_builder: NGB,
             ) -> Result<(), GraphGenerationError>
             where
                 R: TypeResolver + Copy,
-                NGB: Fn() -> GraphBuilder<R>,
+                NGB: Fn() -> GraphBuilder,
             {
                 let graph = quirky_binder_main(new_graph_builder())?;
 
-                graph.generate(out_dir)?;
+                graph.generate(out_dir, type_resolver)?;
 
                 Ok(())
             }
@@ -637,8 +636,6 @@ pub(crate) fn generate_module<'a>(
     });
     error_emitter.error()?;
     Ok(quote! {
-        use std::collections::BTreeMap;
-
         mod __quirky_binder_private {
             use #quirky_binder_crate::prelude::*;
             use std::collections::BTreeMap;

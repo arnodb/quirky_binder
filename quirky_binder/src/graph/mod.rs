@@ -5,7 +5,7 @@ use truc::{
         config::GeneratorConfig,
         fragment::{clone::CloneImplGenerator, serde::SerdeImplGenerator, FragmentGenerator},
     },
-    record::definition::RecordDefinition,
+    record::type_resolver::TypeResolver,
 };
 
 use crate::{codegen::Module, prelude::*};
@@ -17,7 +17,7 @@ pub mod visit;
 
 pub struct Graph {
     chain_customizer: ChainCustomizer,
-    record_definitions: BTreeMap<StreamRecordType, RecordDefinition>,
+    record_definitions: BTreeMap<StreamRecordType, QuirkyRecordDefinition>,
     entry_nodes: Vec<Box<dyn DynNode>>,
 }
 
@@ -26,11 +26,14 @@ impl Graph {
         &self.chain_customizer
     }
 
-    pub fn record_definitions(&self) -> &BTreeMap<StreamRecordType, RecordDefinition> {
+    pub fn record_definitions(&self) -> &BTreeMap<StreamRecordType, QuirkyRecordDefinition> {
         &self.record_definitions
     }
 
-    pub fn generate(&self, output: &Path) -> Result<(), std::io::Error> {
+    pub fn generate<R>(&self, output: &Path, type_resolver: R) -> Result<(), std::io::Error>
+    where
+        R: TypeResolver + Copy,
+    {
         use std::io::Write;
 
         /*
@@ -61,9 +64,10 @@ impl Graph {
         }
         */
 
-        {
+        let variants_mapping = {
             let mut file = File::create(output.join("streams.rs")).unwrap();
             let mut root_module = Module::default();
+            let mut variants_mapping = BTreeMap::new();
             for (record_type, definition) in &self.record_definitions {
                 let module = record_type
                     .iter()
@@ -71,16 +75,20 @@ impl Graph {
                     .fold(root_module.get_or_new_module(&record_type[0]), |m, n| {
                         m.get_or_new_module(n)
                     });
+                let (truc_definition, def_variants_mapping) =
+                    definition.truc(&self.chain_customizer, type_resolver);
                 module.fragment(truc::generator::generate(
-                    definition,
+                    &truc_definition,
                     &GeneratorConfig::default_with_custom_generators([
                         Box::new(CloneImplGenerator) as Box<dyn FragmentGenerator>,
                         Box::new(SerdeImplGenerator) as Box<dyn FragmentGenerator>,
                     ]),
                 ));
+                variants_mapping.insert(record_type, def_variants_mapping);
             }
             write!(file, "{}", root_module).unwrap();
-        }
+            variants_mapping
+        };
         rustfmt_generated_file(output.join("streams.rs").as_path());
 
         {
@@ -91,7 +99,7 @@ impl Graph {
 
             root_module.fragment("mod streams;");
 
-            let mut chain = Chain::new(&self.chain_customizer, &mut root_module);
+            let mut chain = Chain::new(&self.chain_customizer, &mut root_module, &variants_mapping);
 
             for node in &self.entry_nodes {
                 node.gen_chain(self, &mut chain);

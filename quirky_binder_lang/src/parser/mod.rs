@@ -133,12 +133,7 @@ fn assemble_inputs<'a>(
 ) -> Vec<StreamLineInput<'a>> {
     Some(first)
         .into_iter()
-        .chain(
-            extra_streams
-                .into_iter()
-                .map(Into::into)
-                .map(StreamLineInput::Named),
-        )
+        .chain(extra_streams.into_iter().map(StreamLineInput::Named))
         .collect()
 }
 

@@ -5,10 +5,6 @@ use std::{
 };
 
 use itertools::Itertools;
-use truc::record::{
-    definition::{DatumDefinitionOverride, DatumId, RecordDefinitionBuilder, RecordVariantId},
-    type_resolver::TypeResolver,
-};
 
 use self::{
     params::ParamsBuilder, pass_through::OutputBuilderForPassThrough,
@@ -21,11 +17,10 @@ pub mod pass_through;
 pub mod update;
 
 #[derive(new, Getters)]
-pub struct GraphBuilder<R: TypeResolver + Copy> {
-    type_resolver: R,
+pub struct GraphBuilder {
     chain_customizer: ChainCustomizer,
     #[new(default)]
-    record_definitions: BTreeMap<StreamRecordType, RefCell<RecordDefinitionBuilder<R>>>,
+    record_definitions: BTreeMap<StreamRecordType, RefCell<QuirkyRecordDefinitionBuilder>>,
     #[new(default)]
     #[getset(get = "pub")]
     params: ParamsBuilder,
@@ -33,11 +28,11 @@ pub struct GraphBuilder<R: TypeResolver + Copy> {
     anchor_table_count: usize,
 }
 
-impl<R: TypeResolver + Copy> GraphBuilder<R> {
+impl GraphBuilder {
     pub fn new_stream(&mut self, record_type: StreamRecordType) -> ChainResult<()> {
         match self.record_definitions.entry(record_type) {
             Entry::Vacant(entry) => {
-                let record_definition_builder = RecordDefinitionBuilder::new(self.type_resolver);
+                let record_definition_builder = QuirkyRecordDefinitionBuilder::default();
                 entry.insert(record_definition_builder.into());
                 Ok(())
             }
@@ -56,7 +51,7 @@ impl<R: TypeResolver + Copy> GraphBuilder<R> {
     pub fn get_stream(
         &self,
         record_type: &StreamRecordType,
-    ) -> ChainResult<&RefCell<RecordDefinitionBuilder<R>>> {
+    ) -> ChainResult<&RefCell<QuirkyRecordDefinitionBuilder>> {
         self.record_definitions
             .get(record_type)
             .ok_or_else(|| ChainError::StreamNotFound {
@@ -102,48 +97,41 @@ impl<'a> StreamsBuilder<'a> {
         }
     }
 
-    pub fn new_main_stream<R: TypeResolver + Copy>(
-        &mut self,
-        graph: &mut GraphBuilder<R>,
-    ) -> ChainResult<()> {
+    pub fn new_main_stream(&mut self, graph: &mut GraphBuilder) -> ChainResult<()> {
         let full_name = self.name.clone();
         let record_type = StreamRecordType::from(full_name);
         graph.new_stream(record_type)
     }
 
-    pub fn new_named_stream<R: TypeResolver + Copy>(
-        &mut self,
-        name: &str,
-        graph: &mut GraphBuilder<R>,
-    ) -> ChainResult<()> {
+    pub fn new_named_stream(&mut self, name: &str, graph: &mut GraphBuilder) -> ChainResult<()> {
         let full_name = self.name.sub(name);
         let record_type = StreamRecordType::from(full_name);
         graph.new_stream(record_type)
     }
 
-    pub fn new_main_output<'b, 'g, R: TypeResolver + Copy>(
+    pub fn new_main_output<'b, 'g>(
         &'b mut self,
-        graph: &'g GraphBuilder<R>,
-    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, ()>> {
+        graph: &'g GraphBuilder,
+    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, ()>> {
         let full_name = self.name.clone();
         self.new_output_internal(graph, full_name, true)
     }
 
-    pub fn new_named_output<'b, 'g, R: TypeResolver + Copy>(
+    pub fn new_named_output<'b, 'g>(
         &'b mut self,
         name: &str,
-        graph: &'g GraphBuilder<R>,
-    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, ()>> {
+        graph: &'g GraphBuilder,
+    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, ()>> {
         let full_name = self.name.sub(name);
         self.new_output_internal(graph, full_name, false)
     }
 
-    fn new_output_internal<'b, 'g, R: TypeResolver + Copy>(
+    fn new_output_internal<'b, 'g>(
         &'b mut self,
-        graph: &'g GraphBuilder<R>,
+        graph: &'g GraphBuilder,
         full_name: FullyQualifiedName,
         is_output_main_stream: bool,
-    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, ()>> {
+    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, ()>> {
         let record_type = StreamRecordType::from(full_name.clone());
         let record_definition = graph.get_stream(&record_type)?;
         Ok(OutputBuilder {
@@ -158,12 +146,12 @@ impl<'a> StreamsBuilder<'a> {
         })
     }
 
-    pub fn output_from_input<'b, 'g, R: TypeResolver + Copy>(
+    pub fn output_from_input<'b, 'g>(
         &'b mut self,
         input_index: usize,
         is_output_main_stream: bool,
-        graph: &'g GraphBuilder<R>,
-    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, R, DerivedExtra>> {
+        graph: &'g GraphBuilder,
+    ) -> ChainResult<OutputBuilder<'a, 'b, 'g, DerivedExtra>> {
         let input = &self.inputs[input_index];
         if let Some(output_index) = self.in_out_links[input_index] {
             return Err(ChainError::InputAlreadyDerived {
@@ -201,23 +189,23 @@ impl<'a> StreamsBuilder<'a> {
 
 #[must_use]
 #[derive(Getters)]
-pub struct OutputBuilder<'a, 'b, 'g, R: TypeResolver, Extra> {
+pub struct OutputBuilder<'a, 'b, 'g, Extra> {
     streams: &'b mut StreamsBuilder<'a>,
     #[getset(get = "pub")]
     record_type: StreamRecordType,
-    record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
-    input_sub_streams: BTreeMap<DatumId, NodeSubStream>,
+    record_definition: &'g RefCell<QuirkyRecordDefinitionBuilder>,
+    input_sub_streams: BTreeMap<QuirkyDatumId, NodeSubStream>,
     source: NodeStreamSource,
     is_output_main_stream: bool,
     facts: StreamFacts,
     extra: Extra,
 }
 
-impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilder<'a, 'b, 'g, R, Extra> {
+impl<'a, 'b, 'g, Extra> OutputBuilder<'a, 'b, 'g, Extra> {
     pub fn update<B, O>(self, build: B) -> ChainResultWithTrace<O>
     where
         B: FnOnce(
-            &mut OutputBuilderForUpdate<'a, 'b, 'g, R, Extra>,
+            &mut OutputBuilderForUpdate<'a, 'b, 'g, Extra>,
             NoFactsUpdated<()>,
         ) -> ChainResultWithTrace<FactsFullyUpdated<O>>,
     {
@@ -238,15 +226,15 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilder<'a, 'b, 'g, R, Ext
 
     pub fn update_path<B>(
         self,
-        graph: &'g GraphBuilder<R>,
+        graph: &'g GraphBuilder,
         path_fields: &[ValidFieldName],
         build: B,
         trace_name: &str,
     ) -> ChainResultWithTrace<Vec<PathUpdateElement>>
     where
         B: for<'c, 'd> FnOnce(
-            &mut OutputBuilderForUpdate<'c, 'd, 'g, R, Extra>,
-            &mut SubStreamBuilderForUpdate<'g, R, DerivedExtra>,
+            &mut OutputBuilderForUpdate<'c, 'd, 'g, Extra>,
+            &mut SubStreamBuilderForUpdate<'g, DerivedExtra>,
             NoFactsUpdated<()>,
         ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
     {
@@ -257,32 +245,24 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilder<'a, 'b, 'g, R, Ext
                     output_stream.update_sub_stream(sub_input_stream, graph, build, trace_name)
                 },
                 |field: &str, path_stream, sub_output_stream, facts_proof| {
-                    let module_name = graph
-                        .chain_customizer()
-                        .streams_module_name
-                        .sub_n(&***sub_output_stream.record_type());
-                    let record = &format!(
-                        "{module_name}::Record{group_variant_id}",
-                        module_name = module_name,
-                        group_variant_id = sub_output_stream.variant_id(),
-                    );
                     path_stream
-                        .replace_vec_datum(field, record, sub_output_stream)
+                        .replace_vec_datum(
+                            field,
+                            sub_output_stream.record_type().clone(),
+                            sub_output_stream.variant_id(),
+                            sub_output_stream,
+                        )
                         .with_trace_element(trace_element!(trace_name))?;
                     Ok(facts_proof.order_facts_updated().distinct_facts_updated())
                 },
                 |field: &str, output_stream, sub_output_stream| {
-                    let module_name = graph
-                        .chain_customizer()
-                        .streams_module_name
-                        .sub_n(&***sub_output_stream.record_type());
-                    let record = &format!(
-                        "{module_name}::Record{group_variant_id}",
-                        module_name = module_name,
-                        group_variant_id = sub_output_stream.variant_id(),
-                    );
                     output_stream
-                        .replace_vec_datum(field, record, sub_output_stream)
+                        .replace_vec_datum(
+                            field,
+                            sub_output_stream.record_type().clone(),
+                            sub_output_stream.variant_id(),
+                            sub_output_stream,
+                        )
                         .with_trace_element(trace_element!(trace_name))?;
                     Ok(())
                 },
@@ -298,11 +278,11 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy, Extra> OutputBuilder<'a, 'b, 'g, R, Ext
     }
 }
 
-impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R, DerivedExtra> {
+impl<'a, 'b, 'g> OutputBuilder<'a, 'b, 'g, DerivedExtra> {
     pub fn pass_through<B, O>(self, build: B) -> ChainResultWithTrace<O>
     where
         B: FnOnce(
-            &mut OutputBuilderForPassThrough<'a, 'b, 'g, R>,
+            &mut OutputBuilderForPassThrough<'a, 'b, 'g>,
             NoFactsUpdated<()>,
         ) -> ChainResultWithTrace<FactsFullyUpdated<O>>,
     {
@@ -323,13 +303,13 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R, DerivedExt
 
     pub fn pass_through_path<B>(
         self,
-        graph: &'g GraphBuilder<R>,
+        graph: &'g GraphBuilder,
         path_fields: &[ValidFieldName],
         build: B,
         trace_name: &str,
     ) -> ChainResultWithTrace<NodeSubStream>
     where
-        B: FnOnce(&mut SubStreamBuilderForPassThrough<'g, R>) -> ChainResultWithTrace<()>,
+        B: FnOnce(&mut SubStreamBuilderForPassThrough<'g>) -> ChainResultWithTrace<()>,
     {
         self.pass_through(|output_stream, facts_proof| {
             let path_sub_stream = output_stream.pass_through_path(
@@ -351,7 +331,7 @@ impl<'a, 'b, 'g, R: TypeResolver + Copy> OutputBuilder<'a, 'b, 'g, R, DerivedExt
 }
 
 pub struct DerivedExtra {
-    input_variant_id: RecordVariantId,
+    input_variant_id: QuirkyRecordVariantId,
 }
 
 #[derive(Clone, Copy)]
@@ -391,59 +371,57 @@ impl FactsFullyUpdated<()> {
     }
 }
 
-fn add_vec_datum_to_record_definition<R: TypeResolver>(
-    record_definition: &mut RecordDefinitionBuilder<R>,
+fn add_vec_datum_to_record_definition(
+    record_definition: &mut QuirkyRecordDefinitionBuilder,
     field: &str,
-    record: &str,
-) -> DatumId {
-    record_definition.add_datum_override::<Vec<()>, _>(
+    record_type: StreamRecordType,
+    variant_id: QuirkyRecordVariantId,
+) -> Result<QuirkyDatumId, ChainError> {
+    record_definition.add_datum(
         field,
-        DatumDefinitionOverride {
-            type_name: Some(format!("Vec<{}>", record)),
-            size: None,
-            align: None,
-            allow_uninit: None,
+        QuirkyDatumType::Vec {
+            record_type,
+            variant_id,
         },
     )
 }
 
-fn replace_vec_datum_in_record_definition<R: TypeResolver>(
-    record_definition: &mut RecordDefinitionBuilder<R>,
+fn replace_vec_datum_in_record_definition(
+    record_definition: &mut QuirkyRecordDefinitionBuilder,
     field: &str,
-    record: &str,
-) -> ChainResult<(DatumId, DatumId)> {
+    record_type: StreamRecordType,
+    variant_id: QuirkyRecordVariantId,
+) -> ChainResult<(QuirkyDatumId, QuirkyDatumId)> {
     let old_datum = record_definition
         .get_current_datum_definition_by_name(field)
         .ok_or_else(|| ChainError::FieldNotFound {
             field: field.to_owned(),
         })?;
     let old_datum_id = old_datum.id();
-    record_definition.remove_datum(old_datum_id);
+    record_definition.remove_datum(old_datum_id)?;
     Ok((
         old_datum_id,
-        record_definition.add_datum_override::<Vec<()>, _>(
+        record_definition.add_datum(
             field,
-            DatumDefinitionOverride {
-                type_name: Some(format!("Vec<{}>", record)),
-                size: None,
-                align: None,
-                allow_uninit: None,
+            QuirkyDatumType::Vec {
+                record_type,
+                variant_id,
             },
-        ),
+        )?,
     ))
 }
 
-pub fn set_order_fact<R: TypeResolver, I, F>(
+pub fn set_order_fact<I, F>(
     facts: &mut StreamFacts,
     order_fields: I,
-    record_definition: &RecordDefinitionBuilder<R>,
+    record_definition: &QuirkyRecordDefinitionBuilder,
 ) -> ChainResult<()>
 where
     I: IntoIterator<Item = Directed<F>>,
     F: AsRef<str>,
 {
     // Ensure uniqueness, but keep order
-    let mut seen = BTreeSet::<DatumId>::new();
+    let mut seen = BTreeSet::<QuirkyDatumId>::new();
     let order = order_fields
         .into_iter()
         .map(|field| {
@@ -459,16 +437,16 @@ where
             }))
         })
         .filter_map(|res| res.transpose())
-        .collect::<Result<Vec<Directed<DatumId>>, _>>()?;
+        .collect::<Result<Vec<Directed<QuirkyDatumId>>, _>>()?;
     assert_eq!(seen.len(), order.len());
     facts.set_order(order);
     Ok(())
 }
 
-pub fn break_order_fact_at<R: TypeResolver, I, F>(
+pub fn break_order_fact_at<I, F>(
     facts: &mut StreamFacts,
     fields: I,
-    record_definition: &RecordDefinitionBuilder<R>,
+    record_definition: &QuirkyRecordDefinitionBuilder,
 ) -> ChainResult<()>
 where
     I: IntoIterator<Item = F>,
@@ -493,21 +471,18 @@ where
 
 pub fn break_order_fact_at_ids<I>(facts: &mut StreamFacts, datum_ids: I)
 where
-    I: IntoIterator<Item = DatumId>,
+    I: IntoIterator<Item = QuirkyDatumId>,
 {
-    let datum_ids = datum_ids.into_iter().collect::<BTreeSet<DatumId>>();
+    let datum_ids = datum_ids.into_iter().collect::<BTreeSet<QuirkyDatumId>>();
     facts.break_order_at_ids(&datum_ids);
 }
 
-pub fn check_undirected_order_starts_with<R>(
-    expected_order: &[DatumId],
-    actual_order: &[Directed<DatumId>],
-    record_definition: &RecordDefinitionBuilder<R>,
+pub fn check_undirected_order_starts_with(
+    expected_order: &[QuirkyDatumId],
+    actual_order: &[Directed<QuirkyDatumId>],
+    record_definition: &QuirkyRecordDefinitionBuilder,
     more_info: &str,
-) -> ChainResult<()>
-where
-    R: TypeResolver,
-{
+) -> ChainResult<()> {
     assert!(expected_order.iter().all_unique());
 
     let is_ok = if actual_order.len() >= expected_order.len() {
@@ -516,7 +491,7 @@ where
             // Ignore direction
             .map(Deref::deref)
             .copied()
-            .collect::<Vec<DatumId>>();
+            .collect::<Vec<QuirkyDatumId>>();
         sorted_actual.sort();
 
         let mut sorted_expected = expected_order.to_vec();
@@ -550,21 +525,18 @@ where
     Ok(())
 }
 
-pub fn check_directed_order_starts_with<R>(
-    expected_order: &[DatumId],
-    actual_order: &[Directed<DatumId>],
-    record_definition: &RecordDefinitionBuilder<R>,
+pub fn check_directed_order_starts_with(
+    expected_order: &[QuirkyDatumId],
+    actual_order: &[Directed<QuirkyDatumId>],
+    record_definition: &QuirkyRecordDefinitionBuilder,
     more_info: &str,
-) -> ChainResult<()>
-where
-    R: TypeResolver,
-{
+) -> ChainResult<()> {
     assert!(expected_order.iter().all_unique());
 
     let expected_directed_order = expected_order
         .iter()
         .map(|d| Directed::Ascending(*d))
-        .collect::<Vec<Directed<DatumId>>>();
+        .collect::<Vec<Directed<QuirkyDatumId>>>();
 
     let is_ok = if actual_order.len() >= expected_order.len() {
         let actual_directed_order = &actual_order[0..expected_order.len()];
@@ -597,10 +569,10 @@ where
     Ok(())
 }
 
-pub fn set_distinct_fact<R: TypeResolver, I, F>(
+pub fn set_distinct_fact<I, F>(
     facts: &mut StreamFacts,
     distinct_fields: I,
-    record_definition: &RecordDefinitionBuilder<R>,
+    record_definition: &QuirkyRecordDefinitionBuilder,
 ) -> ChainResult<()>
 where
     I: IntoIterator<Item = F>,
@@ -626,27 +598,27 @@ where
 
 pub fn set_distinct_fact_ids<I>(facts: &mut StreamFacts, distinct_datum_ids: I)
 where
-    I: IntoIterator<Item = DatumId>,
+    I: IntoIterator<Item = QuirkyDatumId>,
 {
     // Ensure uniqueness and sort
     let distinct = distinct_datum_ids
         .into_iter()
-        .collect::<BTreeSet<DatumId>>();
+        .collect::<BTreeSet<QuirkyDatumId>>();
     facts.set_distinct(distinct.into_iter().collect());
 }
 
-pub fn set_distinct_fact_all_fields<R: TypeResolver>(
+pub fn set_distinct_fact_all_fields(
     facts: &mut StreamFacts,
-    record_definition: &RecordDefinitionBuilder<R>,
+    record_definition: &QuirkyRecordDefinitionBuilder,
 ) {
     let distinct = record_definition.get_current_data();
     facts.set_distinct(distinct.collect());
 }
 
-pub fn break_distinct_fact_for<R: TypeResolver, I, F>(
+pub fn break_distinct_fact_for<I, F>(
     facts: &mut StreamFacts,
     fields: I,
-    record_definition: &RecordDefinitionBuilder<R>,
+    record_definition: &QuirkyRecordDefinitionBuilder,
 ) -> ChainResult<()>
 where
     I: IntoIterator<Item = F>,
@@ -671,7 +643,7 @@ where
 
 pub fn break_distinct_fact_for_ids<I>(facts: &mut StreamFacts, datum_ids: I)
 where
-    I: IntoIterator<Item = DatumId>,
+    I: IntoIterator<Item = QuirkyDatumId>,
 {
     for datum_id in datum_ids {
         if facts.distinct().iter().any(|d| *d == datum_id) {
@@ -681,15 +653,12 @@ where
     }
 }
 
-pub fn check_distinct_eq<R>(
-    expected_distinct: &[DatumId],
-    actual_distinct: &[DatumId],
-    record_definition: &RecordDefinitionBuilder<R>,
+pub fn check_distinct_eq(
+    expected_distinct: &[QuirkyDatumId],
+    actual_distinct: &[QuirkyDatumId],
+    record_definition: &QuirkyRecordDefinitionBuilder,
     more_info: &str,
-) -> ChainResult<()>
-where
-    R: TypeResolver,
-{
+) -> ChainResult<()> {
     assert!(expected_distinct.iter().all_unique());
 
     let is_ok = {

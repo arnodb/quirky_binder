@@ -1,6 +1,4 @@
-use quirky_binder_support::AnchorId;
 use serde::Deserialize;
-use truc::record::{definition::DatumDefinitionOverride, type_resolver::TypeResolver};
 
 use crate::{prelude::*, trace_element};
 
@@ -23,8 +21,8 @@ pub struct Anchor {
 }
 
 impl Anchor {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: AnchorParams,
@@ -44,18 +42,17 @@ impl Anchor {
             .with_trace_element(trace_element!(ANCHOR_TRACE_NAME))?
             .update(|output_stream, facts_proof| {
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                output_stream_def.add_datum_override::<AnchorId<0>, _>(
-                    valid_anchor_field.name(),
-                    DatumDefinitionOverride {
-                        type_name: Some(format!(
-                            "quirky_binder_support::AnchorId<{}>",
-                            anchor_table_id
-                        )),
-                        size: None,
-                        align: None,
-                        allow_uninit: Some(true),
-                    },
-                );
+                output_stream_def
+                    .add_datum(
+                        valid_anchor_field.name(),
+                        QuirkyDatumType::Simple {
+                            type_name: format!(
+                                "quirky_binder_support::AnchorId<{}>",
+                                anchor_table_id
+                            ),
+                        },
+                    )
+                    .with_trace_element(trace_element!(ANCHOR_TRACE_NAME))?;
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
@@ -114,8 +111,8 @@ impl DynNode for Anchor {
     }
 }
 
-pub fn anchor<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn anchor(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: AnchorParams,

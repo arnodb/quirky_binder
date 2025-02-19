@@ -3,7 +3,7 @@ extern crate getset;
 #[macro_use]
 extern crate quote;
 
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
 use quirky_binder::{prelude::*, quirky_binder, trace_element};
 use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
@@ -20,8 +20,8 @@ pub struct Tokenize {
 }
 
 impl Tokenize {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
@@ -38,9 +38,25 @@ impl Tokenize {
                     .get_variant_datum_definition_by_name(input_variant_id, "words")
                     .unwrap_or_else(|| panic!(r#"datum "{}""#, "words"));
                 let datum_id = datum.id();
-                output_stream_def.remove_datum(datum_id);
-                output_stream_def.add_datum::<Box<str>, _>("word");
-                output_stream_def.add_datum_allow_uninit::<char, _>("first_char");
+                output_stream_def
+                    .remove_datum(datum_id)
+                    .with_trace_element(trace_element!(TOKENIZE_TRACE_NAME))?;
+                output_stream_def
+                    .add_datum(
+                        "word",
+                        QuirkyDatumType::Simple {
+                            type_name: "Box<str>".to_owned(),
+                        },
+                    )
+                    .with_trace_element(trace_element!(TOKENIZE_TRACE_NAME))?;
+                output_stream_def
+                    .add_datum(
+                        "first_char",
+                        QuirkyDatumType::Simple {
+                            type_name: "char".to_owned(),
+                        },
+                    )
+                    .with_trace_element(trace_element!(TOKENIZE_TRACE_NAME))?;
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
@@ -83,8 +99,8 @@ impl DynNode for Tokenize {
     }
 }
 
-pub fn tokenize<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn tokenize(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: (),
@@ -168,14 +184,11 @@ use super::tokenize;
         resolver
     };
 
-    let graph = quirky_binder_main(GraphBuilder::new(
-        &type_resolver,
-        ChainCustomizer::default(),
-    ))
-    .unwrap_or_else(|err| {
-        panic!("{}", err);
-    });
+    let graph =
+        quirky_binder_main(GraphBuilder::new(ChainCustomizer::default())).unwrap_or_else(|err| {
+            panic!("{}", err);
+        });
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
-    graph.generate(Path::new(&out_dir)).unwrap();
+    graph.generate(Path::new(&out_dir), &type_resolver).unwrap();
 }

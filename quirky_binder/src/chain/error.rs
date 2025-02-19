@@ -19,6 +19,10 @@ pub enum ChainError {
     InvalidFieldName { name: String },
     #[error("Invalid field type {r#type_name}")]
     InvalidFieldType { type_name: String },
+    #[error("Field already exists in stream {field}")]
+    FieldAlreadyExistsInStream { field: String },
+    #[error("Field not found in stream {field}")]
+    FieldNotFoundInStream { field: String },
     #[error("Invalid token stream {name}: {msg}")]
     InvalidTokenStream { name: String, msg: String },
     #[error("Expected {more_info} with minimal order {expected} but found {actual}")]

@@ -102,7 +102,7 @@ impl ModuleCode {
             quote! {
                 let graph = quirky_binder_main(new_graph_builder(&[#(#path),*]))?;
 
-                graph.generate(out_dir)?;
+                graph.generate(out_dir, type_resolver)?;
             }
         });
         let all_chains_generate = self.generate_all_chains(path.last().map(Deref::deref), config);
@@ -120,10 +120,11 @@ impl ModuleCode {
                 Ok(quote! {
                     pub mod #name_ident {
                         use quirky_binder::prelude::*;
+                        use std::collections::BTreeMap;
                         use std::fs::File;
                         use std::io::Write;
                         use std::path::{Path, PathBuf};
-                        use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
+                        use truc::record::type_resolver::TypeResolver;
 
                         #sub_code
                     }
@@ -139,7 +140,7 @@ impl ModuleCode {
                     {
                         let sub_out_dir = Path::new(out_dir).join(#name);
                         std::fs::create_dir_all(&sub_out_dir)?;
-                        #name_ident::quirky_binder_generate_deep(sub_out_dir.as_path(), new_graph_builder)?;
+                        #name_ident::quirky_binder_generate_deep(sub_out_dir.as_path(), type_resolver, new_graph_builder)?;
                     }
                 })
             })
@@ -149,11 +150,12 @@ impl ModuleCode {
 
             pub fn quirky_binder_generate_deep<R, NGB>(
                 out_dir: &Path,
+                type_resolver: R,
                 new_graph_builder: NGB,
             ) -> Result<(), GraphGenerationError>
             where
                 R: TypeResolver + Copy,
-                NGB: Fn(&[&str]) -> GraphBuilder<R> + Copy,
+                NGB: Fn(&[&str]) -> GraphBuilder + Copy,
             {
                 #main_generate
 

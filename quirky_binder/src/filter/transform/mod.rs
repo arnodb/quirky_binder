@@ -1,7 +1,6 @@
 use std::collections::BTreeSet;
 
 use proc_macro2::TokenStream;
-use truc::record::{definition::DatumDefinition, type_resolver::TypeResolver};
 
 use crate::{prelude::*, trace_element};
 
@@ -26,14 +25,14 @@ pub trait TransformSpec {
     fn validate_type_update_field(
         &self,
         _name: ValidFieldName,
-        _datum: &DatumDefinition,
+        _datum: &QuirkyDatumDefinition,
     ) -> ChainResultWithTrace<(ValidFieldName, ValidFieldType)> {
         unimplemented!()
     }
 
-    fn update_facts<R: TypeResolver + Copy>(
+    fn update_facts(
         &self,
-        output_stream: &mut OutputBuilderForUpdate<R, DerivedExtra>,
+        output_stream: &mut OutputBuilderForUpdate<DerivedExtra>,
         update_fields: &[ValidFieldName],
         type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
@@ -58,9 +57,9 @@ pub struct Transform<Spec: TransformSpec> {
 }
 
 impl<Spec: TransformSpec> Transform<Spec> {
-    pub fn new<R: TypeResolver + Copy>(
+    pub fn new(
         spec: Spec,
-        graph: &mut GraphBuilder<R>,
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: TransformParams,
@@ -95,8 +94,17 @@ impl<Spec: TransformSpec> Transform<Spec> {
                             .get_current_datum_definition_by_name(f.name())
                             .expect("datum")
                             .id();
-                        record_definition.remove_datum(datum_id);
-                        record_definition.add_dynamic_datum(f.name(), t.type_name());
+                        record_definition
+                            .remove_datum(datum_id)
+                            .with_trace_element(trace_element!(trace_name))?;
+                        record_definition
+                            .add_datum(
+                                f.name(),
+                                QuirkyDatumType::Simple {
+                                    type_name: t.type_name().to_owned(),
+                                },
+                            )
+                            .with_trace_element(trace_element!(trace_name))?;
                         new_variant = true;
                     }
                 }
@@ -124,9 +132,9 @@ impl<Spec: TransformSpec> Transform<Spec> {
         })
     }
 
-    fn validate<R: TypeResolver + Copy>(
+    fn validate(
         spec: &Spec,
-        graph: &mut GraphBuilder<R>,
+        graph: &mut GraphBuilder,
         input: &NodeStream,
         params: TransformFieldParams,
         trace_name: &str,
@@ -293,14 +301,14 @@ pub trait SubTransformSpec {
     fn validate_type_update_field(
         &self,
         _name: ValidFieldName,
-        _datum: &DatumDefinition,
+        _datum: &QuirkyDatumDefinition,
     ) -> ChainResultWithTrace<(ValidFieldName, ValidFieldType)> {
         unimplemented!()
     }
 
-    fn update_facts<R: TypeResolver + Copy>(
+    fn update_facts(
         &self,
-        output_stream: &mut SubStreamBuilderForUpdate<R, DerivedExtra>,
+        output_stream: &mut SubStreamBuilderForUpdate<DerivedExtra>,
         update_fields: &[ValidFieldName],
         type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
@@ -326,9 +334,9 @@ pub struct SubTransform<Spec: SubTransformSpec> {
 }
 
 impl<Spec: SubTransformSpec> SubTransform<Spec> {
-    pub fn new<R: TypeResolver + Copy>(
+    pub fn new(
         spec: Spec,
-        graph: &mut GraphBuilder<R>,
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SubTransformParams,
@@ -369,8 +377,17 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
                                 .get_current_datum_definition_by_name(f.name())
                                 .expect("datum")
                                 .id();
-                            record_definition.remove_datum(datum_id);
-                            record_definition.add_dynamic_datum(f.name(), t.type_name());
+                            record_definition
+                                .remove_datum(datum_id)
+                                .with_trace_element(trace_element!(trace_name))?;
+                            record_definition
+                                .add_datum(
+                                    f.name(),
+                                    QuirkyDatumType::Simple {
+                                        type_name: t.type_name().to_owned(),
+                                    },
+                                )
+                                .with_trace_element(trace_element!(trace_name))?;
                             new_variant = true;
                         }
                     }
@@ -401,9 +418,9 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
         })
     }
 
-    fn validate<R: TypeResolver + Copy>(
+    fn validate(
         spec: &Spec,
-        graph: &mut GraphBuilder<R>,
+        graph: &mut GraphBuilder,
         input: &NodeStream,
         params: SubTransformFieldParams,
         trace_name: &str,

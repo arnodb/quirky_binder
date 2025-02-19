@@ -1,10 +1,5 @@
 use std::{cell::RefCell, collections::BTreeMap};
 
-use truc::record::{
-    definition::{DatumId, RecordDefinitionBuilder, RecordVariantId},
-    type_resolver::TypeResolver,
-};
-
 use super::{
     break_distinct_fact_for, break_distinct_fact_for_ids, break_order_fact_at,
     break_order_fact_at_ids, set_distinct_fact, set_distinct_fact_all_fields,
@@ -17,31 +12,31 @@ use crate::{
 };
 
 #[derive(Getters, CopyGetters)]
-pub struct OutputBuilderForPassThrough<'a, 'b, 'g, R: TypeResolver + Copy> {
+pub struct OutputBuilderForPassThrough<'a, 'b, 'g> {
     pub(super) streams: &'b mut StreamsBuilder<'a>,
     #[getset(get = "pub")]
     pub(super) record_type: StreamRecordType,
     #[getset(get_copy = "pub")]
-    pub(super) record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
-    pub(super) input_variant_id: RecordVariantId,
+    pub(super) record_definition: &'g RefCell<QuirkyRecordDefinitionBuilder>,
+    pub(super) input_variant_id: QuirkyRecordVariantId,
     #[getset(get = "pub")]
-    pub(super) sub_streams: BTreeMap<DatumId, NodeSubStream>,
+    pub(super) sub_streams: BTreeMap<QuirkyDatumId, NodeSubStream>,
     pub(super) source: NodeStreamSource,
     pub(super) is_output_main_stream: bool,
     #[getset(get = "pub")]
     pub(super) facts: StreamFacts,
 }
 
-impl<'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'_, '_, 'g, R> {
+impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
     pub fn pass_through_sub_stream<B>(
         &mut self,
         sub_stream: NodeSubStream,
-        graph: &'g GraphBuilder<R>,
+        graph: &'g GraphBuilder,
         build: B,
         trace_name: &str,
     ) -> ChainResultWithTrace<NodeSubStream>
     where
-        B: FnOnce(&mut SubStreamBuilderForPassThrough<'g, R>) -> ChainResultWithTrace<()>,
+        B: FnOnce(&mut SubStreamBuilderForPassThrough<'g>) -> ChainResultWithTrace<()>,
     {
         let record_definition = graph
             .get_stream(sub_stream.record_type())
@@ -62,19 +57,19 @@ impl<'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'_, '_, 'g, R> {
         &mut self,
         path_fields: &[ValidFieldName],
         pass_through_leaf_sub_stream: PassThroughLeafSubStream,
-        graph: &'g GraphBuilder<R>,
+        graph: &'g GraphBuilder,
         trace_name: &str,
     ) -> ChainResultWithTrace<NodeSubStream>
     where
         PassThroughLeafSubStream: for<'c, 'd> FnOnce(
             NodeSubStream,
-            &mut OutputBuilderForPassThrough<'c, 'd, 'g, R>,
+            &mut OutputBuilderForPassThrough<'c, 'd, 'g>,
         )
             -> ChainResultWithTrace<NodeSubStream>,
     {
         struct PathFieldDetails {
             stream: NodeSubStream,
-            datum_id: DatumId,
+            datum_id: QuirkyDatumId,
         }
 
         // Find the sub stream of the first path field
@@ -163,7 +158,7 @@ impl<'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'_, '_, 'g, R> {
         set_order_fact(
             &mut self.facts,
             order_fields,
-            &*self.record_definition.borrow(),
+            &self.record_definition.borrow(),
         )
     }
 
@@ -172,12 +167,12 @@ impl<'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'_, '_, 'g, R> {
         I: IntoIterator<Item = F>,
         F: AsRef<str>,
     {
-        break_order_fact_at(&mut self.facts, fields, &*self.record_definition.borrow())
+        break_order_fact_at(&mut self.facts, fields, &self.record_definition.borrow())
     }
 
     pub fn break_order_fact_at_ids<I>(&mut self, datum_ids: I)
     where
-        I: IntoIterator<Item = DatumId>,
+        I: IntoIterator<Item = QuirkyDatumId>,
     {
         break_order_fact_at_ids(&mut self.facts, datum_ids);
     }
@@ -186,19 +181,19 @@ impl<'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'_, '_, 'g, R> {
         set_distinct_fact(
             &mut self.facts,
             distinct_fields,
-            &*self.record_definition.borrow(),
+            &self.record_definition.borrow(),
         )
     }
 
     pub fn set_distinct_fact_ids<I>(&mut self, distinct_datum_ids: I)
     where
-        I: IntoIterator<Item = DatumId>,
+        I: IntoIterator<Item = QuirkyDatumId>,
     {
         set_distinct_fact_ids(&mut self.facts, distinct_datum_ids);
     }
 
     pub fn set_distinct_fact_all_fields(&mut self) {
-        set_distinct_fact_all_fields(&mut self.facts, &*self.record_definition.borrow());
+        set_distinct_fact_all_fields(&mut self.facts, &self.record_definition.borrow());
     }
 
     pub fn break_distinct_fact_for<I, F>(&mut self, fields: I) -> ChainResult<()>
@@ -206,17 +201,17 @@ impl<'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'_, '_, 'g, R> {
         I: IntoIterator<Item = F>,
         F: AsRef<str>,
     {
-        break_distinct_fact_for(&mut self.facts, fields, &*self.record_definition.borrow())
+        break_distinct_fact_for(&mut self.facts, fields, &self.record_definition.borrow())
     }
 
     pub fn break_distinct_fact_for_ids<I>(&mut self, datum_ids: I)
     where
-        I: IntoIterator<Item = DatumId>,
+        I: IntoIterator<Item = QuirkyDatumId>,
     {
         break_distinct_fact_for_ids(&mut self.facts, datum_ids);
     }
 
-    pub fn build(self) -> &'g RefCell<RecordDefinitionBuilder<R>> {
+    pub fn build(self) -> &'g RefCell<QuirkyRecordDefinitionBuilder> {
         self.streams.outputs.push(NodeStream::new(
             self.record_type,
             self.input_variant_id,
@@ -230,18 +225,18 @@ impl<'g, R: TypeResolver + Copy> OutputBuilderForPassThrough<'_, '_, 'g, R> {
 }
 
 #[derive(Getters, CopyGetters)]
-pub struct SubStreamBuilderForPassThrough<'g, R: TypeResolver> {
+pub struct SubStreamBuilderForPassThrough<'g> {
     #[getset(get = "pub")]
     record_type: StreamRecordType,
     #[getset(get_copy = "pub")]
-    record_definition: &'g RefCell<RecordDefinitionBuilder<R>>,
-    input_variant_id: RecordVariantId,
-    sub_streams: BTreeMap<DatumId, NodeSubStream>,
+    record_definition: &'g RefCell<QuirkyRecordDefinitionBuilder>,
+    input_variant_id: QuirkyRecordVariantId,
+    sub_streams: BTreeMap<QuirkyDatumId, NodeSubStream>,
     #[getset(get = "pub")]
     facts: StreamFacts,
 }
 
-impl<R: TypeResolver> SubStreamBuilderForPassThrough<'_, R> {
+impl SubStreamBuilderForPassThrough<'_> {
     pub fn close_pass_through(self) -> NodeSubStream {
         NodeSubStream::new(
             self.record_type,
@@ -259,11 +254,11 @@ impl<R: TypeResolver> SubStreamBuilderForPassThrough<'_, R> {
         set_order_fact(
             &mut self.facts,
             order_fields,
-            &*self.record_definition.borrow(),
+            &self.record_definition.borrow(),
         )
     }
 
     pub fn set_distinct_fact_all_fields(&mut self) {
-        set_distinct_fact_all_fields(&mut self.facts, &*self.record_definition.borrow());
+        set_distinct_fact_all_fields(&mut self.facts, &self.record_definition.borrow());
     }
 }

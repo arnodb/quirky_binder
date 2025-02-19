@@ -1,5 +1,3 @@
-use truc::record::{definition::DatumDefinition, type_resolver::TypeResolver};
-
 use crate::{prelude::*, trace_element};
 
 const DEBUG_TRACE_NAME: &str = "debug";
@@ -14,8 +12,8 @@ pub struct Debug {
 }
 
 impl Debug {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
@@ -34,11 +32,11 @@ impl Debug {
                 fn indent(depth: usize) {
                     eprint!("{: <1$}", "", depth * 4);
                 }
-                fn debug_sub_stream<R: TypeResolver + Copy>(
+                fn debug_sub_stream(
                     depth: usize,
-                    datum: &DatumDefinition,
+                    datum: &QuirkyDatumDefinition,
                     sub_stream: &NodeSubStream,
-                    graph: &GraphBuilder<R>,
+                    graph: &GraphBuilder,
                 ) -> ChainResultWithTrace<()> {
                     let def = graph
                         .get_stream(sub_stream.record_type())
@@ -109,8 +107,8 @@ impl DynNode for Debug {
     }
 }
 
-pub fn debug<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn debug(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: (),

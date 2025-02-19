@@ -1,10 +1,15 @@
-use std::{borrow::Cow, collections::HashMap, fmt::Display};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap},
+    fmt::Display,
+};
 
 use itertools::Itertools;
 use proc_macro2::TokenStream;
 pub use quirky_binder_lang::location::Location;
 use serde::Deserialize;
 use syn::{Ident, Type};
+use truc::record::definition::RecordVariantId;
 
 use self::error::{ChainError, ChainErrorWithTrace};
 use crate::{codegen::Module, prelude::*};
@@ -111,6 +116,8 @@ pub struct Chain<'a> {
     thread_by_source: HashMap<NodeStreamSource, ChainSourceThread>,
     #[new(default)]
     pipe_count: usize,
+    variants_mapping:
+        &'a BTreeMap<&'a StreamRecordType, BTreeMap<QuirkyRecordVariantId, RecordVariantId>>,
 }
 
 impl<'a> Chain<'a> {
@@ -118,14 +125,22 @@ impl<'a> Chain<'a> {
         &self,
         stream: &'a NodeStream,
     ) -> RecordDefinitionFragments<'a> {
-        stream.definition_fragments(&self.customizer.streams_module_name)
+        RecordDefinitionFragments::new(
+            stream.record_type(),
+            self.variants_mapping[stream.record_type()][&stream.variant_id()],
+            &self.customizer.streams_module_name,
+        )
     }
 
     pub fn sub_stream_definition_fragments(
         &self,
         stream: &'a NodeSubStream,
     ) -> RecordDefinitionFragments<'a> {
-        stream.definition_fragments(&self.customizer.streams_module_name)
+        RecordDefinitionFragments::new(
+            stream.record_type(),
+            self.variants_mapping[stream.record_type()][&stream.variant_id()],
+            &self.customizer.streams_module_name,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -356,22 +371,9 @@ impl<'a> Chain<'a> {
 
     pub fn gen_chain(&mut self) {
         for thread in &self.threads {
-            let name = format!("thread_{}", thread.id);
-            let module = self.module.get_module(&name).expect("thread module");
-            module.import("std::sync", "Arc");
-            module.import(
-                "quirky_binder_support::chain::configuration",
-                "ChainConfiguration",
-            );
-            if thread.input_streams.len() > 0 {
-                module.import("std::sync::mpsc", "Receiver");
-            }
-            if thread.output_pipes.is_some() && thread.output_streams.len() > 0 {
-                module.import("std::sync::mpsc", "SyncSender");
-            }
             let inputs = (0..thread.input_streams.len()).map(|i| format_ident!("input_{}", i));
             let input_types = thread.input_streams.iter().map(|input_stream| {
-                let def = input_stream.definition_fragments(&self.customizer.streams_module_name);
+                let def = self.stream_definition_fragments(input_stream);
                 def.record()
             });
             let outputs = if thread.output_pipes.is_some() {
@@ -383,8 +385,7 @@ impl<'a> Chain<'a> {
             .flatten();
             let output_types = if thread.output_pipes.is_some() {
                 Some(thread.output_streams.iter().map(|output_stream| {
-                    let def =
-                        output_stream.definition_fragments(&self.customizer.streams_module_name);
+                    let def = self.stream_definition_fragments(output_stream);
                     def.record()
                 }))
             } else {
@@ -451,6 +452,19 @@ impl<'a> Chain<'a> {
                 }
 
             };
+            let name = format!("thread_{}", thread.id);
+            let module = self.module.get_module(&name).expect("thread module");
+            module.import("std::sync", "Arc");
+            module.import(
+                "quirky_binder_support::chain::configuration",
+                "ChainConfiguration",
+            );
+            if !thread.input_streams.is_empty() {
+                module.import("std::sync::mpsc", "Receiver");
+            }
+            if thread.output_pipes.is_some() && !thread.output_streams.is_empty() {
+                module.import("std::sync::mpsc", "SyncSender");
+            }
             module.fragment(struct_def.to_string());
         }
 

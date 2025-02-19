@@ -12,7 +12,7 @@ pub fn generate_tests(out_dir: &Path) {
         resolver
     };
 
-    quirky_binder_generate_deep(out_dir, |module_path| {
+    quirky_binder_generate_deep(out_dir, &type_resolver, |module_path| {
         let module_name = FullyQualifiedName::new_n(&["crate", "all_chains"]).sub_n(module_path);
         let streams_module_name = module_name.sub("streams");
         let customizer = ChainCustomizer {
@@ -20,7 +20,7 @@ pub fn generate_tests(out_dir: &Path) {
             module_name,
             ..Default::default()
         };
-        GraphBuilder::new(&type_resolver, customizer)
+        GraphBuilder::new(customizer)
     })
     .unwrap_or_else(|err| {
         panic!("{}", err);

@@ -1,6 +1,5 @@
 use proc_macro2::TokenStream;
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
 
 use crate::{prelude::*, trace_element};
 
@@ -25,8 +24,8 @@ pub struct FunctionExecute {
 }
 
 impl FunctionExecute {
-    fn new<R: TypeResolver + Copy>(
-        _graph: &mut GraphBuilder<R>,
+    fn new(
+        _graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
         params: FunctionExecuteParams,
@@ -81,8 +80,8 @@ impl DynNode for FunctionExecute {
     }
 }
 
-pub fn function_execute<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn function_execute(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 0],
     params: FunctionExecuteParams,

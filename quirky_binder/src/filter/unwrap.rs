@@ -1,11 +1,49 @@
 use proc_macro2::TokenStream;
 use serde::Deserialize;
-use truc::record::{definition::DatumDefinition, type_resolver::TypeResolver};
 
 use super::transform::{
     SubTransform, SubTransformParams, SubTransformSpec, Transform, TransformParams, TransformSpec,
 };
 use crate::{prelude::*, trace_element};
+
+fn unwrap_field_type<'a>(
+    name: &ValidFieldName,
+    datum_type: &'a QuirkyDatumType,
+) -> ChainResult<&'a str> {
+    match datum_type {
+        QuirkyDatumType::Simple {
+            type_name: optional_type_name,
+        } => {
+            let type_name = {
+                let s = optional_type_name.trim();
+                let t = s.strip_prefix("Option").and_then(|t| {
+                    let t = t.trim();
+                    if t.starts_with('<') && t.ends_with('>') {
+                        Some(&t[1..t.len() - 1])
+                    } else {
+                        None
+                    }
+                });
+                match t {
+                    Some(t) => t,
+                    None => {
+                        return Err(ChainError::Other {
+                            msg: format!(
+                                "field `{}` is not an option: {}",
+                                name.name(),
+                                optional_type_name
+                            ),
+                        });
+                    }
+                }
+            };
+            Ok(type_name)
+        }
+        QuirkyDatumType::Vec { .. } => Err(ChainError::Other {
+            msg: format!("field `{}` is not an option, it is a vector", name.name()),
+        }),
+    }
+}
 
 enum NoneStrategy {
     Skip,
@@ -30,33 +68,10 @@ impl TransformSpec for Unwrap {
     fn validate_type_update_field(
         &self,
         name: ValidFieldName,
-        datum: &DatumDefinition,
+        datum: &QuirkyDatumDefinition,
     ) -> ChainResultWithTrace<(ValidFieldName, ValidFieldType)> {
-        let optional_type_name = datum.type_name().to_string();
-        let type_name = {
-            let s = optional_type_name.trim();
-            let t = s.strip_prefix("Option").and_then(|t| {
-                let t = t.trim();
-                if t.starts_with('<') && t.ends_with('>') {
-                    Some(&t[1..t.len() - 1])
-                } else {
-                    None
-                }
-            });
-            match t {
-                Some(t) => t,
-                None => {
-                    return Err(ChainError::Other {
-                        msg: format!(
-                            "field `{}` is not an option: {}",
-                            name.name(),
-                            optional_type_name
-                        ),
-                    })
-                    .with_trace_element(trace_element!(UNWRAP_TRACE_NAME));
-                }
-            }
-        };
+        let type_name = unwrap_field_type(&name, datum.datum_type())
+            .with_trace_element(trace_element!(UNWRAP_TRACE_NAME))?;
         let valid_type = ValidFieldType::try_from(type_name)
             .map_err(|_| ChainError::InvalidFieldType {
                 type_name: type_name.to_owned(),
@@ -65,9 +80,9 @@ impl TransformSpec for Unwrap {
         Ok((name, valid_type))
     }
 
-    fn update_facts<R: TypeResolver + Copy>(
+    fn update_facts(
         &self,
-        _output_stream: &mut OutputBuilderForUpdate<R, DerivedExtra>,
+        _output_stream: &mut OutputBuilderForUpdate<DerivedExtra>,
         _update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
@@ -103,8 +118,8 @@ impl TransformSpec for Unwrap {
     }
 }
 
-pub fn unwrap<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn unwrap(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: UnwrapParams,
@@ -149,33 +164,10 @@ impl SubTransformSpec for SubUnwrap {
     fn validate_type_update_field(
         &self,
         name: ValidFieldName,
-        datum: &DatumDefinition,
+        datum: &QuirkyDatumDefinition,
     ) -> ChainResultWithTrace<(ValidFieldName, ValidFieldType)> {
-        let optional_type_name = datum.type_name().to_string();
-        let type_name = {
-            let s = optional_type_name.trim();
-            let t = s.strip_prefix("Option").and_then(|t| {
-                let t = t.trim();
-                if t.starts_with('<') && t.ends_with('>') {
-                    Some(&t[1..t.len() - 1])
-                } else {
-                    None
-                }
-            });
-            match t {
-                Some(t) => t,
-                None => {
-                    return Err(ChainError::Other {
-                        msg: format!(
-                            "field `{}` is not an option: {}",
-                            name.name(),
-                            optional_type_name
-                        ),
-                    })
-                    .with_trace_element(trace_element!(SUB_UNWRAP_TRACE_NAME));
-                }
-            }
-        };
+        let type_name = unwrap_field_type(&name, datum.datum_type())
+            .with_trace_element(trace_element!(SUB_UNWRAP_TRACE_NAME))?;
         let valid_type = ValidFieldType::try_from(type_name)
             .map_err(|_| ChainError::InvalidFieldType {
                 type_name: type_name.to_owned(),
@@ -184,9 +176,9 @@ impl SubTransformSpec for SubUnwrap {
         Ok((name, valid_type))
     }
 
-    fn update_facts<R: TypeResolver + Copy>(
+    fn update_facts(
         &self,
-        _output_stream: &mut SubStreamBuilderForUpdate<R, DerivedExtra>,
+        _output_stream: &mut SubStreamBuilderForUpdate<DerivedExtra>,
         _update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
@@ -222,8 +214,8 @@ impl SubTransformSpec for SubUnwrap {
     }
 }
 
-pub fn sub_unwrap<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn sub_unwrap(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubUnwrapParams,

@@ -18,6 +18,7 @@ pub mod filter;
 pub mod graph;
 pub mod params;
 pub mod prelude;
+pub mod record_definition;
 pub mod stream;
 pub mod support;
 

@@ -1,6 +1,5 @@
 use proc_macro2::TokenStream;
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
 
 use crate::{prelude::*, trace_element};
 
@@ -27,8 +26,8 @@ pub struct FunctionProduce {
 }
 
 impl FunctionProduce {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 0],
         params: FunctionProduceParams,
@@ -78,7 +77,14 @@ impl FunctionProduce {
                 {
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
                     for (name, r#type) in valid_fields.iter() {
-                        output_stream_def.add_dynamic_datum(name.name(), r#type.type_name());
+                        output_stream_def
+                            .add_datum(
+                                name.name(),
+                                QuirkyDatumType::Simple {
+                                    type_name: r#type.type_name().to_owned(),
+                                },
+                            )
+                            .with_trace_element(trace_element!(FUNCTION_PRODUCE_TRACE_NAME))?;
                     }
                 }
                 if let Some(order_fields) = valid_order_fields.as_ref() {
@@ -167,8 +173,8 @@ impl DynNode for FunctionProduce {
     }
 }
 
-pub fn function_produce<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn function_produce(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 0],
     params: FunctionProduceParams,

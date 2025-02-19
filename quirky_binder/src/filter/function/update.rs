@@ -1,6 +1,5 @@
 use proc_macro2::TokenStream;
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
 
 use crate::{prelude::*, trace_element};
 
@@ -25,8 +24,8 @@ pub struct FunctionUpdate {
 }
 
 impl FunctionUpdate {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: FunctionUpdateParams,
@@ -65,13 +64,22 @@ impl FunctionUpdate {
                             .get_current_datum_definition_by_name(name.name())
                             .expect("datum")
                             .id();
-                        output_stream_def.remove_datum(datum_id);
+                        output_stream_def
+                            .remove_datum(datum_id)
+                            .with_trace_element(trace_element!(FUNCTION_UPDATE_TRACE_NAME))?;
                     }
                 }
                 if let Some(add_fields) = valid_add_fields {
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
                     for (name, r#type) in add_fields.iter() {
-                        output_stream_def.add_dynamic_datum(name.name(), r#type.type_name());
+                        output_stream_def
+                            .add_datum(
+                                name.name(),
+                                QuirkyDatumType::Simple {
+                                    type_name: r#type.type_name().to_owned(),
+                                },
+                            )
+                            .with_trace_element(trace_element!(FUNCTION_UPDATE_TRACE_NAME))?;
                     }
                 }
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
@@ -108,8 +116,8 @@ impl DynNode for FunctionUpdate {
     }
 }
 
-pub fn function_update<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn function_update(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: FunctionUpdateParams,

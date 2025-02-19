@@ -1,5 +1,4 @@
 use serde::Deserialize;
-use truc::record::type_resolver::TypeResolver;
 
 use crate::{prelude::*, support::eq::fields_eq, trace_element};
 
@@ -15,8 +14,8 @@ pub struct Dedup {
 }
 
 impl Dedup {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         _params: (),
@@ -75,8 +74,8 @@ impl DynNode for Dedup {
     }
 }
 
-pub fn dedup<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn dedup(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: (),
@@ -105,8 +104,8 @@ pub struct SubDedup {
 }
 
 impl SubDedup {
-    fn new<R: TypeResolver + Copy>(
-        graph: &mut GraphBuilder<R>,
+    fn new(
+        graph: &mut GraphBuilder,
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SubDedupParams,
@@ -216,8 +215,8 @@ impl DynNode for SubDedup {
     }
 }
 
-pub fn sub_dedup<R: TypeResolver + Copy>(
-    graph: &mut GraphBuilder<R>,
+pub fn sub_dedup(
+    graph: &mut GraphBuilder,
     name: FullyQualifiedName,
     inputs: [NodeStream; 1],
     params: SubDedupParams,
