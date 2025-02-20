@@ -4,7 +4,6 @@ use std::{
 };
 
 use itertools::Itertools;
-use truc::record::definition::RecordVariantId;
 
 use crate::prelude::*;
 
@@ -129,14 +128,14 @@ impl NodeSubStream {
 #[derive(new)]
 pub struct RecordDefinitionFragments<'a> {
     record_type: &'a StreamRecordType,
-    variant_id: RecordVariantId,
+    variant_id: QuirkyRecordVariantId,
     module_prefix: &'a FullyQualifiedName,
 }
 
 impl RecordDefinitionFragments<'_> {
     pub fn record(&self) -> syn::Type {
         syn::parse_str::<syn::Type>(&format!(
-            "{}::{}::Record{}",
+            "{}::{}::QbRecord{}",
             self.module_prefix, self.record_type, self.variant_id
         ))
         .expect("record")
@@ -144,7 +143,7 @@ impl RecordDefinitionFragments<'_> {
 
     pub fn unpacked_record(&self) -> syn::Type {
         syn::parse_str::<syn::Type>(&format!(
-            "{}::{}::UnpackedRecord{}",
+            "{}::{}::QbUnpackedRecord{}",
             self.module_prefix, self.record_type, self.variant_id
         ))
         .expect("unpacked_record")
@@ -152,7 +151,7 @@ impl RecordDefinitionFragments<'_> {
 
     pub fn unpacked_record_in(&self) -> syn::Type {
         syn::parse_str::<syn::Type>(&format!(
-            "{}::{}::UnpackedRecordIn{}",
+            "{}::{}::QbUnpackedRecordIn{}",
             self.module_prefix, self.record_type, self.variant_id
         ))
         .expect("unpacked_record_in")
@@ -160,7 +159,7 @@ impl RecordDefinitionFragments<'_> {
 
     pub fn record_and_unpacked_out(&self) -> syn::Type {
         syn::parse_str::<syn::Type>(&format!(
-            "{}::{}::Record{}AndUnpackedOut",
+            "{}::{}::QbRecord{}AndUnpackedOut",
             self.module_prefix, self.record_type, self.variant_id
         ))
         .expect("record_and_unpacked_out")

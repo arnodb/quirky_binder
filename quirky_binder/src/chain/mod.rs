@@ -1,15 +1,10 @@
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, HashMap},
-    fmt::Display,
-};
+use std::{borrow::Cow, collections::HashMap, fmt::Display};
 
 use itertools::Itertools;
 use proc_macro2::TokenStream;
 pub use quirky_binder_lang::location::Location;
 use serde::Deserialize;
 use syn::{Ident, Type};
-use truc::record::definition::RecordVariantId;
 
 use self::error::{ChainError, ChainErrorWithTrace};
 use crate::{codegen::Module, prelude::*};
@@ -116,8 +111,6 @@ pub struct Chain<'a> {
     thread_by_source: HashMap<NodeStreamSource, ChainSourceThread>,
     #[new(default)]
     pipe_count: usize,
-    variants_mapping:
-        &'a BTreeMap<&'a StreamRecordType, BTreeMap<QuirkyRecordVariantId, RecordVariantId>>,
 }
 
 impl<'a> Chain<'a> {
@@ -127,7 +120,7 @@ impl<'a> Chain<'a> {
     ) -> RecordDefinitionFragments<'a> {
         RecordDefinitionFragments::new(
             stream.record_type(),
-            self.variants_mapping[stream.record_type()][&stream.variant_id()],
+            stream.variant_id(),
             &self.customizer.streams_module_name,
         )
     }
@@ -138,7 +131,7 @@ impl<'a> Chain<'a> {
     ) -> RecordDefinitionFragments<'a> {
         RecordDefinitionFragments::new(
             stream.record_type(),
-            self.variants_mapping[stream.record_type()][&stream.variant_id()],
+            stream.variant_id(),
             &self.customizer.streams_module_name,
         )
     }

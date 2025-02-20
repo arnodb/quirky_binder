@@ -64,10 +64,9 @@ impl Graph {
         }
         */
 
-        let variants_mapping = {
+        {
             let mut file = File::create(output.join("streams.rs")).unwrap();
             let mut root_module = Module::default();
-            let mut variants_mapping = BTreeMap::new();
             for (record_type, definition) in &self.record_definitions {
                 let module = record_type
                     .iter()
@@ -75,7 +74,7 @@ impl Graph {
                     .fold(root_module.get_or_new_module(&record_type[0]), |m, n| {
                         m.get_or_new_module(n)
                     });
-                let (truc_definition, def_variants_mapping) =
+                let (truc_definition, variants_mapping) =
                     definition.truc(&self.chain_customizer, type_resolver);
                 module.fragment(truc::generator::generate(
                     &truc_definition,
@@ -84,11 +83,32 @@ impl Graph {
                         Box::new(SerdeImplGenerator) as Box<dyn FragmentGenerator>,
                     ]),
                 ));
-                variants_mapping.insert(record_type, def_variants_mapping);
+                module.fragment("\n");
+                for (quirky_id, truc_id) in variants_mapping {
+                    module.fragment("// Quirky Binder aliases");
+                    module.fragment(format!(
+                        "pub type QbRecord{} = Record{};",
+                        quirky_id, truc_id
+                    ));
+                    module.fragment(format!(
+                        "pub type QbUnpackedRecord{} = UnpackedRecord{};",
+                        quirky_id, truc_id
+                    ));
+                    if *quirky_id.as_ref() > 0 {
+                        module.fragment(format!(
+                            "pub type QbUnpackedRecordIn{} = UnpackedRecordIn{};",
+                            quirky_id, truc_id
+                        ));
+                        module.fragment(format!(
+                        "pub type QbRecord{}AndUnpackedOut<const CAP: usize> = Record{}AndUnpackedOut<CAP>;",
+                        quirky_id, truc_id
+                    ));
+                    }
+                    module.fragment("\n");
+                }
             }
             write!(file, "{}", root_module).unwrap();
-            variants_mapping
-        };
+        }
         rustfmt_generated_file(output.join("streams.rs").as_path());
 
         {
@@ -99,7 +119,7 @@ impl Graph {
 
             root_module.fragment("mod streams;");
 
-            let mut chain = Chain::new(&self.chain_customizer, &mut root_module, &variants_mapping);
+            let mut chain = Chain::new(&self.chain_customizer, &mut root_module);
 
             for node in &self.entry_nodes {
                 node.gen_chain(self, &mut chain);

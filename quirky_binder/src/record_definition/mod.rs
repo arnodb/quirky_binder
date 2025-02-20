@@ -15,10 +15,10 @@ use crate::{chain::ChainCustomizer, stream::StreamRecordType};
 
 pub mod builder;
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Display, From, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Display, From, AsRef, Debug)]
 pub struct QuirkyDatumId(usize);
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Display, From, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Display, From, AsRef, Debug)]
 pub struct QuirkyRecordVariantId(usize);
 
 #[derive(Clone, Debug)]
