@@ -10,6 +10,7 @@ repository = "https://github.com/arnodb/quirky_binder"
 readme = "../README.md"
 
 [dependencies]
+codegen = "0.2"
 derive-new = "0.5"
 derive_more = "0.99"
 getset = "0.1"

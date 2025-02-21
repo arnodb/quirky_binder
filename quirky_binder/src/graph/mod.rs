@@ -1,11 +1,15 @@
 use std::{collections::BTreeMap, fs::File, path::Path};
 
+use codegen::Scope;
 use truc::{
     generator::{
         config::GeneratorConfig,
-        fragment::{clone::CloneImplGenerator, serde::SerdeImplGenerator, FragmentGenerator},
+        fragment::{
+            clone::CloneImplGenerator, serde::SerdeImplGenerator, FragmentGenerator,
+            FragmentGeneratorSpecs,
+        },
     },
-    record::type_resolver::TypeResolver,
+    record::{definition::RecordVariantId, type_resolver::TypeResolver},
 };
 
 use crate::{codegen::Module, prelude::*};
@@ -76,36 +80,69 @@ impl Graph {
                     });
                 let (truc_definition, variants_mapping) =
                     definition.truc(&self.chain_customizer, type_resolver);
+
+                let reversed_variants_mapping = {
+                    let mut map = BTreeMap::<RecordVariantId, Vec<QuirkyRecordVariantId>>::new();
+                    for (quirky_id, truc_id) in variants_mapping {
+                        map.entry(truc_id).or_default().push(quirky_id);
+                    }
+                    map
+                };
+
+                struct VariantAliasesGenerator {
+                    reversed_variants_mapping:
+                        BTreeMap<RecordVariantId, Vec<QuirkyRecordVariantId>>,
+                }
+
+                impl FragmentGenerator for VariantAliasesGenerator {
+                    fn generate(&self, specs: &FragmentGeneratorSpecs, scope: &mut Scope) {
+                        let truc_id = specs.record.variant.id();
+                        let quirky_ids = &self.reversed_variants_mapping[&truc_id];
+                        for &quirky_id in quirky_ids {
+                            scope
+                                .new_type_alias(
+                                    format!("QbRecord{}", quirky_id),
+                                    &specs.record.record_name,
+                                )
+                                .vis("pub");
+                            scope
+                                .new_type_alias(
+                                    format!("QbUnpackedRecord{}", quirky_id),
+                                    &specs.record.unpacked_record_name,
+                                )
+                                .vis("pub");
+                            if specs.prev_record.is_some() {
+                                scope
+                                    .new_type_alias(
+                                        format!("QbUnpackedRecordIn{}", quirky_id),
+                                        &specs.record.unpacked_record_in_name,
+                                    )
+                                    .vis("pub");
+                                scope
+                                    .new_type_alias(
+                                        format!("QbRecord{}AndUnpackedOut", quirky_id),
+                                        format!(
+                                            "{}<CAP>",
+                                            specs.record.record_and_unpacked_out_name
+                                        ),
+                                    )
+                                    .generic("const CAP: usize")
+                                    .vis("pub");
+                            }
+                        }
+                    }
+                }
+
                 module.fragment(truc::generator::generate(
                     &truc_definition,
                     &GeneratorConfig::default_with_custom_generators([
                         Box::new(CloneImplGenerator) as Box<dyn FragmentGenerator>,
                         Box::new(SerdeImplGenerator) as Box<dyn FragmentGenerator>,
+                        Box::new(VariantAliasesGenerator {
+                            reversed_variants_mapping,
+                        }) as Box<dyn FragmentGenerator>,
                     ]),
                 ));
-                module.fragment("\n");
-                for (quirky_id, truc_id) in variants_mapping {
-                    module.fragment("// Quirky Binder aliases");
-                    module.fragment(format!(
-                        "pub type QbRecord{} = Record{};",
-                        quirky_id, truc_id
-                    ));
-                    module.fragment(format!(
-                        "pub type QbUnpackedRecord{} = UnpackedRecord{};",
-                        quirky_id, truc_id
-                    ));
-                    if *quirky_id.as_ref() > 0 {
-                        module.fragment(format!(
-                            "pub type QbUnpackedRecordIn{} = UnpackedRecordIn{};",
-                            quirky_id, truc_id
-                        ));
-                        module.fragment(format!(
-                        "pub type QbRecord{}AndUnpackedOut<const CAP: usize> = Record{}AndUnpackedOut<CAP>;",
-                        quirky_id, truc_id
-                    ));
-                    }
-                    module.fragment("\n");
-                }
             }
             write!(file, "{}", root_module).unwrap();
         }
