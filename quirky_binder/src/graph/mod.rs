@@ -9,10 +9,13 @@ use truc::{
             FragmentGeneratorSpecs,
         },
     },
-    record::{definition::RecordVariantId, type_resolver::TypeResolver},
+    record::{
+        definition::{RecordDefinition, RecordVariantId},
+        type_resolver::TypeResolver,
+    },
 };
 
-use crate::{codegen::Module, prelude::*};
+use crate::{codegen::Module, prelude::*, record_definition::quirky_to_rust_definition};
 
 pub mod builder;
 pub mod error;
@@ -21,7 +24,7 @@ pub mod visit;
 
 pub struct Graph {
     chain_customizer: ChainCustomizer,
-    record_definitions: BTreeMap<StreamRecordType, QuirkyRecordDefinition>,
+    record_definitions: BTreeMap<StreamRecordType, RecordDefinition<QuirkyDatumType>>,
     entry_nodes: Vec<Box<dyn DynNode>>,
 }
 
@@ -30,7 +33,9 @@ impl Graph {
         &self.chain_customizer
     }
 
-    pub fn record_definitions(&self) -> &BTreeMap<StreamRecordType, QuirkyRecordDefinition> {
+    pub fn record_definitions(
+        &self,
+    ) -> &BTreeMap<StreamRecordType, RecordDefinition<QuirkyDatumType>> {
         &self.record_definitions
     }
 
@@ -79,10 +84,11 @@ impl Graph {
                         m.get_or_new_module(n)
                     });
                 let (truc_definition, variants_mapping) =
-                    definition.truc(&self.chain_customizer, type_resolver);
+                    quirky_to_rust_definition(definition, &self.chain_customizer, type_resolver)
+                        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
 
                 let reversed_variants_mapping = {
-                    let mut map = BTreeMap::<RecordVariantId, Vec<QuirkyRecordVariantId>>::new();
+                    let mut map = BTreeMap::<RecordVariantId, Vec<RecordVariantId>>::new();
                     for (quirky_id, truc_id) in variants_mapping {
                         map.entry(truc_id).or_default().push(quirky_id);
                     }
@@ -90,8 +96,7 @@ impl Graph {
                 };
 
                 struct VariantAliasesGenerator {
-                    reversed_variants_mapping:
-                        BTreeMap<RecordVariantId, Vec<QuirkyRecordVariantId>>,
+                    reversed_variants_mapping: BTreeMap<RecordVariantId, Vec<RecordVariantId>>,
                 }
 
                 impl FragmentGenerator for VariantAliasesGenerator {

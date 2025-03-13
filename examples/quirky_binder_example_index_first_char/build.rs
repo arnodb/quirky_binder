@@ -40,6 +40,7 @@ impl Tokenize {
                 let datum_id = datum.id();
                 output_stream_def
                     .remove_datum(datum_id)
+                    .map_err(|err| ChainError::Other { msg: err })
                     .with_trace_element(trace_element!(TOKENIZE_TRACE_NAME))?;
                 output_stream_def
                     .add_datum(
@@ -48,6 +49,7 @@ impl Tokenize {
                             type_name: "Box<str>".to_owned(),
                         },
                     )
+                    .map_err(|err| ChainError::Other { msg: err })
                     .with_trace_element(trace_element!(TOKENIZE_TRACE_NAME))?;
                 output_stream_def
                     .add_datum(
@@ -56,6 +58,7 @@ impl Tokenize {
                             type_name: "char".to_owned(),
                         },
                     )
+                    .map_err(|err| ChainError::Other { msg: err })
                     .with_trace_element(trace_element!(TOKENIZE_TRACE_NAME))?;
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;

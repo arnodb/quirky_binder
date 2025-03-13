@@ -102,7 +102,8 @@ impl Join {
                             .any(|field| field.name() == datum.name())
                         {
                             if let Err(err) = output_stream_def
-                                .copy_datum(datum)
+                                .add_datum(datum.name(), datum.details().clone())
+                                .map_err(|err| ChainError::Other { msg: err })
                                 .with_trace_element(trace_element!(JOIN_TRACE_NAME))
                             {
                                 return Some(Err(err));

@@ -76,6 +76,7 @@ impl ReadCsv {
                                     type_name: r#type.type_name().to_owned(),
                                 },
                             )
+                            .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!(READ_CSV_TRACE_NAME))?;
                     }
                 }

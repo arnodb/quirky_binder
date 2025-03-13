@@ -1,5 +1,9 @@
 use std::{cell::RefCell, collections::BTreeMap};
 
+use truc::record::definition::{
+    builder::generic::variant, DatumDefinition, DatumId, RecordVariantId,
+};
+
 use super::{
     add_vec_datum_to_record_definition, break_distinct_fact_for, break_distinct_fact_for_ids,
     break_order_fact_at, break_order_fact_at_ids, replace_vec_datum_in_record_definition,
@@ -19,7 +23,7 @@ pub struct OutputBuilderForUpdate<'a, 'b, 'g, Extra> {
     pub(super) record_type: StreamRecordType,
     #[getset(get_copy = "pub")]
     pub(super) record_definition: &'g RefCell<QuirkyRecordDefinitionBuilder>,
-    pub(super) sub_streams: BTreeMap<QuirkyDatumId, NodeSubStream>,
+    pub(super) sub_streams: BTreeMap<DatumId, NodeSubStream>,
     pub(super) source: NodeStreamSource,
     pub(super) is_output_main_stream: bool,
     #[getset(get = "pub")]
@@ -28,7 +32,7 @@ pub struct OutputBuilderForUpdate<'a, 'b, 'g, Extra> {
 }
 
 impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
-    pub fn sub_stream(&self, datum_id: QuirkyDatumId) -> &NodeSubStream {
+    pub fn sub_stream(&self, datum_id: DatumId) -> &NodeSubStream {
         &self.sub_streams[&datum_id]
     }
 
@@ -117,7 +121,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
         struct PathFieldDetails<'a> {
             stream: NodeSubStream,
             field: &'a ValidFieldName,
-            datum_id: QuirkyDatumId,
+            datum_id: DatumId,
         }
 
         // Find the sub stream of the first path field
@@ -127,7 +131,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
                 .record_definition
                 .borrow()
                 .get_current_datum_definition_by_name(field.name())
-                .map(QuirkyDatumDefinition::id);
+                .map(DatumDefinition::id);
             if let Some(datum_id) = datum_id {
                 let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
                 let sub_record_definition = graph
@@ -153,7 +157,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
                 let datum_id = record_definition
                     .borrow()
                     .get_current_datum_definition_by_name(field.name())
-                    .map(QuirkyDatumDefinition::id);
+                    .map(DatumDefinition::id);
                 if let Some(datum_id) = datum_id {
                     let sub_stream = stream
                         .sub_streams_mut()
@@ -249,7 +253,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
         &mut self,
         field: &str,
         record_type: StreamRecordType,
-        variant_id: QuirkyRecordVariantId,
+        variant_id: RecordVariantId,
         sub_stream: NodeSubStream,
     ) -> ChainResult<()> {
         let datum_id = add_vec_datum_to_record_definition(
@@ -271,7 +275,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
         &mut self,
         field: &str,
         record_type: StreamRecordType,
-        variant_id: QuirkyRecordVariantId,
+        variant_id: RecordVariantId,
         sub_stream: NodeSubStream,
     ) -> ChainResult<()> {
         let (old_datum_id, new_datum_id) = replace_vec_datum_in_record_definition(
@@ -317,7 +321,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
 
     pub fn break_order_fact_at_ids<I>(&mut self, datum_ids: I)
     where
-        I: IntoIterator<Item = QuirkyDatumId>,
+        I: IntoIterator<Item = DatumId>,
     {
         break_order_fact_at_ids(&mut self.facts, datum_ids);
     }
@@ -336,7 +340,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
 
     pub fn set_distinct_fact_ids<I>(&mut self, distinct_datum_ids: I)
     where
-        I: IntoIterator<Item = QuirkyDatumId>,
+        I: IntoIterator<Item = DatumId>,
     {
         set_distinct_fact_ids(&mut self.facts, distinct_datum_ids);
     }
@@ -355,13 +359,16 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
 
     pub fn break_distinct_fact_for_ids<I>(&mut self, datum_ids: I)
     where
-        I: IntoIterator<Item = QuirkyDatumId>,
+        I: IntoIterator<Item = DatumId>,
     {
         break_distinct_fact_for_ids(&mut self.facts, datum_ids);
     }
 
     pub fn build(self) -> &'g RefCell<QuirkyRecordDefinitionBuilder> {
-        let variant_id = self.record_definition.borrow_mut().close_record_variant();
+        let variant_id = self
+            .record_definition
+            .borrow_mut()
+            .close_record_variant_with(variant::append_data);
         self.streams.outputs.push(NodeStream::new(
             self.record_type,
             variant_id,
@@ -375,7 +382,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
 }
 
 impl OutputBuilderForUpdate<'_, '_, '_, DerivedExtra> {
-    pub fn input_variant_id(&self) -> QuirkyRecordVariantId {
+    pub fn input_variant_id(&self) -> RecordVariantId {
         self.extra.input_variant_id
     }
 }
@@ -392,14 +399,14 @@ pub struct SubStreamBuilderForUpdate<'g, Extra> {
     record_type: StreamRecordType,
     #[getset(get_copy = "pub")]
     record_definition: &'g RefCell<QuirkyRecordDefinitionBuilder>,
-    sub_streams: BTreeMap<QuirkyDatumId, NodeSubStream>,
+    sub_streams: BTreeMap<DatumId, NodeSubStream>,
     #[getset(get = "pub", get_mut = "pub")]
     facts: StreamFacts,
     extra: Extra,
 }
 
 impl<Extra> SubStreamBuilderForUpdate<'_, Extra> {
-    pub fn sub_stream(&self, datum_id: QuirkyDatumId) -> &NodeSubStream {
+    pub fn sub_stream(&self, datum_id: DatumId) -> &NodeSubStream {
         &self.sub_streams[&datum_id]
     }
 
@@ -407,7 +414,7 @@ impl<Extra> SubStreamBuilderForUpdate<'_, Extra> {
         &mut self,
         field: &str,
         record_type: StreamRecordType,
-        variant_id: QuirkyRecordVariantId,
+        variant_id: RecordVariantId,
         sub_stream: NodeSubStream,
     ) -> ChainResult<()> {
         let datum_id = add_vec_datum_to_record_definition(
@@ -429,7 +436,7 @@ impl<Extra> SubStreamBuilderForUpdate<'_, Extra> {
         &mut self,
         field: &str,
         record_type: StreamRecordType,
-        variant_id: QuirkyRecordVariantId,
+        variant_id: RecordVariantId,
         sub_stream: NodeSubStream,
     ) -> ChainResult<()> {
         let (old_datum_id, new_datum_id) = replace_vec_datum_in_record_definition(
@@ -475,7 +482,7 @@ impl<Extra> SubStreamBuilderForUpdate<'_, Extra> {
 
     pub fn break_order_fact_at_ids<I>(&mut self, datum_ids: I)
     where
-        I: IntoIterator<Item = QuirkyDatumId>,
+        I: IntoIterator<Item = DatumId>,
     {
         break_order_fact_at_ids(&mut self.facts, datum_ids);
     }
@@ -494,7 +501,7 @@ impl<Extra> SubStreamBuilderForUpdate<'_, Extra> {
 
     pub fn set_distinct_fact_ids<I>(&mut self, distinct_datum_ids: I)
     where
-        I: IntoIterator<Item = QuirkyDatumId>,
+        I: IntoIterator<Item = DatumId>,
     {
         set_distinct_fact_ids(&mut self.facts, distinct_datum_ids);
     }
@@ -508,13 +515,16 @@ impl<Extra> SubStreamBuilderForUpdate<'_, Extra> {
     }
 
     pub fn close_record_variant(self, _facts: FactsFullyUpdated<()>) -> NodeSubStream {
-        let variant_id = self.record_definition.borrow_mut().close_record_variant();
+        let variant_id = self
+            .record_definition
+            .borrow_mut()
+            .close_record_variant_with(variant::append_data);
         NodeSubStream::new(self.record_type, variant_id, self.sub_streams, self.facts)
     }
 }
 
 impl SubStreamBuilderForUpdate<'_, DerivedExtra> {
-    pub fn input_variant_id(&self) -> QuirkyRecordVariantId {
+    pub fn input_variant_id(&self) -> RecordVariantId {
         self.extra.input_variant_id
     }
 }

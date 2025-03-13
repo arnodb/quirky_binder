@@ -1,3 +1,5 @@
+use truc::record::definition::RecordVariantId;
+
 use super::helper::{drawing_source_node_name, DrawingHelper, NodePortsBuilder};
 use crate::{
     drawing::{Drawing, DrawingPortSize},
@@ -5,8 +7,8 @@ use crate::{
     prelude::*,
 };
 
-pub type StreamsPortKey<'a> = (&'a [Box<str>], &'a StreamRecordType, QuirkyRecordVariantId);
-pub type StreamsPathKey<'a> = (&'a StreamRecordType, QuirkyRecordVariantId);
+pub type StreamsPortKey<'a> = (&'a [Box<str>], &'a StreamRecordType, RecordVariantId);
+pub type StreamsPathKey<'a> = (&'a StreamRecordType, RecordVariantId);
 
 pub type StreamsDrawingHelper<'a> = DrawingHelper<'a, StreamsPortKey<'a>, StreamsPathKey<'a>>;
 

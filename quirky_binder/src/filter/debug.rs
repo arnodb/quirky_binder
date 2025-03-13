@@ -1,3 +1,5 @@
+use truc::record::definition::DatumDefinition;
+
 use crate::{prelude::*, trace_element};
 
 const DEBUG_TRACE_NAME: &str = "debug";
@@ -34,7 +36,7 @@ impl Debug {
                 }
                 fn debug_sub_stream(
                     depth: usize,
-                    datum: &QuirkyDatumDefinition,
+                    datum: &DatumDefinition<QuirkyDatumType>,
                     sub_stream: &NodeSubStream,
                     graph: &GraphBuilder,
                 ) -> ChainResultWithTrace<()> {

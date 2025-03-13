@@ -1,5 +1,7 @@
 use std::{cell::RefCell, collections::BTreeMap};
 
+use truc::record::definition::{DatumId, RecordVariantId};
+
 use super::{
     break_distinct_fact_for, break_distinct_fact_for_ids, break_order_fact_at,
     break_order_fact_at_ids, set_distinct_fact, set_distinct_fact_all_fields,
@@ -18,9 +20,9 @@ pub struct OutputBuilderForPassThrough<'a, 'b, 'g> {
     pub(super) record_type: StreamRecordType,
     #[getset(get_copy = "pub")]
     pub(super) record_definition: &'g RefCell<QuirkyRecordDefinitionBuilder>,
-    pub(super) input_variant_id: QuirkyRecordVariantId,
+    pub(super) input_variant_id: RecordVariantId,
     #[getset(get = "pub")]
-    pub(super) sub_streams: BTreeMap<QuirkyDatumId, NodeSubStream>,
+    pub(super) sub_streams: BTreeMap<DatumId, NodeSubStream>,
     pub(super) source: NodeStreamSource,
     pub(super) is_output_main_stream: bool,
     #[getset(get = "pub")]
@@ -69,7 +71,7 @@ impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
     {
         struct PathFieldDetails {
             stream: NodeSubStream,
-            datum_id: QuirkyDatumId,
+            datum_id: DatumId,
         }
 
         // Find the sub stream of the first path field
@@ -172,7 +174,7 @@ impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
 
     pub fn break_order_fact_at_ids<I>(&mut self, datum_ids: I)
     where
-        I: IntoIterator<Item = QuirkyDatumId>,
+        I: IntoIterator<Item = DatumId>,
     {
         break_order_fact_at_ids(&mut self.facts, datum_ids);
     }
@@ -187,7 +189,7 @@ impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
 
     pub fn set_distinct_fact_ids<I>(&mut self, distinct_datum_ids: I)
     where
-        I: IntoIterator<Item = QuirkyDatumId>,
+        I: IntoIterator<Item = DatumId>,
     {
         set_distinct_fact_ids(&mut self.facts, distinct_datum_ids);
     }
@@ -206,7 +208,7 @@ impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
 
     pub fn break_distinct_fact_for_ids<I>(&mut self, datum_ids: I)
     where
-        I: IntoIterator<Item = QuirkyDatumId>,
+        I: IntoIterator<Item = DatumId>,
     {
         break_distinct_fact_for_ids(&mut self.facts, datum_ids);
     }
@@ -230,8 +232,8 @@ pub struct SubStreamBuilderForPassThrough<'g> {
     record_type: StreamRecordType,
     #[getset(get_copy = "pub")]
     record_definition: &'g RefCell<QuirkyRecordDefinitionBuilder>,
-    input_variant_id: QuirkyRecordVariantId,
-    sub_streams: BTreeMap<QuirkyDatumId, NodeSubStream>,
+    input_variant_id: RecordVariantId,
+    sub_streams: BTreeMap<DatumId, NodeSubStream>,
     #[getset(get = "pub")]
     facts: StreamFacts,
 }

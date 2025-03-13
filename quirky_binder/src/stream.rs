@@ -4,6 +4,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use truc::record::definition::{DatumId, RecordVariantId};
 
 use crate::prelude::*;
 
@@ -39,10 +40,10 @@ pub struct NodeStream {
     record_type: StreamRecordType,
     /// The record variant for a specific node.
     #[getset(get_copy = "pub")]
-    variant_id: QuirkyRecordVariantId,
+    variant_id: RecordVariantId,
     /// The sub-streams indexed by datum ID.
     #[getset(get = "pub")]
-    sub_streams: BTreeMap<QuirkyDatumId, NodeSubStream>,
+    sub_streams: BTreeMap<DatumId, NodeSubStream>,
     /// The source to connect to in order to read records from it.
     #[getset(get = "pub")]
     source: NodeStreamSource,
@@ -98,10 +99,10 @@ pub struct NodeSubStream {
     record_type: StreamRecordType,
     /// The record variant for a specific node.
     #[getset(get_copy = "pub")]
-    variant_id: QuirkyRecordVariantId,
+    variant_id: RecordVariantId,
     /// The sub-streams indexed by datum ID.
     #[getset(get = "pub", get_mut = "pub")]
-    sub_streams: BTreeMap<QuirkyDatumId, NodeSubStream>,
+    sub_streams: BTreeMap<DatumId, NodeSubStream>,
     /// The facts (order and distinct) of the sub-stream.
     #[getset(get = "pub")]
     facts: StreamFacts,
@@ -112,8 +113,8 @@ impl NodeSubStream {
         self,
     ) -> (
         StreamRecordType,
-        QuirkyRecordVariantId,
-        BTreeMap<QuirkyDatumId, NodeSubStream>,
+        RecordVariantId,
+        BTreeMap<DatumId, NodeSubStream>,
         StreamFacts,
     ) {
         (
@@ -128,7 +129,7 @@ impl NodeSubStream {
 #[derive(new)]
 pub struct RecordDefinitionFragments<'a> {
     record_type: &'a StreamRecordType,
-    variant_id: QuirkyRecordVariantId,
+    variant_id: RecordVariantId,
     module_prefix: &'a FullyQualifiedName,
 }
 
@@ -169,23 +170,23 @@ impl RecordDefinitionFragments<'_> {
 #[derive(Clone, Default, Getters, Debug)]
 pub struct StreamFacts {
     #[getset(get = "pub")]
-    order: Vec<Directed<QuirkyDatumId>>,
+    order: Vec<Directed<DatumId>>,
     #[getset(get = "pub")]
-    distinct: Vec<QuirkyDatumId>,
+    distinct: Vec<DatumId>,
 }
 
 impl StreamFacts {
-    pub fn set_order(&mut self, order: Vec<Directed<QuirkyDatumId>>) {
+    pub fn set_order(&mut self, order: Vec<Directed<DatumId>>) {
         assert!(order.iter().all_unique());
         self.order = order;
     }
 
-    pub fn set_distinct(&mut self, distinct: Vec<QuirkyDatumId>) {
+    pub fn set_distinct(&mut self, distinct: Vec<DatumId>) {
         assert!(distinct.iter().all_unique());
         self.distinct = distinct;
     }
 
-    pub fn break_order_at_ids(&mut self, datum_ids: &BTreeSet<QuirkyDatumId>) {
+    pub fn break_order_at_ids(&mut self, datum_ids: &BTreeSet<DatumId>) {
         let position = self.order.iter().position(|d| datum_ids.contains(d));
         if let Some(position) = position {
             self.order.truncate(position);

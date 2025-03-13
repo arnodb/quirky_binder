@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use proc_macro2::TokenStream;
+use truc::record::definition::DatumDefinition;
 
 use crate::{prelude::*, trace_element};
 
@@ -25,7 +26,7 @@ pub trait TransformSpec {
     fn validate_type_update_field(
         &self,
         _name: ValidFieldName,
-        _datum: &QuirkyDatumDefinition,
+        _datum: &DatumDefinition<QuirkyDatumType>,
     ) -> ChainResultWithTrace<(ValidFieldName, ValidFieldType)> {
         unimplemented!()
     }
@@ -96,6 +97,7 @@ impl<Spec: TransformSpec> Transform<Spec> {
                             .id();
                         record_definition
                             .remove_datum(datum_id)
+                            .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!(trace_name))?;
                         record_definition
                             .add_datum(
@@ -104,6 +106,7 @@ impl<Spec: TransformSpec> Transform<Spec> {
                                     type_name: t.type_name().to_owned(),
                                 },
                             )
+                            .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!(trace_name))?;
                         new_variant = true;
                     }
@@ -301,7 +304,7 @@ pub trait SubTransformSpec {
     fn validate_type_update_field(
         &self,
         _name: ValidFieldName,
-        _datum: &QuirkyDatumDefinition,
+        _datum: &DatumDefinition<QuirkyDatumType>,
     ) -> ChainResultWithTrace<(ValidFieldName, ValidFieldType)> {
         unimplemented!()
     }
@@ -379,6 +382,7 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
                                 .id();
                             record_definition
                                 .remove_datum(datum_id)
+                                .map_err(|err| ChainError::Other { msg: err })
                                 .with_trace_element(trace_element!(trace_name))?;
                             record_definition
                                 .add_datum(
@@ -387,6 +391,7 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
                                         type_name: t.type_name().to_owned(),
                                     },
                                 )
+                                .map_err(|err| ChainError::Other { msg: err })
                                 .with_trace_element(trace_element!(trace_name))?;
                             new_variant = true;
                         }

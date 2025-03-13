@@ -66,6 +66,7 @@ impl FunctionUpdate {
                             .id();
                         output_stream_def
                             .remove_datum(datum_id)
+                            .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!(FUNCTION_UPDATE_TRACE_NAME))?;
                     }
                 }
@@ -79,6 +80,7 @@ impl FunctionUpdate {
                                     type_name: r#type.type_name().to_owned(),
                                 },
                             )
+                            .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!(FUNCTION_UPDATE_TRACE_NAME))?;
                     }
                 }

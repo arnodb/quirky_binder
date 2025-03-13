@@ -19,10 +19,7 @@ pub use crate::{
         Graph,
     },
     params::{DirectedFieldsParam, FieldParam, FieldsParam, TypedFieldsParam},
-    record_definition::{
-        builder::QuirkyRecordDefinitionBuilder, QuirkyDatumDefinition, QuirkyDatumId,
-        QuirkyDatumType, QuirkyRecordDefinition, QuirkyRecordVariant, QuirkyRecordVariantId,
-    },
+    record_definition::{QuirkyDatumType, QuirkyRecordDefinitionBuilder},
     stream::{
         NodeStream, NodeStreamSource, NodeSubStream, NoneNodeStream, RecordDefinitionFragments,
         SingleNodeStream, StreamFacts, StreamRecordType,

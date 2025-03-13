@@ -1,6 +1,7 @@
 use std::{cell::Ref, iter::once};
 
 use serde::Deserialize;
+use truc::record::definition::DatumDefinition;
 
 use crate::{prelude::*, trace_element};
 
@@ -46,7 +47,7 @@ impl FieldParam<'_> {
         try_map: M,
     ) -> ChainResult<O>
     where
-        M: Fn(ValidFieldName, &QuirkyDatumDefinition) -> ChainResult<O>,
+        M: Fn(ValidFieldName, &DatumDefinition<QuirkyDatumType>) -> ChainResult<O>,
     {
         self.validate_ext(|name| {
             if let Some(datum) = def.get_current_datum_definition_by_name(name.name()) {
@@ -74,7 +75,7 @@ impl FieldParam<'_> {
         try_map: M,
     ) -> ChainResult<O>
     where
-        M: Fn(ValidFieldName, &QuirkyDatumDefinition) -> ChainResult<O>,
+        M: Fn(ValidFieldName, &DatumDefinition<QuirkyDatumType>) -> ChainResult<O>,
     {
         let def = graph.get_stream(stream.record_type())?.borrow();
         self.validate_on_record_definition_ext(&def, try_map)
@@ -145,7 +146,7 @@ impl FieldsParam<'_> {
         trace_name: &str,
     ) -> ChainResultWithTrace<Vec<O>>
     where
-        M: Fn(ValidFieldName, &QuirkyDatumDefinition) -> ChainResultWithTrace<O>,
+        M: Fn(ValidFieldName, &DatumDefinition<QuirkyDatumType>) -> ChainResultWithTrace<O>,
     {
         self.validate_ext(
             |name| {
@@ -179,7 +180,7 @@ impl FieldsParam<'_> {
         trace_name: &str,
     ) -> ChainResultWithTrace<Vec<O>>
     where
-        M: Fn(ValidFieldName, &QuirkyDatumDefinition) -> ChainResultWithTrace<O>,
+        M: Fn(ValidFieldName, &DatumDefinition<QuirkyDatumType>) -> ChainResultWithTrace<O>,
     {
         let def = graph
             .get_stream(stream.record_type())

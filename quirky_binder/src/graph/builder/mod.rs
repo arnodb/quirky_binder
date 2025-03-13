@@ -5,6 +5,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use truc::record::definition::{DatumId, RecordVariantId};
 
 use self::{
     params::ParamsBuilder, pass_through::OutputBuilderForPassThrough,
@@ -194,7 +195,7 @@ pub struct OutputBuilder<'a, 'b, 'g, Extra> {
     #[getset(get = "pub")]
     record_type: StreamRecordType,
     record_definition: &'g RefCell<QuirkyRecordDefinitionBuilder>,
-    input_sub_streams: BTreeMap<QuirkyDatumId, NodeSubStream>,
+    input_sub_streams: BTreeMap<DatumId, NodeSubStream>,
     source: NodeStreamSource,
     is_output_main_stream: bool,
     facts: StreamFacts,
@@ -331,7 +332,7 @@ impl<'a, 'b, 'g> OutputBuilder<'a, 'b, 'g, DerivedExtra> {
 }
 
 pub struct DerivedExtra {
-    input_variant_id: QuirkyRecordVariantId,
+    input_variant_id: RecordVariantId,
 }
 
 #[derive(Clone, Copy)]
@@ -375,39 +376,45 @@ fn add_vec_datum_to_record_definition(
     record_definition: &mut QuirkyRecordDefinitionBuilder,
     field: &str,
     record_type: StreamRecordType,
-    variant_id: QuirkyRecordVariantId,
-) -> Result<QuirkyDatumId, ChainError> {
-    record_definition.add_datum(
-        field,
-        QuirkyDatumType::Vec {
-            record_type,
-            variant_id,
-        },
-    )
+    variant_id: RecordVariantId,
+) -> Result<DatumId, ChainError> {
+    record_definition
+        .add_datum(
+            field,
+            QuirkyDatumType::Vec {
+                record_type,
+                variant_id,
+            },
+        )
+        .map_err(|err| ChainError::Other { msg: err })
 }
 
 fn replace_vec_datum_in_record_definition(
     record_definition: &mut QuirkyRecordDefinitionBuilder,
     field: &str,
     record_type: StreamRecordType,
-    variant_id: QuirkyRecordVariantId,
-) -> ChainResult<(QuirkyDatumId, QuirkyDatumId)> {
+    variant_id: RecordVariantId,
+) -> ChainResult<(DatumId, DatumId)> {
     let old_datum = record_definition
         .get_current_datum_definition_by_name(field)
         .ok_or_else(|| ChainError::FieldNotFound {
             field: field.to_owned(),
         })?;
     let old_datum_id = old_datum.id();
-    record_definition.remove_datum(old_datum_id)?;
+    record_definition
+        .remove_datum(old_datum_id)
+        .map_err(|err| ChainError::Other { msg: err })?;
     Ok((
         old_datum_id,
-        record_definition.add_datum(
-            field,
-            QuirkyDatumType::Vec {
-                record_type,
-                variant_id,
-            },
-        )?,
+        record_definition
+            .add_datum(
+                field,
+                QuirkyDatumType::Vec {
+                    record_type,
+                    variant_id,
+                },
+            )
+            .map_err(|err| ChainError::Other { msg: err })?,
     ))
 }
 
@@ -421,7 +428,7 @@ where
     F: AsRef<str>,
 {
     // Ensure uniqueness, but keep order
-    let mut seen = BTreeSet::<QuirkyDatumId>::new();
+    let mut seen = BTreeSet::<DatumId>::new();
     let order = order_fields
         .into_iter()
         .map(|field| {
@@ -437,7 +444,7 @@ where
             }))
         })
         .filter_map(|res| res.transpose())
-        .collect::<Result<Vec<Directed<QuirkyDatumId>>, _>>()?;
+        .collect::<Result<Vec<Directed<DatumId>>, _>>()?;
     assert_eq!(seen.len(), order.len());
     facts.set_order(order);
     Ok(())
@@ -471,15 +478,15 @@ where
 
 pub fn break_order_fact_at_ids<I>(facts: &mut StreamFacts, datum_ids: I)
 where
-    I: IntoIterator<Item = QuirkyDatumId>,
+    I: IntoIterator<Item = DatumId>,
 {
-    let datum_ids = datum_ids.into_iter().collect::<BTreeSet<QuirkyDatumId>>();
+    let datum_ids = datum_ids.into_iter().collect::<BTreeSet<DatumId>>();
     facts.break_order_at_ids(&datum_ids);
 }
 
 pub fn check_undirected_order_starts_with(
-    expected_order: &[QuirkyDatumId],
-    actual_order: &[Directed<QuirkyDatumId>],
+    expected_order: &[DatumId],
+    actual_order: &[Directed<DatumId>],
     record_definition: &QuirkyRecordDefinitionBuilder,
     more_info: &str,
 ) -> ChainResult<()> {
@@ -491,7 +498,7 @@ pub fn check_undirected_order_starts_with(
             // Ignore direction
             .map(Deref::deref)
             .copied()
-            .collect::<Vec<QuirkyDatumId>>();
+            .collect::<Vec<DatumId>>();
         sorted_actual.sort();
 
         let mut sorted_expected = expected_order.to_vec();
@@ -526,8 +533,8 @@ pub fn check_undirected_order_starts_with(
 }
 
 pub fn check_directed_order_starts_with(
-    expected_order: &[QuirkyDatumId],
-    actual_order: &[Directed<QuirkyDatumId>],
+    expected_order: &[DatumId],
+    actual_order: &[Directed<DatumId>],
     record_definition: &QuirkyRecordDefinitionBuilder,
     more_info: &str,
 ) -> ChainResult<()> {
@@ -536,7 +543,7 @@ pub fn check_directed_order_starts_with(
     let expected_directed_order = expected_order
         .iter()
         .map(|d| Directed::Ascending(*d))
-        .collect::<Vec<Directed<QuirkyDatumId>>>();
+        .collect::<Vec<Directed<DatumId>>>();
 
     let is_ok = if actual_order.len() >= expected_order.len() {
         let actual_directed_order = &actual_order[0..expected_order.len()];
@@ -598,12 +605,12 @@ where
 
 pub fn set_distinct_fact_ids<I>(facts: &mut StreamFacts, distinct_datum_ids: I)
 where
-    I: IntoIterator<Item = QuirkyDatumId>,
+    I: IntoIterator<Item = DatumId>,
 {
     // Ensure uniqueness and sort
     let distinct = distinct_datum_ids
         .into_iter()
-        .collect::<BTreeSet<QuirkyDatumId>>();
+        .collect::<BTreeSet<DatumId>>();
     facts.set_distinct(distinct.into_iter().collect());
 }
 
@@ -643,7 +650,7 @@ where
 
 pub fn break_distinct_fact_for_ids<I>(facts: &mut StreamFacts, datum_ids: I)
 where
-    I: IntoIterator<Item = QuirkyDatumId>,
+    I: IntoIterator<Item = DatumId>,
 {
     for datum_id in datum_ids {
         if facts.distinct().iter().any(|d| *d == datum_id) {
@@ -654,8 +661,8 @@ where
 }
 
 pub fn check_distinct_eq(
-    expected_distinct: &[QuirkyDatumId],
-    actual_distinct: &[QuirkyDatumId],
+    expected_distinct: &[DatumId],
+    actual_distinct: &[DatumId],
     record_definition: &QuirkyRecordDefinitionBuilder,
     more_info: &str,
 ) -> ChainResult<()> {

@@ -52,6 +52,7 @@ impl Anchor {
                             ),
                         },
                     )
+                    .map_err(|err| ChainError::Other { msg: err })
                     .with_trace_element(trace_element!(ANCHOR_TRACE_NAME))?;
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;

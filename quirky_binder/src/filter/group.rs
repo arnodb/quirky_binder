@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
+use truc::record::definition::DatumId;
 
 use crate::{
     graph::builder::check_undirected_order_starts_with,
@@ -92,16 +93,18 @@ impl Group {
                     )
                     .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
 
-                    let mut map = BTreeMap::<QuirkyDatumId, QuirkyDatumId>::new();
+                    let mut map = BTreeMap::<DatumId, DatumId>::new();
                     for datum in &group_data {
                         let new_id = group_stream_def
-                            .copy_datum(datum)
+                            .add_datum(datum.name(), datum.details().clone())
+                            .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
                         map.insert(datum.id(), new_id);
                     }
-                    for datum_id in &group_datum_ids {
+                    for &datum_id in &group_datum_ids {
                         output_stream_def
-                            .remove_datum(*datum_id)
+                            .remove_datum(datum_id)
+                            .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
                     }
 
@@ -347,16 +350,18 @@ impl SubGroup {
                         )
                         .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
 
-                        let mut map = BTreeMap::<QuirkyDatumId, QuirkyDatumId>::new();
+                        let mut map = BTreeMap::<DatumId, DatumId>::new();
                         for datum in &group_data {
                             let new_id = group_stream_def
-                                .copy_datum(datum)
+                                .add_datum(datum.name(), datum.details().clone())
+                                .map_err(|err| ChainError::Other { msg: err })
                                 .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
                             map.insert(datum.id(), new_id);
                         }
                         for datum_id in &group_datum_ids {
                             output_stream_def
                                 .remove_datum(*datum_id)
+                                .map_err(|err| ChainError::Other { msg: err })
                                 .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
                         }
 

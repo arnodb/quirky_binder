@@ -84,6 +84,7 @@ impl FunctionProduce {
                                     type_name: r#type.type_name().to_owned(),
                                 },
                             )
+                            .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!(FUNCTION_PRODUCE_TRACE_NAME))?;
                     }
                 }

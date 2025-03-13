@@ -59,6 +59,7 @@ impl Ungroup {
 
                     output_stream_def
                         .remove_datum(group_datum_id)
+                        .map_err(|err| ChainError::Other { msg: err })
                         .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?;
 
                     let sub_stream_def = graph
@@ -70,7 +71,8 @@ impl Ungroup {
                         .map(|d| {
                             let datum = &sub_stream_def[d];
                             output_stream_def
-                                .copy_datum(datum)
+                                .add_datum(datum.name(), datum.details().clone())
+                                .map_err(|err| ChainError::Other { msg: err })
                                 .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?;
                             Ok(datum.name().to_owned())
                         })
@@ -241,6 +243,7 @@ impl SubUngroup {
 
                         output_stream_def
                             .remove_datum(group_datum_id)
+                            .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?;
 
                         let sub_stream_def = graph
@@ -252,7 +255,8 @@ impl SubUngroup {
                             .map(|d| {
                                 let datum = &sub_stream_def[d];
                                 output_stream_def
-                                    .copy_datum(datum)
+                                    .add_datum(datum.name(), datum.details().clone())
+                                    .map_err(|err| ChainError::Other { msg: err })
                                     .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?;
                                 Ok(datum.name().to_owned())
                             })

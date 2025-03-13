@@ -46,7 +46,8 @@ impl ExtractFields {
                     .order_facts_updated()
                     .distinct_facts_updated()
                     .with_output(record_definition))
-            })?;
+            })?
+            .borrow();
 
         streams
             .new_named_output("extracted", graph)
@@ -55,16 +56,15 @@ impl ExtractFields {
                 let mut output_extracted_stream_def =
                     output_extracted_stream.record_definition().borrow_mut();
                 for field in valid_fields.iter() {
-                    output_extracted_stream_def
-                        .copy_datum(
-                            output_stream_def
-                                .borrow()
-                                .get_variant_datum_definition_by_name(
-                                    inputs.single().variant_id(),
-                                    field.name(),
-                                )
-                                .unwrap_or_else(|| panic!(r#"datum "{}""#, field.name())),
+                    let datum = output_stream_def
+                        .get_variant_datum_definition_by_name(
+                            inputs.single().variant_id(),
+                            field.name(),
                         )
+                        .unwrap_or_else(|| panic!(r#"datum "{}""#, field.name()));
+                    output_extracted_stream_def
+                        .add_datum(datum.name(), datum.details().clone())
+                        .map_err(|err| ChainError::Other { msg: err })
                         .with_trace_element(trace_element!(EXTRACT_FIELDS_TRACE_NAME))?;
                 }
                 // XXX That is actually not true, let's see what we can do later.

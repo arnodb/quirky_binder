@@ -1,5 +1,6 @@
 use proc_macro2::TokenStream;
 use serde::Deserialize;
+use truc::record::definition::DatumDefinition;
 
 use super::transform::{
     SubTransform, SubTransformParams, SubTransformSpec, Transform, TransformParams, TransformSpec,
@@ -68,9 +69,9 @@ impl TransformSpec for Unwrap {
     fn validate_type_update_field(
         &self,
         name: ValidFieldName,
-        datum: &QuirkyDatumDefinition,
+        datum: &DatumDefinition<QuirkyDatumType>,
     ) -> ChainResultWithTrace<(ValidFieldName, ValidFieldType)> {
-        let type_name = unwrap_field_type(&name, datum.datum_type())
+        let type_name = unwrap_field_type(&name, datum.details())
             .with_trace_element(trace_element!(UNWRAP_TRACE_NAME))?;
         let valid_type = ValidFieldType::try_from(type_name)
             .map_err(|_| ChainError::InvalidFieldType {
@@ -164,9 +165,9 @@ impl SubTransformSpec for SubUnwrap {
     fn validate_type_update_field(
         &self,
         name: ValidFieldName,
-        datum: &QuirkyDatumDefinition,
+        datum: &DatumDefinition<QuirkyDatumType>,
     ) -> ChainResultWithTrace<(ValidFieldName, ValidFieldType)> {
-        let type_name = unwrap_field_type(&name, datum.datum_type())
+        let type_name = unwrap_field_type(&name, datum.details())
             .with_trace_element(trace_element!(SUB_UNWRAP_TRACE_NAME))?;
         let valid_type = ValidFieldType::try_from(type_name)
             .map_err(|_| ChainError::InvalidFieldType {
