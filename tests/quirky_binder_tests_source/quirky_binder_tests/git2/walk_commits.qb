@@ -1,0 +1,66 @@
+use quirky_binder::{
+    filter::{
+        function::terminate::function_terminate,
+    },
+};
+use quirky_binder_git2::walk_commits;
+
+{
+  (
+      walk_commits(
+        repository: "../..",
+        pushes: ["HEAD"],
+        hides: ["HEAD~4"],
+        fields: [
+            "id",
+            "author",
+            "author_name",
+            "author_email",
+            "committer",
+            "committer_name",
+            "committer_email",
+            "time_seconds",
+            "time_offset_minutes",
+            "message",
+            "summary",
+            "body",
+        ],
+      )
+    - function_terminate(
+        body: r#"
+            println!("=== Walk");
+            while let Some(record) = input.next()? {
+                println!("--- Commit");
+                println!("Id: {}", record.id());
+                println!("Author: {}", record.author());
+                if let Some(author_name) = record.author_name() {
+                    println!("Author name: {}", author_name);
+                }
+                if let Some(author_email) = record.author_email() {
+                    println!("Author email: {}", author_email);
+                }
+                println!("Committer: {}", record.committer());
+                if let Some(committer_name) = record.committer_name() {
+                    println!("Committer name: {}", committer_name);
+                }
+                if let Some(committer_email) = record.committer_email() {
+                    println!("Committer email: {}", committer_email);
+                }
+                println!("Time seconds: {}", record.time_seconds());
+                println!("Time offset minutes: {}", record.time_offset_minutes());
+                if let Some(message) = record.message() {
+                    println!("Message: {}", message);
+                }
+                if let Some(summary) = record.summary() {
+                    println!("Summary: {}", summary);
+                }
+                if let Some(body) = record.body() {
+                    println!("Body: {}", body);
+                }
+            }
+            println!("=== End walk");
+            Ok(())
+"#,
+      )
+  )
+}

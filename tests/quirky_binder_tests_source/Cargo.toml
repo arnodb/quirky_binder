@@ -8,4 +8,5 @@ rust-version = "1.65.0"
 anyhow = "1"
 quirky_binder = { path = "../../quirky_binder" }
 quirky_binder_csv = { path = "../../contrib/quirky_binder_csv" }
+quirky_binder_git2 = { path = "../../contrib/quirky_binder_git2" }
 truc = { git = "https://github.com/arnodb/truc.git" }

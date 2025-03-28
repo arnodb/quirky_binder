@@ -90,6 +90,16 @@ impl FieldsParam<'_> {
         Self(Default::default())
     }
 
+    pub fn validate_new(self) -> ChainResult<Vec<ValidFieldName>> {
+        self.iter()
+            .map(|name| {
+                ValidFieldName::try_from(*name).map_err(|_| ChainError::InvalidFieldName {
+                    name: (*name).to_owned(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+    }
+
     pub fn validate<L>(
         self,
         lookup: L,
