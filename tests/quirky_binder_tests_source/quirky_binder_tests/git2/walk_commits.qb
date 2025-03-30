@@ -8,7 +8,7 @@ use quirky_binder_git2::walk_commits;
 {
   (
       walk_commits(
-        repository: "../..",
+        repository: "input/git2_repo",
         pushes: ["HEAD"],
         hides: ["HEAD~4"],
         fields: [

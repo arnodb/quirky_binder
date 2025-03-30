@@ -28,6 +28,10 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
+      - name: Prepare tests
+        run: |
+          ./scripts/init_tests.sh
+
       - name: Generate code coverage
         run: cargo llvm-cov --workspace --all-features --include-build-script --lcov --output-path lcov.info
 
