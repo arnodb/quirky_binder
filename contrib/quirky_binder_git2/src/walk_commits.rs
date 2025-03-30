@@ -202,9 +202,11 @@ impl DynNode for WalkCommits {
         let thread_body = quote! {
             let output = thread_control.output_0.take().expect("output 0");
             move || {
+                use anyhow::Context;
                 use git2::Repository;
 
-                let repository = Repository::open(#repository)?;
+                let repository = Repository::open(#repository)
+                    .with_context(|| format!("Could not open repository {}", #repository))?;
 
                 let mut revwalk = repository.revwalk()?;
                 #(revwalk.push(repository.revparse_single(#pushes)?.id())?;)*

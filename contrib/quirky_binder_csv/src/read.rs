@@ -179,8 +179,10 @@ impl DynNode for ReadCsv {
             move || {
                 use std::fs::File;
                 use std::io::BufReader;
+                use anyhow::Context;
 
-                let file = File::open(#input_file)?;
+                let file = File::open(#input_file)
+                    .with_context(|| format!("Could not open {}", #input_file))?;
 
                 let mut reader = csv::ReaderBuilder::new()
                     .has_headers(#has_headers)

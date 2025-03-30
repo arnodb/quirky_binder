@@ -1,12 +1,19 @@
 [package]
-name = "quirky_binder_tests_source"
+name = "quirky_binder_tests_git2"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.82.0"
 
 [dependencies]
 anyhow = "1"
+fallible-iterator = "0.3"
+git2 = "0.20"
+quirky_binder_support = { path = "../../quirky_binder_support" }
+serde = "1"
+static_assertions = "1"
+truc_runtime = { git = "https://github.com/arnodb/truc.git" }
+
+[build-dependencies]
 quirky_binder = { path = "../../quirky_binder" }
-quirky_binder_csv = { path = "../../contrib/quirky_binder_csv" }
 quirky_binder_git2 = { path = "../../contrib/quirky_binder_git2" }
 truc = { git = "https://github.com/arnodb/truc.git" }

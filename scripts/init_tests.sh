@@ -6,7 +6,9 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 REPO="git2_repo"
 
-cd "$ROOT/tests/quirky_binder_tests/input"
+mkdir -p "$ROOT/tests/quirky_binder_tests_git2/input"
+
+cd "$ROOT/tests/quirky_binder_tests_git2/input"
 
 rm -Rf "$REPO"
 mkdir "$REPO"
