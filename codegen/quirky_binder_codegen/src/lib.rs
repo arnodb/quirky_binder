@@ -61,7 +61,18 @@ pub fn parse_and_generate_module(
         error_emitter,
     };
     let module = codegen_parse_module(src, &mut qb_error_emitter)?;
-    generate_module(&module, quirky_binder_crate, &mut qb_error_emitter)
+    let code = generate_module(&module, quirky_binder_crate, &mut qb_error_emitter)?;
+    let source_include = source_file.map(|source_file| {
+        // Tell cargo to rebuild when source file changes
+        Some(quote! {
+            const _: &'static [u8] = include_bytes!(#source_file);
+        })
+    });
+    Ok(quote! {
+        #source_include
+
+        #code
+    })
 }
 
 struct ModuleConfiguration {
