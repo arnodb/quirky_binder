@@ -94,7 +94,7 @@ impl<'a, PortKey: Ord + Copy + Debug, PathKey: Ord + Copy + Debug>
         if self.columns[col]
             .nodes
             .last()
-            .map_or(false, |node| row <= node.row)
+            .is_some_and(|node| row <= node.row)
         {
             // move all the columns on the right 1 unit farther
             self.columns.insert(col, DrawingColumn::default());
