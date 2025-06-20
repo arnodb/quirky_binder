@@ -653,7 +653,7 @@ where
     I: IntoIterator<Item = DatumId>,
 {
     for datum_id in datum_ids {
-        if facts.distinct().iter().any(|d| *d == datum_id) {
+        if facts.distinct().contains(&datum_id) {
             facts.set_distinct(Vec::new());
             return;
         }

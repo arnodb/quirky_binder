@@ -85,7 +85,7 @@ impl Graph {
                     });
                 let (truc_definition, variants_mapping) =
                     quirky_to_rust_definition(definition, &self.chain_customizer, type_resolver)
-                        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+                        .map_err(std::io::Error::other)?;
 
                 let reversed_variants_mapping = {
                     let mut map = BTreeMap::<RecordVariantId, Vec<RecordVariantId>>::new();
