@@ -1,20 +1,17 @@
+export RUST_BACKTRACE := "1"
+
 # Build
 
 clippy:
-    export RUST_BACKTRACE=1
     cargo clippy --all-features --all-targets -- -D warnings
 
 watch_clippy:
-    export RUST_BACKTRACE=1
     cargo watch -x "clippy --all-features --all-targets -- -D warnings"
 
 test:
-    export RUST_BACKTRACE=1
     cargo test --all-features
 
 check_all:
-    export RUST_BACKTRACE=1
-
     just stable
     cargo clippy --all-features --all-targets -- -D warnings
     cargo build --all-features
@@ -29,6 +26,16 @@ check_all:
     cargo test --all-features
 
     just stable
+    just recipes
+    just wasm
+
+[working-directory: 'recipes']
+recipes:
+    cargo build --all-features
+
+[working-directory: 'codegen/quirky_binder_codegen_wasm']
+wasm:
+    wasm-pack build
 
 # Toolchain management
 
