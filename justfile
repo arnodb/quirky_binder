@@ -8,8 +8,8 @@ clippy:
 watch_clippy:
     cargo watch -x "clippy --all-features --all-targets -- -D warnings"
 
-test:
-    cargo test --all-features
+test *args:
+    cargo test --all-features {{args}}
 
 check_all:
     just stable
@@ -57,3 +57,7 @@ fmt_nightly:
     just nightly
     cargo fmt
 
+# Examples
+
+run_example example *args:
+    cargo run -p $(basename {{example}}) {{args}}
