@@ -477,15 +477,6 @@ impl<'a> Chain<'a> {
                 .iter()
                 .enumerate()
                 .map(|(thread_index, thread)| {
-                    let thread_outer_control = format_ident!(
-                        "{}thread_outer_control_{}",
-                        match thread.thread_type {
-                            ChainThreadType::Regular => "_",
-                            ChainThreadType::Background => "",
-                        },
-                        thread.id
-                    );
-                    let thread_control = format_ident!("thread_control_{}", thread.id);
                     let thread_module = format_ident!("thread_{}", thread.id);
                     let interrupt = match thread.thread_type {
                         ChainThreadType::Regular => None,
@@ -498,7 +489,7 @@ impl<'a> Chain<'a> {
                     };
                     let interrupt_clone = interrupt.is_some().then(|| {
                         quote! {
-                            interrupt: #thread_outer_control.interrupt.clone(),
+                            interrupt: thread_outer_control.interrupt.clone(),
                         }
                     });
                     let inputs = thread
@@ -535,10 +526,10 @@ impl<'a> Chain<'a> {
                         }
                     };
                     quote! {
-                        let #thread_outer_control = #thread_module::ThreadOuterControl {
+                        let thread_outer_control = #thread_module::ThreadOuterControl {
                             #interrupt
                         };
-                        let #thread_control = #thread_module::ThreadControl {
+                        let thread_control = #thread_module::ThreadControl {
                             #config_assignment
                             #interrupt_clone
                             #(#inputs)*
@@ -547,14 +538,28 @@ impl<'a> Chain<'a> {
                     }
                 });
 
-            let spawn_threads = self.threads.iter().map(|thread| {
+            let thread_vars = self.threads.iter().map(|thread| {
+                let thread_outer_control = format_ident!(
+                    "{}thread_outer_control_{}",
+                    match thread.thread_type {
+                        ChainThreadType::Regular => "_",
+                        ChainThreadType::Background => "",
+                    },
+                    thread.id
+                );
                 let join_thread = format_ident!("join_{}", thread.id);
+                quote! { (#thread_outer_control, #join_thread) }
+            });
+
+            let spawn_threads = self.threads.iter().map(|thread| {
                 let thread_main =
                     syn::parse_str::<syn::Expr>(&thread.main.as_ref().expect("main").to_string())
                         .expect("thread_main");
-                let thread_control = format_ident!("thread_control_{}", thread.id);
                 quote! {
-                    let #join_thread = std::thread::spawn(#thread_main(#thread_control));
+                    (
+                        thread_outer_control,
+                        std::thread::spawn(#thread_main(thread_control)),
+                    )
                 }
             });
 
@@ -617,9 +622,11 @@ impl<'a> Chain<'a> {
 
                     #(#channels)*
 
-                    #(#thread_controls)*
+                    #(let #thread_vars = {
+                        #thread_controls
 
-                    #(#spawn_threads)*
+                        #spawn_threads
+                    };)*
 
                     #(#join_regular_threads)*
 
