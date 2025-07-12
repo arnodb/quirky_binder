@@ -61,7 +61,7 @@ where
                     rust.add_datum_override::<Vec<()>, _>(
                         datum.name(),
                         DatumDefinitionOverride {
-                            type_name: Some(format!("Vec<{}::Record{}>", module_name, variant_id)),
+                            type_name: Some(format!("Vec<{module_name}::Record{variant_id}>")),
                             size: None,
                             align: None,
                             allow_uninit: None,

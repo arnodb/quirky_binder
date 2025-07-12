@@ -47,8 +47,7 @@ impl Anchor {
                         valid_anchor_field.name(),
                         QuirkyDatumType::Simple {
                             type_name: format!(
-                                "quirky_binder_support::AnchorId<{}>",
-                                anchor_table_id
+                                "quirky_binder_support::AnchorId<{anchor_table_id}>"
                             ),
                         },
                     )

@@ -32,7 +32,7 @@ pub monitor()
 
             loop {
                 meter.scan()
-                    .map_err(|e| writeln!(&mut stderr(), "Scan error: {}", e))
+                    .map_err(|e| writeln!(&mut stderr(), "Scan error: {e}"))
                     .ok();
 
                 let report = meter.report();

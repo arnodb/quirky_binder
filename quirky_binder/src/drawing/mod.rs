@@ -360,8 +360,7 @@ where
         write!(w, "V{}", head.cy - head.radius())?;
         writeln!(
             w,
-            "\" style=\"stroke:{};stroke-width:3;fill:none;\" />",
-            color
+            "\" style=\"stroke:{color};stroke-width:3;fill:none;\" />"
         )?;
     }
 
@@ -373,8 +372,7 @@ where
         write!(w, "r=\"{}\" ", port.radius())?;
         writeln!(
             w,
-            "style=\"stroke:#000000;stroke-width:{};fill:none;\" />",
-            PORT_STROKE_WIDTH
+            "style=\"stroke:#000000;stroke-width:{PORT_STROKE_WIDTH};fill:none;\" />"
         )?;
         Ok(())
     }

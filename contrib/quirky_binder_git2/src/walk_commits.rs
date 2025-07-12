@@ -54,7 +54,7 @@ impl WalkCommits {
                     let name = field.name();
                     if seen.contains(name) {
                         return Err(ChainError::Other {
-                            msg: format!("Duplicate field {}", name),
+                            msg: format!("Duplicate field {name}"),
                         })
                         .with_trace_element(trace_element!(WALK_COMMITS_TRACE_NAME));
                     }
@@ -73,7 +73,7 @@ impl WalkCommits {
                         "body" => "Option<String>",
                         _ => {
                             return Err(ChainError::Other {
-                                msg: format!("Unknown Git field {}", name),
+                                msg: format!("Unknown Git field {name}"),
                             })
                             .with_trace_element(trace_element!(WALK_COMMITS_TRACE_NAME));
                         }

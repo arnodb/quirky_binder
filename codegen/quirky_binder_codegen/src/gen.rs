@@ -37,7 +37,7 @@ impl GraphNames {
 
     fn add_name(&mut self, name: String, feature: Option<&str>) -> Result<(), String> {
         if self.names.iter().any(|n| n.name == name) {
-            return Err(format!("Graph name {} already exists", name));
+            return Err(format!("Graph name {name} already exists"));
         }
         self.names.push(GraphName {
             name,
@@ -138,13 +138,13 @@ fn quirky_binder_graph_definition<'a>(
                         Ok(tokens) => Some(tokens),
                         Err(ConnectError::NotFound) => {
                             error_emitter
-                                .emit_error(name, format!("stream `{}` not found", name).into());
+                                .emit_error(name, format!("stream `{name}` not found").into());
                             None
                         }
                         Err(ConnectError::AlreadyConnected) => {
                             error_emitter.emit_error(
                                 name,
-                                format!("stream `{}` is already connected", name).into(),
+                                format!("stream `{name}` is already connected").into(),
                             );
                             None
                         }
@@ -270,7 +270,7 @@ impl<'a> NamedStreams<'a> {
                 });
             }
             Entry::Occupied(_) => {
-                error_emitter.emit_error(name, format!("stream `{}` already exists", name).into());
+                error_emitter.emit_error(name, format!("stream `{name}` already exists").into());
             }
         }
     }
@@ -292,7 +292,7 @@ impl<'a> NamedStreams<'a> {
             match state {
                 NamedStreamState::Dangling { anchor, .. } => {
                     error_emitter
-                        .emit_error(anchor, format!("stream `{}` is not connected", name).into());
+                        .emit_error(anchor, format!("stream `{name}` is not connected").into());
                 }
                 NamedStreamState::Connected => {}
             }
@@ -441,8 +441,7 @@ fn quirky_binder_stream_lines<'a>(
                                     Err(ConnectError::AlreadyConnected) => {
                                         error_emitter.emit_error(
                                             name,
-                                            format!("stream `{}` is already connected", name)
-                                                .into(),
+                                            format!("stream `{name}` is already connected").into(),
                                         );
                                         None
                                     }

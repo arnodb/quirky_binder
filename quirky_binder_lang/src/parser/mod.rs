@@ -95,7 +95,7 @@ impl SpannedErrorKind {
             Self::UnterminatedChar => "unterminated char".into(),
             Self::UnterminatedString => "unterminated string".into(),
             Self::UnrecognizedToken => "unrecognized token".into(),
-            Self::AnnotationsParseError(err) => format!("annotations parse error: {}", err).into(),
+            Self::AnnotationsParseError(err) => format!("annotations parse error: {err}").into(),
             #[cfg(feature = "nom_parser")]
             Self::Nom(nom) => nom.description().into(),
             #[cfg(feature = "nom_parser")]

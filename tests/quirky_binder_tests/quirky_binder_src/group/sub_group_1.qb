@@ -44,12 +44,12 @@ use quirky_binder::{
             let mut seen2 = BTreeSet::<u8>::new();
             while let Some(group_record) = input.next()? {
                 let lsb2 = *group_record.lsb2();
-                assert!(!seen2.contains(&lsb2), "Already seen lsb2 {}", lsb2);
+                assert!(!seen2.contains(&lsb2), "Already seen lsb2 {lsb2}");
                 seen2.insert(lsb2);
                 let mut seen4 = BTreeSet::<u8>::new();
                 for sub_group_record in group_record.group().iter() {
                     let lsb4 = *sub_group_record.lsb4();
-                    assert!(!seen4.contains(&lsb4), "Already seen lsb2 {} lsb4 {}", lsb2, lsb4);
+                    assert!(!seen4.contains(&lsb4), "Already seen lsb2 {lsb2} lsb4 {lsb4}");
                     seen4.insert(lsb4);
                     for record in sub_group_record.sub_group().iter() {
                         assert_eq!(lsb2, record.num() & 0x03, "lsb2");

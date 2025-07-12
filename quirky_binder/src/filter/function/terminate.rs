@@ -74,7 +74,7 @@ impl<const N: usize> DynNode for FunctionTerminate<N> {
             let inputs = (0..self.inputs.len())
                 .map(|input_index| {
                     let input = format_ident!("input_{}", input_index);
-                    let expect = format!("input {}", input_index);
+                    let expect = format!("input {input_index}");
                     quote! { let #input = thread_control.#input.take().expect(#expect); }
                 })
                 .collect::<Vec<_>>();

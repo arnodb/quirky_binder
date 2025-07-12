@@ -106,26 +106,26 @@ impl Graph {
                         for &quirky_id in quirky_ids {
                             scope
                                 .new_type_alias(
-                                    format!("QbRecord{}", quirky_id),
+                                    format!("QbRecord{quirky_id}"),
                                     &specs.record.record_name,
                                 )
                                 .vis("pub");
                             scope
                                 .new_type_alias(
-                                    format!("QbUnpackedRecord{}", quirky_id),
+                                    format!("QbUnpackedRecord{quirky_id}"),
                                     &specs.record.unpacked_record_name,
                                 )
                                 .vis("pub");
                             if specs.prev_record.is_some() {
                                 scope
                                     .new_type_alias(
-                                        format!("QbUnpackedRecordIn{}", quirky_id),
+                                        format!("QbUnpackedRecordIn{quirky_id}"),
                                         &specs.record.unpacked_record_in_name,
                                     )
                                     .vis("pub");
                                 scope
                                     .new_type_alias(
-                                        format!("QbRecord{}AndUnpackedOut", quirky_id),
+                                        format!("QbRecord{quirky_id}AndUnpackedOut"),
                                         format!(
                                             "{}<CAP>",
                                             specs.record.record_and_unpacked_out_name
@@ -149,7 +149,7 @@ impl Graph {
                     ]),
                 ));
             }
-            write!(file, "{}", root_module).unwrap();
+            write!(file, "{root_module}").unwrap();
         }
         rustfmt_generated_file(output.join("streams.rs").as_path());
 
@@ -170,7 +170,7 @@ impl Graph {
             chain.gen_chain();
 
             let mut file = File::create(output.join("chain.rs")).unwrap();
-            write!(file, "{}", root_module).unwrap();
+            write!(file, "{root_module}").unwrap();
         }
         rustfmt_generated_file(output.join("chain.rs").as_path());
 
@@ -195,13 +195,13 @@ fn rustfmt_generated_file(file: &Path) {
             let stderr = String::from_utf8_lossy(&output.stderr);
             match output.status.code() {
                 Some(2) => {
-                    eprintln!("Rustfmt parsing errors:\n{}", stderr);
+                    eprintln!("Rustfmt parsing errors:\n{stderr}");
                 }
                 Some(3) => {
-                    eprintln!("Rustfmt could not format some lines:\n{}", stderr);
+                    eprintln!("Rustfmt could not format some lines:\n{stderr}");
                 }
                 _ => {
-                    eprintln!("Internal rustfmt error:\n{}", stderr);
+                    eprintln!("Internal rustfmt error:\n{stderr}");
                 }
             }
         }

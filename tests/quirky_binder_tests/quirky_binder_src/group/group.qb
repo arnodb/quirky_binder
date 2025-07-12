@@ -42,7 +42,7 @@ use quirky_binder::{
             let mut seen = BTreeSet::<u8>::new();
             while let Some(group_record) = input.next()? {
                 let lsb2 = *group_record.lsb2();
-                assert!(!seen.contains(&lsb2), "Already seen lsb2 {}", lsb2);
+                assert!(!seen.contains(&lsb2), "Already seen lsb2 {lsb2}");
                 seen.insert(lsb2);
                 for record in group_record.group().iter() {
                     assert_eq!(lsb2, record.num() & 0x03, "lsb2");

@@ -40,8 +40,8 @@ impl<T> From<MaybeTaggedDirected<T>> for Directed<T> {
 impl<T: Display> Display for Directed<T> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Ascending(t) => f.write_fmt(format_args!("asc({})", t)),
-            Self::Descending(t) => f.write_fmt(format_args!("desc({})", t)),
+            Self::Ascending(t) => f.write_fmt(format_args!("asc({t})")),
+            Self::Descending(t) => f.write_fmt(format_args!("desc({t})")),
         }
     }
 }

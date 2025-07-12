@@ -198,7 +198,7 @@ impl<'a> Chain<'a> {
             input_pipes,
             output_pipes,
         });
-        let name = format!("thread_{}", thread_id);
+        let name = format!("thread_{thread_id}");
         let module = self.module.get_or_new_module(&name);
         for (path, ty) in &self.customizer.custom_module_imports {
             module.import(path, ty);
@@ -645,7 +645,7 @@ impl<'a> Chain<'a> {
             for (path, ty) in &chain_customizer.custom_module_imports {
                 module.import(path, ty);
             }
-            let thread_module = format!("thread_{}", thread_id);
+            let thread_module = format!("thread_{thread_id}");
             module.import("super", &thread_module);
         };
         if let Some(first) = iter.next() {
@@ -913,7 +913,7 @@ impl<'a> Trace<'a> {
 impl Display for Trace<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (index, element) in self.elements.iter().enumerate() {
-            f.write_fmt(format_args!("{:4}: {}", index, element))?;
+            f.write_fmt(format_args!("{index:4}: {element}"))?;
         }
         Ok(())
     }

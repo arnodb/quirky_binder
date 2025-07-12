@@ -26,7 +26,7 @@ impl Debug {
             .with_trace_element(trace_element!(DEBUG_TRACE_NAME))?
             .pass_through(|builder, facts_proof| {
                 let def = builder.record_definition().borrow();
-                eprintln!("=== Filter {}:", name);
+                eprintln!("=== Filter {name}:");
                 for d in def.get_current_data() {
                     eprintln!("    {:?}", def.get_datum_definition(d).expect("datum"));
                 }

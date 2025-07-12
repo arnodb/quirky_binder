@@ -191,7 +191,7 @@ impl ModuleCode {
         let local = self.code.as_ref().map(|_| {
             let test_name = name.map_or_else(
                 || Cow::Borrowed("test"),
-                |name| format!("test_{}", name).into(),
+                |name| format!("test_{name}").into(),
             );
             let test_local = config.test.then(|| {
                 quote! {
@@ -267,13 +267,13 @@ pub fn parse_and_generate_glob_modules(
         path
     };
     let files = glob::glob(&absolute_pattern.to_string_lossy())
-        .map_err(|err| error_emitter.emit_error(format!("{}", err).into()))?;
+        .map_err(|err| error_emitter.emit_error(format!("{err}").into()))?;
     let mut tree = ModuleCode::default();
     let mut error = None;
     let mut file_count = 0;
     for file in files {
         let file =
-            file.map_err(|err| error_emitter.emit_error(format!("Glob error {}", err).into()))?;
+            file.map_err(|err| error_emitter.emit_error(format!("Glob error {err}").into()))?;
 
         let mut module_components = file
             .strip_prefix(&prefix)
@@ -331,7 +331,7 @@ pub fn parse_and_generate_glob_modules(
         file_count += 1;
     }
     if file_count == 0 {
-        let error = error_emitter.emit_error(format!("Pattern {} did not match", pattern).into());
+        let error = error_emitter.emit_error(format!("Pattern {pattern} did not match").into());
         return Err(error);
     }
     if let Some(err) = error {
