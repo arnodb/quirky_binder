@@ -3,7 +3,7 @@ include!(concat!(env!("OUT_DIR"), "/chain.rs"));
 pub mod tokenize {
     use std::collections::VecDeque;
 
-    use fallible_iterator::FallibleIterator;
+    use fallible_iterator::{from_fn, FallibleIterator};
 
     use crate::chain::streams::quirky_binder_main_0::read_input::{
         Record0 as RecordIn, Record1 as RecordOut, UnpackedRecord1 as UnpackedRecordOut,
@@ -14,7 +14,7 @@ pub mod tokenize {
         I: FallibleIterator<Item = RecordIn, Error = E>,
     {
         let mut buffer = VecDeque::<Box<str>>::new();
-        quirky_binder_support::iterator::from_fn(move || {
+        from_fn(move || {
             buffer.pop_front().map_or_else(
                 || loop {
                     let record_0 = if let Some(rec) = input.next()? {
