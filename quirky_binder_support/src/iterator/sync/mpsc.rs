@@ -1,23 +1,30 @@
-use std::sync::mpsc::{Receiver, RecvError};
+use std::sync::mpsc::{Receiver, RecvError, TryRecvError};
 
 use fallible_iterator::FallibleIterator;
 
 /// Receives records from a `Receiver`
 #[derive(new)]
-pub struct Receive<R, E> {
+pub struct Receive<R> {
     rx: Receiver<Option<R>>,
-    #[new(default)]
-    _e: std::marker::PhantomData<E>,
     #[new(default)]
     end_of_input: bool,
 }
 
-impl<R, E> FallibleIterator for Receive<R, E>
-where
-    E: From<RecvError>,
-{
+impl<R> Receive<R> {
+    pub fn try_next(&mut self) -> Result<Option<Option<R>>, RecvError> {
+        self.rx.try_recv().map_or_else(
+            |err| match err {
+                TryRecvError::Empty => Ok(None),
+                TryRecvError::Disconnected => Err(RecvError),
+            },
+            |r| Ok(Some(r)),
+        )
+    }
+}
+
+impl<R> FallibleIterator for Receive<R> {
     type Item = R;
-    type Error = E;
+    type Error = RecvError;
 
     fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
         if !self.end_of_input {
@@ -41,17 +48,8 @@ mod tests {
     fn should_stream_received_records() {
         use std::sync::mpsc::channel;
 
-        #[derive(Debug)]
-        struct Error(#[allow(dead_code)] String);
-
-        impl From<RecvError> for Error {
-            fn from(_: RecvError) -> Self {
-                Self("Receive error".to_string())
-            }
-        }
-
         let (tx, rx) = channel();
-        let mut stream = Receive::<_, Error>::new(rx);
+        let mut stream = Receive::new(rx);
         for i in 0..42 {
             tx.send(Some(i)).unwrap();
         }
@@ -68,17 +66,8 @@ mod tests {
     fn should_stream_received_records_from_sync_channel() {
         use std::sync::mpsc::sync_channel;
 
-        #[derive(Debug)]
-        struct Error(#[allow(dead_code)] String);
-
-        impl From<RecvError> for Error {
-            fn from(_: RecvError) -> Self {
-                Self("Receive error".to_string())
-            }
-        }
-
         let (tx, rx) = sync_channel(100);
-        let mut stream = Receive::<_, Error>::new(rx);
+        let mut stream = Receive::new(rx);
         for i in 0..42 {
             tx.send(Some(i)).unwrap();
         }

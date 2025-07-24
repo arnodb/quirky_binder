@@ -51,6 +51,7 @@ struct ChainThread {
     name: FullyQualifiedName,
     thread_type: ChainThreadType,
     main: Option<FullyQualifiedName>,
+    nodes_data: Vec<(FullyQualifiedName, usize, usize)>,
     input_streams: Box<[NodeStream]>,
     output_streams: Box<[NodeStream]>,
     input_pipes: Option<Box<[usize]>>,
@@ -77,8 +78,20 @@ impl ChainSourceThread {
         source_name: &NodeStreamSource,
         customizer: &ChainCustomizer,
         mutable: bool,
+        status_info: Option<(&Ident, usize)>,
     ) -> TokenStream {
         let mutable_input = mutable.then(|| quote! {mut});
+        let collect_statistics = status_info.map(|(node_status_ident, input_index)| {
+            quote! {
+                .inspect({
+                    let thread_status = thread_status.clone();
+                    move |_| {
+                        thread_status.lock().unwrap().#node_status_ident.input_read[#input_index] += 1;
+                        Ok(())
+                    }
+                })
+            }
+        });
         if !self.piped {
             let input = syn::parse_str::<syn::Path>(&format!(
                 "{}::{}",
@@ -86,7 +99,7 @@ impl ChainSourceThread {
             ))
             .expect("chain_module");
             quote! {
-                let #mutable_input input = #input(thread_control);
+                let #mutable_input input = #input(thread_control) #collect_statistics;
             }
         } else {
             let input = format_ident!("input_{}", self.stream_index);
@@ -94,8 +107,8 @@ impl ChainSourceThread {
             quote! {
                 let #mutable_input input = {
                     let rx = thread_control.#input.take().expect("input {stream_index}");
-                    quirky_binder_support::iterator::sync::mpsc::Receive::<_, #error_type>::new(rx)
-                };
+                    rx.into_fallible_iter().map_err(#error_type::from)
+                } #collect_statistics;
             }
         }
     }
@@ -188,11 +201,13 @@ impl<'a> Chain<'a> {
         } else {
             None
         };
+        let nodes_data = vec![(name.clone(), input_streams.len(), output_streams.len())];
         self.threads.push(ChainThread {
             id: thread_id,
             name,
             thread_type,
             main,
+            nodes_data,
             input_streams,
             output_streams,
             input_pipes,
@@ -237,7 +252,7 @@ impl<'a> Chain<'a> {
     pub fn get_thread_by_source(
         &mut self,
         input: &NodeStream,
-        new_thread_name: &FullyQualifiedName,
+        name: &FullyQualifiedName,
         output: Option<&NodeStream>,
     ) -> ChainSourceThread {
         let source_thread = self.get_source_thread(input.source());
@@ -245,12 +260,18 @@ impl<'a> Chain<'a> {
         let thread = &self.threads[thread_id];
         if let Some(output_pipes) = &thread.output_pipes {
             let input_pipe = output_pipes[source_thread.stream_index];
-            let streams = Box::new([thread.output_streams[source_thread.stream_index].clone()]);
+            let streams: Box<[NodeStream]> =
+                Box::new([thread.output_streams[source_thread.stream_index].clone()]);
+            let output_streams = if output.is_some() {
+                streams.clone()
+            } else {
+                Box::new([])
+            };
             let thread_id = self.new_thread(
-                new_thread_name.clone(),
+                name.clone(),
                 ChainThreadType::Regular,
-                streams.clone(),
                 streams,
+                output_streams,
                 Some(Box::new([input_pipe])),
                 true,
                 None,
@@ -264,11 +285,16 @@ impl<'a> Chain<'a> {
                 piped: true,
             }
         } else {
-            let thread = source_thread.clone();
-            if let Some(output) = output {
-                self.update_thread_single_stream(thread.thread_id, output);
-            }
+            let source_thread = source_thread.clone();
+            let thread = &mut self.threads[source_thread.thread_id];
+            assert!(!thread.nodes_data.iter().any(|(n, _, _)| n == name));
             thread
+                .nodes_data
+                .push((name.clone(), 1, if output.is_some() { 1 } else { 0 }));
+            if let Some(output) = output {
+                self.update_thread_single_stream(source_thread.thread_id, output);
+            }
+            source_thread
         }
     }
 
@@ -312,7 +338,7 @@ impl<'a> Chain<'a> {
             {
                 let error_type = self.customizer.error_type.to_full_name();
 
-                let input = source_thread.format_input(source, self.customizer, true);
+                let input = source_thread.format_input(source, self.customizer, true, None);
 
                 let pipe_def = quote! {
                     pub fn quirky_binder_pipe(mut thread_control: ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
@@ -423,7 +449,22 @@ impl<'a> Chain<'a> {
                     }
                 }),
             };
+            let nodes_statuses = thread.nodes_data.iter().enumerate().map(
+                |(node_index, (name, input_count, output_count))| {
+                    let ident = format_ident!("node_{node_index}");
+                    let doc = name.to_full_name().to_string();
+                    quote! {
+                        #[doc = #doc]
+                        pub #ident: NodeStatus<#input_count, #output_count>,
+                    }
+                },
+            );
             let struct_def = quote! {
+
+                #[derive(Default)]
+                pub struct ThreadStatus {
+                    #(#nodes_statuses)*
+                }
 
                 pub struct ThreadOuterControl {
                     #interrupt
@@ -436,8 +477,9 @@ impl<'a> Chain<'a> {
                 pub struct ThreadControl {
                     pub chain_configuration: Arc<ChainConfiguration>,
                     #interrupt
-                    #(pub #inputs: Option<Receiver<Option<#input_types>>>,)*
-                    #(pub #outputs: Option<SyncSender<Option<#output_types>>>,)*
+                    #(pub #inputs: Option<ThreadInput<#input_types>>,)*
+                    #(pub #outputs: Option<ThreadOutput<#output_types>>,)*
+                    pub status: Arc<Mutex<ThreadStatus>>,
                 }
 
                 impl ThreadControl {
@@ -448,16 +490,8 @@ impl<'a> Chain<'a> {
             let name = format!("thread_{}", thread.id);
             let module = self.module.get_module(&name).expect("thread module");
             module.import("std::sync", "Arc");
-            module.import(
-                "quirky_binder_support::chain::configuration",
-                "ChainConfiguration",
-            );
-            if !thread.input_streams.is_empty() {
-                module.import("std::sync::mpsc", "Receiver");
-            }
-            if thread.output_pipes.is_some() && !thread.output_streams.is_empty() {
-                module.import("std::sync::mpsc", "SyncSender");
-            }
+            module.import("std::sync", "Mutex");
+            module.import("quirky_binder_support::prelude", "*");
             module.fragment(struct_def.to_string());
         }
 
@@ -499,7 +533,7 @@ impl<'a> Chain<'a> {
                             input_pipes.iter().enumerate().map(|(index, pipe)| {
                                 let input = format_ident!("input_{}", index);
                                 let rx = format_ident!("rx_{}", pipe);
-                                quote! { #input: Some(#rx), }
+                                quote! { #input: Some(ThreadInput::new(#rx)), }
                             })
                         })
                         .into_iter()
@@ -511,7 +545,7 @@ impl<'a> Chain<'a> {
                             output_pipes.iter().enumerate().map(|(index, pipe)| {
                                 let output = format_ident!("output_{}", index);
                                 let tx = format_ident!("tx_{}", pipe);
-                                quote! { #output: Some(#tx), }
+                                quote! { #output: Some(ThreadOutput::new(#tx)), }
                             })
                         })
                         .into_iter()
@@ -526,6 +560,7 @@ impl<'a> Chain<'a> {
                         }
                     };
                     quote! {
+                        let thread_status = Arc::new(Mutex::new(#thread_module::ThreadStatus::default()));
                         let thread_outer_control = #thread_module::ThreadOuterControl {
                             #interrupt
                         };
@@ -534,6 +569,7 @@ impl<'a> Chain<'a> {
                             #interrupt_clone
                             #(#inputs)*
                             #(#outputs)*
+                            status: thread_status.clone(),
                         };
                     }
                 });
@@ -597,10 +633,8 @@ impl<'a> Chain<'a> {
                 });
 
             self.module.import("std::sync", "Arc");
-            self.module.import(
-                "quirky_binder_support::chain::configuration",
-                "ChainConfiguration",
-            );
+            self.module.import("std::sync", "Mutex");
+            self.module.import("quirky_binder_support::prelude", "*");
 
             let main_attrs = if !self.customizer.main_attrs.is_empty() {
                 let attrs = &self
@@ -685,15 +719,42 @@ impl<'a> Chain<'a> {
         let thread_module = format_ident!("thread_{}", thread.thread_id);
         let error_type = self.customizer.error_type.to_full_name();
 
-        let input = thread.format_input(input.source(), self.customizer, false);
+        let node_status_ident = self.node_status_ident(thread.thread_id, name);
+
+        let input = thread.format_input(
+            input.source(),
+            self.customizer,
+            false,
+            Some((&node_status_ident, 0)),
+        );
 
         let fn_def = quote! {
-              pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
-                  #input
-                  {
-                      #inline_body
-                  }
-              }
+            pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
+                let thread_status = thread_control.status.clone();
+
+                #input
+
+                let output = {
+                    #inline_body
+                };
+
+                output
+                    .inspect({
+                        let thread_status = thread_status.clone();
+                        move |_| {
+                            thread_status.lock().unwrap().#node_status_ident.output_written[0] += 1;
+                            Ok(())
+                        }
+                    })
+                    .map_err({
+                        use quirky_binder_support::prelude::*;
+                        let thread_status = thread_status.clone();
+                        move |err: #error_type| {
+                            thread_status.lock().unwrap().#node_status_ident.state = NodeState::Error(err.to_string());
+                            err
+                        }
+                    })
+            }
         };
 
         let mut import_scope = ImportScope::default();
@@ -722,15 +783,34 @@ impl<'a> Chain<'a> {
         let thread_module = format_ident!("thread_{}", thread_id);
         let error_type = self.customizer.error_type.to_full_name();
 
+        let node_status_ident = self.node_status_ident(thread_id, name);
+
         let fn_def = quote! {
             pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
-                #thread_body
+                let thread_status = thread_control.status.clone();
+
+                #[allow(unused_mut)]
+                let mut thread_body = {
+                    #thread_body
+                };
+                move || {
+                    thread_body()
+                        .map_err({
+                            use quirky_binder_support::prelude::*;
+                            let thread_status = thread_status.clone();
+                            move |err: #error_type| {
+                                thread_status.lock().unwrap().#node_status_ident.state = NodeState::Error(err.to_string());
+                                err
+                            }
+                        })
+                }
             }
         };
 
         let mut import_scope = ImportScope::default();
         if !node.inputs().is_empty() {
             import_scope.add_import("fallible_iterator", "FallibleIterator");
+            import_scope.add_import("fallible_iterator", "IntoFallibleIterator");
         }
 
         let module =
@@ -831,6 +911,15 @@ impl<'a> Chain<'a> {
         };
 
         self.implement_inline_node(node, input, output, &inline_body);
+    }
+
+    pub fn node_status_ident(&self, thread_id: usize, node_name: &FullyQualifiedName) -> Ident {
+        let node_index = self.threads[thread_id]
+            .nodes_data
+            .iter()
+            .rposition(|(n, _, _)| n == node_name)
+            .unwrap();
+        format_ident!("node_{node_index}")
     }
 }
 

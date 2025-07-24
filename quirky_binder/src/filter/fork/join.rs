@@ -190,10 +190,10 @@ impl DynNode for Join {
                     let secondary_record = secondary_record.take().expect("secondary_record");
                     let #secondary_unpacked_record{ #joined_fields .. } = secondary_record.unpack();
                     let #record_and_unpacked_out { record } = #record_and_unpacked_out::from((primary_record, #unpacked_record_in { #joined_fields }));
-                    tx.send(Some(record))?;
+                    output.send(Some(record))?;
                 } else {
                     let #record_and_unpacked_out { record } = #record_and_unpacked_out::from((primary_record, #unpacked_record_in { #joined_fields_defaults }));
-                    tx.send(Some(record))?;
+                    output.send(Some(record))?;
                 }
             }
         } else {
@@ -201,7 +201,7 @@ impl DynNode for Join {
                 if equal {
                     secondary_record.take().expect("secondary_record");
                 }
-                tx.send(Some(primary_record))?;
+                output.send(Some(primary_record))?;
             }
         };
 
@@ -209,16 +209,16 @@ impl DynNode for Join {
             move || {
                 use std::cmp::Ordering;
 
-                let primary_rx = thread_control.input_0.take().expect("primary input");
-                let secondary_rx = thread_control.input_1.take().expect("secondary input");
-                let tx = thread_control.output_0.take().expect("output");
+                let mut primary_input = thread_control.input_0.take().expect("primary input").into_fallible_iter();
+                let mut secondary_input = thread_control.input_1.take().expect("secondary input").into_fallible_iter();
+                let output = thread_control.output_0.take().expect("output");
 
                 let cmp = #cmp;
 
                 let mut secondary_finished = false;
                 let mut secondary_record = None;
 
-                while let Some(primary_record) = primary_rx.recv()? {
+                while let Some(primary_record) = primary_input.next()? {
                     let equal = loop {
                         if secondary_finished {
                             break false;
@@ -236,7 +236,7 @@ impl DynNode for Join {
                                 }
                             }
                         }
-                        secondary_record = secondary_rx.recv()?;
+                        secondary_record = secondary_input.next()?;
                         if secondary_record.is_none() {
                             secondary_finished = true;
                         }
@@ -245,11 +245,11 @@ impl DynNode for Join {
                 }
 
                 if !secondary_finished {
-                    while secondary_rx.recv()?.is_some() {}
+                    while secondary_input.next()?.is_some() {}
                     // TODO log
                 }
 
-                tx.send(None)?;
+                output.send(None)?;
                 Ok(())
             }
         };

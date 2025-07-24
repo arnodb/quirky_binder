@@ -64,8 +64,12 @@ impl<const N: usize> DynNode for FunctionTerminate<N> {
             let thread =
                 chain.get_thread_by_source(&self.inputs[0], &self.name, self.outputs.none());
 
-            let input =
-                thread.format_input(self.inputs[0].source(), graph.chain_customizer(), true);
+            let input = thread.format_input(
+                self.inputs[0].source(),
+                graph.chain_customizer(),
+                true,
+                Some((&chain.node_status_ident(thread.thread_id, &self.name), 0)),
+            );
 
             (thread.thread_id, vec![input])
         } else {
@@ -75,7 +79,7 @@ impl<const N: usize> DynNode for FunctionTerminate<N> {
                 .map(|input_index| {
                     let input = format_ident!("input_{}", input_index);
                     let expect = format!("input {input_index}");
-                    quote! { let #input = thread_control.#input.take().expect(#expect); }
+                    quote! { let #input = thread_control.#input.take().expect(#expect).into_fallible_iter(); }
                 })
                 .collect::<Vec<_>>();
 

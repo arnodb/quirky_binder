@@ -71,8 +71,12 @@ impl DynNode for WriteCsv {
             let thread =
                 chain.get_thread_by_source(&self.inputs[0], &self.name, self.outputs.none());
 
-            let input =
-                thread.format_input(self.inputs[0].source(), graph.chain_customizer(), true);
+            let input = thread.format_input(
+                self.inputs[0].source(),
+                graph.chain_customizer(),
+                true,
+                Some((&chain.node_status_ident(thread.thread_id, &self.name), 0)),
+            );
 
             (thread.thread_id, vec![input])
         } else {

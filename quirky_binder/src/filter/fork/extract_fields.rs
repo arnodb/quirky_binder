@@ -121,10 +121,10 @@ impl DynNode for ExtractFields {
 
         let thread_body = quote! {
             move || {
-                let input_0 = thread_control.input_0.take().expect("input 0");
+                let mut input_0 = thread_control.input_0.take().expect("input 0").into_fallible_iter();
                 let output_0 = thread_control.output_0.take().expect("output 0");
                 let output_1 = thread_control.output_1.take().expect("output 1");
-                while let Some(record) = input_0.recv()? {
+                while let Some(record) = input_0.next()? {
                     #(#datum_clones)*
                     let record_1 = #output_record_1::new(
                         #output_unpacked_record_1 { #(#fields),* }

@@ -60,9 +60,9 @@ use quirky_binder::{
             let mut input_3 = Some(input_3);
             while input_0.is_some() || input_1.is_some() || input_2.is_some() || input_3.is_some() {
                 let mut read = 0;
-                if let Some(input) = &input_0 {
+                if let Some(input) = &mut input_0 {
                     let mut closed = false;
-                    for record in input.try_iter() {
+                    while let Some(record) = input.try_next()? {
                         if let Some(record) = record {
                             println!("word_{} [label=\"{}\"]", record.anchor(), record.token());
                             read += 1;
@@ -74,9 +74,9 @@ use quirky_binder::{
                         input_0 = None;
                     }
                 }
-                if let Some(input) = &input_1 {
+                if let Some(input) = &mut input_1 {
                     let mut closed = false;
-                    for record in input.try_iter() {
+                    while let Some(record) = input.try_next()? {
                         if let Some(record) = record {
                             println!("rev_word_{} [label=\"{}\"]", record.anchor(), record.token());
                             println!("word_{} -> rev_word_{}", record.anchor(), record.anchor());
@@ -89,9 +89,9 @@ use quirky_binder::{
                         input_1 = None;
                     }
                 }
-                if let Some(input) = &input_2 {
+                if let Some(input) = &mut input_2 {
                     let mut closed = false;
-                    for record in input.try_iter() {
+                    while let Some(record) = input.try_next()? {
                         if let Some(record) = record {
                             println!("ci_word_{} [label=\"{}\"]", record.ci_anchor(), record.token());
                             for ref_record in record.ci_refs() {
@@ -106,9 +106,9 @@ use quirky_binder::{
                         input_2 = None;
                     }
                 }
-                if let Some(input) = &input_3 {
+                if let Some(input) = &mut input_3 {
                     let mut closed = false;
-                    for record in input.try_iter() {
+                    while let Some(record) = input.try_next()? {
                         if let Some(record) = record {
                             println!("rev_ci_word_{} [label=\"{}\"]", record.ci_anchor(), record.token());
                             println!("ci_word_{} -> rev_ci_word_{}", record.ci_anchor(), record.ci_anchor());
