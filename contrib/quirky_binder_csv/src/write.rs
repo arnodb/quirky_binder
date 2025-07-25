@@ -71,11 +71,12 @@ impl DynNode for WriteCsv {
             let thread =
                 chain.get_thread_by_source(&self.inputs[0], &self.name, self.outputs.none());
 
-            let input = thread.format_input(
+            let input = chain.format_source_thread_input(
+                &thread,
                 self.inputs[0].source(),
-                graph.chain_customizer(),
                 true,
-                Some((&chain.node_status_ident(thread.thread_id, &self.name), 0)),
+                &self.name,
+                true,
             );
 
             (thread.thread_id, vec![input])
@@ -84,9 +85,9 @@ impl DynNode for WriteCsv {
 
             let inputs = (0..self.inputs.len())
                 .map(|input_index| {
-                    let input = format_ident!("input_{}", input_index);
-                    let expect = format!("input {input_index}");
-                    quote! { let #input = thread_control.#input.take().expect(#expect); }
+                    let input_name = format_ident!("input_{}", input_index);
+                    let input = chain.format_thread_input(thread_id, &self.name, input_index, true);
+                    quote! { let #input_name = #input; }
                 })
                 .collect::<Vec<_>>();
 

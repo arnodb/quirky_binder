@@ -153,6 +153,9 @@ impl DynNode for Join {
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.pipe_inputs(&self.name, &self.inputs, &self.outputs);
 
+        let primary_input = chain.format_thread_input(thread_id, &self.name, 0, true);
+        let secondary_input = chain.format_thread_input(thread_id, &self.name, 1, true);
+
         let primary_input_def = chain.stream_definition_fragments(&self.inputs[0]);
         let secondary_input_def = chain.stream_definition_fragments(&self.inputs[1]);
         let output_def = chain.stream_definition_fragments(self.outputs.single());
@@ -206,11 +209,12 @@ impl DynNode for Join {
         };
 
         let thread_body = quote! {
+            let thread_status = thread_status.clone();
             move || {
                 use std::cmp::Ordering;
 
-                let mut primary_input = thread_control.input_0.take().expect("primary input").into_fallible_iter();
-                let mut secondary_input = thread_control.input_1.take().expect("secondary input").into_fallible_iter();
+                let mut primary_input = #primary_input;
+                let mut secondary_input = #secondary_input;
                 let output = thread_control.output_0.take().expect("output");
 
                 let cmp = #cmp;

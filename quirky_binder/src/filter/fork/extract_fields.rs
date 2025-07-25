@@ -99,6 +99,8 @@ impl DynNode for ExtractFields {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.pipe_inputs(&self.name, &self.inputs, &self.outputs);
 
+        let input_0 = chain.format_thread_input(thread_id, &self.name, 0, true);
+
         let def_output_1 = chain.stream_definition_fragments(&self.outputs[1]);
 
         let record_definition = &graph.record_definitions()[self.outputs[1].record_type()];
@@ -120,8 +122,9 @@ impl DynNode for ExtractFields {
         });
 
         let thread_body = quote! {
+            let thread_status = thread_status.clone();
             move || {
-                let mut input_0 = thread_control.input_0.take().expect("input 0").into_fallible_iter();
+                let mut input_0 = #input_0;
                 let output_0 = thread_control.output_0.take().expect("output 0");
                 let output_1 = thread_control.output_1.take().expect("output 1");
                 while let Some(record) = input_0.next()? {

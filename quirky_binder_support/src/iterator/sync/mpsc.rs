@@ -2,24 +2,14 @@ use std::sync::mpsc::{Receiver, RecvError, TryRecvError};
 
 use fallible_iterator::FallibleIterator;
 
+use crate::iterator::try_fallible::TryFallibleIterator;
+
 /// Receives records from a `Receiver`
 #[derive(new)]
 pub struct Receive<R> {
     rx: Receiver<Option<R>>,
     #[new(default)]
     end_of_input: bool,
-}
-
-impl<R> Receive<R> {
-    pub fn try_next(&mut self) -> Result<Option<Option<R>>, RecvError> {
-        self.rx.try_recv().map_or_else(
-            |err| match err {
-                TryRecvError::Empty => Ok(None),
-                TryRecvError::Disconnected => Err(RecvError),
-            },
-            |r| Ok(Some(r)),
-        )
-    }
 }
 
 impl<R> FallibleIterator for Receive<R> {
@@ -33,6 +23,22 @@ impl<R> FallibleIterator for Receive<R> {
                 self.end_of_input = true
             };
             Ok(res)
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+impl<R> TryFallibleIterator for Receive<R> {
+    fn try_next(&mut self) -> Result<Option<Option<Self::Item>>, Self::Error> {
+        if !self.end_of_input {
+            self.rx.try_recv().map_or_else(
+                |err| match err {
+                    TryRecvError::Empty => Ok(None),
+                    TryRecvError::Disconnected => Err(RecvError),
+                },
+                |r| Ok(Some(r)),
+            )
         } else {
             Ok(None)
         }

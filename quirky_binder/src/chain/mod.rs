@@ -72,48 +72,6 @@ pub struct ChainSourceThread {
     pub piped: bool,
 }
 
-impl ChainSourceThread {
-    pub fn format_input(
-        &self,
-        source_name: &NodeStreamSource,
-        customizer: &ChainCustomizer,
-        mutable: bool,
-        status_info: Option<(&Ident, usize)>,
-    ) -> TokenStream {
-        let mutable_input = mutable.then(|| quote! {mut});
-        let collect_statistics = status_info.map(|(node_status_ident, input_index)| {
-            quote! {
-                .inspect({
-                    let thread_status = thread_status.clone();
-                    move |_| {
-                        thread_status.lock().unwrap().#node_status_ident.input_read[#input_index] += 1;
-                        Ok(())
-                    }
-                })
-            }
-        });
-        if !self.piped {
-            let input = syn::parse_str::<syn::Path>(&format!(
-                "{}::{}",
-                customizer.module_name, source_name
-            ))
-            .expect("chain_module");
-            quote! {
-                let #mutable_input input = #input(thread_control) #collect_statistics;
-            }
-        } else {
-            let input = format_ident!("input_{}", self.stream_index);
-            let error_type = customizer.error_type.to_full_name();
-            quote! {
-                let #mutable_input input = {
-                    let rx = thread_control.#input.take().expect("input {stream_index}");
-                    rx.into_fallible_iter().map_err(#error_type::from)
-                } #collect_statistics;
-            }
-        }
-    }
-}
-
 #[derive(new)]
 pub struct Chain<'a> {
     customizer: &'a ChainCustomizer,
@@ -320,46 +278,50 @@ impl<'a> Chain<'a> {
         pipe
     }
 
-    fn pipe_single_thread(&mut self, source: &NodeStreamSource) -> usize {
+    fn pipe_single_thread(
+        &mut self,
+        source: &NodeStreamSource,
+        node_name: &FullyQualifiedName,
+    ) -> usize {
         let source_thread = self.get_source_thread(source).clone();
         let thread = &mut self.threads[source_thread.thread_id];
         if let Some(output_pipes) = &thread.output_pipes {
             return output_pipes[source_thread.stream_index];
         }
+
+        assert_eq!(thread.output_streams.len(), 1);
+
+        let error_type = self.customizer.error_type.to_full_name();
+
+        let input = self.format_source_thread_input(&source_thread, source, true, node_name, false);
+
+        let pipe_def = quote! {
+            pub fn quirky_binder_pipe(mut thread_control: ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
+                move || {
+                    let tx = thread_control.output_0.take().expect("output 0");
+                    #input
+                    while let Some(record) = input.next()? {
+                        tx.send(Some(record))?;
+                    }
+                    tx.send(None)?;
+                    Ok(())
+                }
+            }
+        };
+
         let pipe = self.new_pipe();
-        let thread = &mut self.threads[source_thread.thread_id];
         let name = format!("thread_{}", source_thread.thread_id);
         let module = self.module.get_module(&name).expect("thread module");
+        module.fragment(pipe_def.to_string());
+
+        let thread = &mut self.threads[source_thread.thread_id];
+        thread.output_pipes = Some(Box::new([pipe]));
+        thread.main = Some(FullyQualifiedName::new(name).sub("quirky_binder_pipe"));
+
         let mut import_scope = ImportScope::default();
-        if thread.output_pipes.is_none() {
-            assert_eq!(thread.output_streams.len(), 1);
-            import_scope.add_import("fallible_iterator", "FallibleIterator");
-
-            {
-                let error_type = self.customizer.error_type.to_full_name();
-
-                let input = source_thread.format_input(source, self.customizer, true, None);
-
-                let pipe_def = quote! {
-                    pub fn quirky_binder_pipe(mut thread_control: ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
-                        move || {
-                            let tx = thread_control.output_0.take().expect("output 0");
-                            #input
-                            while let Some(record) = input.next()? {
-                                tx.send(Some(record))?;
-                            }
-                            tx.send(None)?;
-                            Ok(())
-                        }
-                    }
-                };
-                module.fragment(pipe_def.to_string());
-            }
-
-            thread.output_pipes = Some(Box::new([pipe]));
-            thread.main = Some(FullyQualifiedName::new(name).sub("quirky_binder_pipe"));
-        }
+        import_scope.add_import("fallible_iterator", "FallibleIterator");
         import_scope.import(module);
+
         pipe
     }
 
@@ -371,7 +333,7 @@ impl<'a> Chain<'a> {
     ) -> usize {
         let input_pipes = inputs
             .iter()
-            .map(|input| self.pipe_single_thread(input.source()))
+            .map(|input| self.pipe_single_thread(input.source(), name))
             .collect::<Vec<usize>>();
         self.new_thread(
             name.clone(),
@@ -721,12 +683,7 @@ impl<'a> Chain<'a> {
 
         let node_status_ident = self.node_status_ident(thread.thread_id, name);
 
-        let input = thread.format_input(
-            input.source(),
-            self.customizer,
-            false,
-            Some((&node_status_ident, 0)),
-        );
+        let input = self.format_source_thread_input(&thread, input.source(), false, name, true);
 
         let fn_def = quote! {
             pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
@@ -742,7 +699,11 @@ impl<'a> Chain<'a> {
                     .inspect({
                         let thread_status = thread_status.clone();
                         move |_| {
-                            thread_status.lock().unwrap().#node_status_ident.output_written[0] += 1;
+                            thread_status
+                                .lock()
+                                .unwrap()
+                                .#node_status_ident
+                                .output_written[0] += 1;
                             Ok(())
                         }
                     })
@@ -750,7 +711,11 @@ impl<'a> Chain<'a> {
                         use quirky_binder_support::prelude::*;
                         let thread_status = thread_status.clone();
                         move |err: #error_type| {
-                            thread_status.lock().unwrap().#node_status_ident.state = NodeState::Error(err.to_string());
+                            thread_status
+                                .lock()
+                                .unwrap()
+                                .#node_status_ident
+                                .state = NodeState::Error(err.to_string());
                             err
                         }
                     })
@@ -799,7 +764,11 @@ impl<'a> Chain<'a> {
                             use quirky_binder_support::prelude::*;
                             let thread_status = thread_status.clone();
                             move |err: #error_type| {
-                                thread_status.lock().unwrap().#node_status_ident.state = NodeState::Error(err.to_string());
+                                thread_status
+                                    .lock()
+                                    .unwrap()
+                                    .#node_status_ident
+                                    .state = NodeState::Error(err.to_string());
                                 err
                             }
                         })
@@ -810,7 +779,7 @@ impl<'a> Chain<'a> {
         let mut import_scope = ImportScope::default();
         if !node.inputs().is_empty() {
             import_scope.add_import("fallible_iterator", "FallibleIterator");
-            import_scope.add_import("fallible_iterator", "IntoFallibleIterator");
+            import_scope.add_import("quirky_binder_support::prelude", "*");
         }
 
         let module =
@@ -913,13 +882,115 @@ impl<'a> Chain<'a> {
         self.implement_inline_node(node, input, output, &inline_body);
     }
 
-    pub fn node_status_ident(&self, thread_id: usize, node_name: &FullyQualifiedName) -> Ident {
+    fn node_status_ident(&self, thread_id: usize, node_name: &FullyQualifiedName) -> Ident {
         let node_index = self.threads[thread_id]
             .nodes_data
             .iter()
             .rposition(|(n, _, _)| n == node_name)
             .unwrap();
         format_ident!("node_{node_index}")
+    }
+
+    pub fn format_inline_input(
+        &self,
+        thread_id: usize,
+        source_name: &NodeStreamSource,
+        node_name: &FullyQualifiedName,
+        stream_index: usize,
+        with_statistics: bool,
+    ) -> TokenStream {
+        let collect_statistics = with_statistics.then(|| {
+            let node_status_ident = self.node_status_ident(thread_id, node_name);
+            quote! {
+                .inspect({
+                    let thread_status = thread_status.clone();
+                    move |_| {
+                        thread_status
+                            .lock()
+                            .unwrap()
+                            .#node_status_ident
+                            .input_read[#stream_index] += 1;
+                        Ok(())
+                    }
+                })
+            }
+        });
+        let input = syn::parse_str::<syn::Path>(&format!(
+            "{}::{}",
+            self.customizer.module_name, source_name
+        ))
+        .expect("chain_module");
+        quote! {
+            #input(thread_control) #collect_statistics
+        }
+    }
+
+    pub fn format_thread_input(
+        &self,
+        thread_id: usize,
+        node_name: &FullyQualifiedName,
+        stream_index: usize,
+        with_statistics: bool,
+    ) -> TokenStream {
+        let input = format_ident!("input_{}", stream_index);
+        let error_type = self.customizer.error_type.to_full_name();
+        let collect_statistics = with_statistics.then(|| {
+            let node_status_ident = self.node_status_ident(thread_id, node_name);
+            quote! {
+                .try_inspect({
+                    let thread_status = thread_status.clone();
+                    move |_| {
+                        thread_status
+                            .lock()
+                            .unwrap()
+                            .#node_status_ident
+                            .input_read[#stream_index] += 1;
+                        Ok(())
+                    }
+                })
+            }
+        });
+        quote! {
+            thread_control
+                .#input
+                .take()
+                .unwrap_or_else(|| panic!("input {}", #stream_index))
+                .into_try_fallible_iter()
+                .try_map_err(#error_type::from)
+                #collect_statistics
+        }
+    }
+    pub fn format_source_thread_input(
+        &self,
+        source_thread: &ChainSourceThread,
+        source_name: &NodeStreamSource,
+        mutable: bool,
+        node_name: &FullyQualifiedName,
+        with_statistics: bool,
+    ) -> TokenStream {
+        let mutable_input = mutable.then(|| quote! {mut});
+        let stream_index = source_thread.stream_index;
+        // The function is only called in an inline node context
+        assert_eq!(stream_index, 0);
+        let input = if !source_thread.piped {
+            self.format_inline_input(
+                source_thread.thread_id,
+                source_name,
+                node_name,
+                stream_index,
+                with_statistics,
+            )
+        } else {
+            self.format_thread_input(
+                source_thread.thread_id,
+                node_name,
+                source_thread.stream_index,
+                with_statistics,
+            )
+        };
+        quote! {
+            let #mutable_input input = #input;
+        }
     }
 }
 
