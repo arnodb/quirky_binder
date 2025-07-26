@@ -5,7 +5,7 @@ pub use crate::{
     chain::{
         error::{ChainError, ChainErrorWithTrace},
         Chain, ChainCustomizer, ChainResult, ChainResultWithTrace, ChainThreadType, ImportScope,
-        Trace, TraceElement, WithTraceElement,
+        NodeStatisticsOption, Trace, TraceElement, WithTraceElement,
     },
     graph::{
         builder::{

@@ -68,8 +68,9 @@ impl<const N: usize> DynNode for FunctionTerminate<N> {
                 &thread,
                 self.inputs[0].source(),
                 true,
-                &self.name,
-                true,
+                NodeStatisticsOption::WithStatistics {
+                    node_name: &self.name,
+                },
             );
 
             (thread.thread_id, vec![input])
@@ -79,7 +80,13 @@ impl<const N: usize> DynNode for FunctionTerminate<N> {
             let inputs = (0..self.inputs.len())
                 .map(|input_index| {
                     let input_name = format_ident!("input_{}", input_index);
-                    let input = chain.format_thread_input(thread_id, &self.name, input_index, true);
+                    let input = chain.format_thread_input(
+                        thread_id,
+                        input_index,
+                        NodeStatisticsOption::WithStatistics {
+                            node_name: &self.name,
+                        },
+                    );
                     quote! { let #input_name = #input; }
                 })
                 .collect::<Vec<_>>();

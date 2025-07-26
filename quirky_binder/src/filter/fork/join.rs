@@ -153,8 +153,20 @@ impl DynNode for Join {
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.pipe_inputs(&self.name, &self.inputs, &self.outputs);
 
-        let primary_input = chain.format_thread_input(thread_id, &self.name, 0, true);
-        let secondary_input = chain.format_thread_input(thread_id, &self.name, 1, true);
+        let primary_input = chain.format_thread_input(
+            thread_id,
+            0,
+            NodeStatisticsOption::WithStatistics {
+                node_name: &self.name,
+            },
+        );
+        let secondary_input = chain.format_thread_input(
+            thread_id,
+            1,
+            NodeStatisticsOption::WithStatistics {
+                node_name: &self.name,
+            },
+        );
 
         let primary_input_def = chain.stream_definition_fragments(&self.inputs[0]);
         let secondary_input_def = chain.stream_definition_fragments(&self.inputs[1]);

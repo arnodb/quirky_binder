@@ -278,11 +278,7 @@ impl<'a> Chain<'a> {
         pipe
     }
 
-    fn pipe_single_thread(
-        &mut self,
-        source: &NodeStreamSource,
-        node_name: &FullyQualifiedName,
-    ) -> usize {
+    fn pipe_single_thread(&mut self, source: &NodeStreamSource) -> usize {
         let source_thread = self.get_source_thread(source).clone();
         let thread = &mut self.threads[source_thread.thread_id];
         if let Some(output_pipes) = &thread.output_pipes {
@@ -293,7 +289,12 @@ impl<'a> Chain<'a> {
 
         let error_type = self.customizer.error_type.to_full_name();
 
-        let input = self.format_source_thread_input(&source_thread, source, true, node_name, false);
+        let input = self.format_source_thread_input(
+            &source_thread,
+            source,
+            true,
+            NodeStatisticsOption::WithoutStatistics,
+        );
 
         let pipe_def = quote! {
             pub fn quirky_binder_pipe(mut thread_control: ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
@@ -333,7 +334,7 @@ impl<'a> Chain<'a> {
     ) -> usize {
         let input_pipes = inputs
             .iter()
-            .map(|input| self.pipe_single_thread(input.source(), name))
+            .map(|input| self.pipe_single_thread(input.source()))
             .collect::<Vec<usize>>();
         self.new_thread(
             name.clone(),
@@ -683,7 +684,12 @@ impl<'a> Chain<'a> {
 
         let node_status_ident = self.node_status_ident(thread.thread_id, name);
 
-        let input = self.format_source_thread_input(&thread, input.source(), false, name, true);
+        let input = self.format_source_thread_input(
+            &thread,
+            input.source(),
+            false,
+            NodeStatisticsOption::WithStatistics { node_name: name },
+        );
 
         let fn_def = quote! {
             pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
@@ -895,26 +901,28 @@ impl<'a> Chain<'a> {
         &self,
         thread_id: usize,
         source_name: &NodeStreamSource,
-        node_name: &FullyQualifiedName,
         stream_index: usize,
-        with_statistics: bool,
+        statistics_option: NodeStatisticsOption,
     ) -> TokenStream {
-        let collect_statistics = with_statistics.then(|| {
-            let node_status_ident = self.node_status_ident(thread_id, node_name);
-            quote! {
-                .inspect({
-                    let thread_status = thread_status.clone();
-                    move |_| {
-                        thread_status
-                            .lock()
-                            .unwrap()
-                            .#node_status_ident
-                            .input_read[#stream_index] += 1;
-                        Ok(())
-                    }
+        let collect_statistics = match statistics_option {
+            NodeStatisticsOption::WithStatistics { node_name } => {
+                let node_status_ident = self.node_status_ident(thread_id, node_name);
+                Some(quote! {
+                    .inspect({
+                        let thread_status = thread_status.clone();
+                        move |_| {
+                            thread_status
+                                .lock()
+                                .unwrap()
+                                .#node_status_ident
+                                .input_read[#stream_index] += 1;
+                            Ok(())
+                        }
+                    })
                 })
             }
-        });
+            NodeStatisticsOption::WithoutStatistics => None,
+        };
         let input = syn::parse_str::<syn::Path>(&format!(
             "{}::{}",
             self.customizer.module_name, source_name
@@ -928,28 +936,30 @@ impl<'a> Chain<'a> {
     pub fn format_thread_input(
         &self,
         thread_id: usize,
-        node_name: &FullyQualifiedName,
         stream_index: usize,
-        with_statistics: bool,
+        statistics_option: NodeStatisticsOption,
     ) -> TokenStream {
         let input = format_ident!("input_{}", stream_index);
         let error_type = self.customizer.error_type.to_full_name();
-        let collect_statistics = with_statistics.then(|| {
-            let node_status_ident = self.node_status_ident(thread_id, node_name);
-            quote! {
-                .try_inspect({
-                    let thread_status = thread_status.clone();
-                    move |_| {
-                        thread_status
-                            .lock()
-                            .unwrap()
-                            .#node_status_ident
-                            .input_read[#stream_index] += 1;
-                        Ok(())
-                    }
+        let collect_statistics = match statistics_option {
+            NodeStatisticsOption::WithStatistics { node_name } => {
+                let node_status_ident = self.node_status_ident(thread_id, node_name);
+                Some(quote! {
+                    .try_inspect({
+                        let thread_status = thread_status.clone();
+                        move |_| {
+                            thread_status
+                                .lock()
+                                .unwrap()
+                                .#node_status_ident
+                                .input_read[#stream_index] += 1;
+                            Ok(())
+                        }
+                    })
                 })
             }
-        });
+            NodeStatisticsOption::WithoutStatistics => None,
+        };
         quote! {
             thread_control
                 .#input
@@ -965,8 +975,7 @@ impl<'a> Chain<'a> {
         source_thread: &ChainSourceThread,
         source_name: &NodeStreamSource,
         mutable: bool,
-        node_name: &FullyQualifiedName,
-        with_statistics: bool,
+        statistics_option: NodeStatisticsOption,
     ) -> TokenStream {
         let mutable_input = mutable.then(|| quote! {mut});
         let stream_index = source_thread.stream_index;
@@ -976,16 +985,14 @@ impl<'a> Chain<'a> {
             self.format_inline_input(
                 source_thread.thread_id,
                 source_name,
-                node_name,
                 stream_index,
-                with_statistics,
+                statistics_option,
             )
         } else {
             self.format_thread_input(
                 source_thread.thread_id,
-                node_name,
                 source_thread.stream_index,
-                with_statistics,
+                statistics_option,
             )
         };
         quote! {
@@ -1124,4 +1131,9 @@ macro_rules! trace_element {
             .to_owned()
         }
     };
+}
+
+pub enum NodeStatisticsOption<'a> {
+    WithStatistics { node_name: &'a FullyQualifiedName },
+    WithoutStatistics,
 }

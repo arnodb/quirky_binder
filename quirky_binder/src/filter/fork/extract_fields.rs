@@ -99,7 +99,13 @@ impl DynNode for ExtractFields {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let thread_id = chain.pipe_inputs(&self.name, &self.inputs, &self.outputs);
 
-        let input_0 = chain.format_thread_input(thread_id, &self.name, 0, true);
+        let input_0 = chain.format_thread_input(
+            thread_id,
+            0,
+            NodeStatisticsOption::WithStatistics {
+                node_name: &self.name,
+            },
+        );
 
         let def_output_1 = chain.stream_definition_fragments(&self.outputs[1]);
 
