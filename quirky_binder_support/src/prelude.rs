@@ -3,5 +3,5 @@ pub use crate::{
     input::ThreadInput,
     iterator::try_fallible::TryFallibleIterator,
     output::ThreadOutput,
-    status::{NodeState, NodeStatus},
+    status::{DynThreadStatus, NodeState, NodeStatus, NodeStatusItem},
 };

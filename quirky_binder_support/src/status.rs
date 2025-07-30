@@ -1,4 +1,5 @@
 /// Node state
+#[derive(Debug)]
 pub enum NodeState {
     /// Everything is fine
     Good,
@@ -7,6 +8,7 @@ pub enum NodeState {
 }
 
 /// Node status container
+#[derive(Debug)]
 pub struct NodeStatus<const I: usize, const O: usize> {
     /// The node state
     pub state: NodeState,
@@ -24,4 +26,18 @@ impl<const I: usize, const O: usize> Default for NodeStatus<I, O> {
             output_written: [0; O],
         }
     }
+}
+
+#[derive(Debug)]
+/// Item returned by [`DynThreadStatus::node_statuses`].
+pub struct NodeStatusItem<'a> {
+    pub node_name: &'a str,
+    pub state: &'a NodeState,
+    pub input_read: &'a [usize],
+    pub output_written: &'a [usize],
+}
+
+/// Interface to access multi-node thread statuses.
+pub trait DynThreadStatus: Send {
+    fn node_statuses(&self) -> Box<dyn Iterator<Item = NodeStatusItem> + '_>;
 }

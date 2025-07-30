@@ -25,5 +25,6 @@ fn main() {
         .variables
         .insert("root".to_owned(), root);
 
-    chain::main(chain_configuration).unwrap();
+    let (_, join) = chain::main(chain_configuration).unwrap();
+    join.join_all().unwrap();
 }

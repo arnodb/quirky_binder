@@ -381,16 +381,6 @@ impl<'a> Chain<'a> {
                     pub interrupt: std::sync::Arc<(std::sync::Mutex<bool>, std::sync::Condvar)>,
                 }),
             };
-            let outer_interrupt_impl = match thread.thread_type {
-                ChainThreadType::Regular => None,
-                ChainThreadType::Background => Some(quote! {
-                    pub fn interrupt(&self) {
-                        let mut is_interrupted = self.interrupt.0.lock().unwrap();
-                        *is_interrupted = true;
-                        self.interrupt.1.notify_all();
-                    }
-                }),
-            };
             let interrupt_impl = match thread.thread_type {
                 ChainThreadType::Regular => None,
                 ChainThreadType::Background => Some(quote! {
@@ -415,34 +405,56 @@ impl<'a> Chain<'a> {
             let nodes_statuses = thread.nodes_data.iter().enumerate().map(
                 |(node_index, (name, input_count, output_count))| {
                     let ident = format_ident!("node_{node_index}");
-                    let doc = name.to_full_name().to_string();
+                    let full_name = name.to_full_name().to_string();
                     quote! {
-                        #[doc = #doc]
+                        #[doc = #full_name]
                         pub #ident: NodeStatus<#input_count, #output_count>,
                     }
                 },
             );
-            let struct_def = quote! {
+            let nodes_status_items =
+                thread
+                    .nodes_data
+                    .iter()
+                    .enumerate()
+                    .map(|(node_index, (name, _, _))| {
+                        let ident = format_ident!("node_{node_index}");
+                        let full_name = name.to_full_name().to_string();
+                        quote! {
+                            NodeStatusItem {
+                                node_name: #full_name,
+                                state: &self.#ident.state,
+                                input_read: &self.#ident.input_read[..],
+                                output_written: &self.#ident.output_written[..],
+                            }
+                        }
+                    });
+            let thread_structs_definitions = quote! {
 
                 #[derive(Default)]
                 pub struct ThreadStatus {
                     #(#nodes_statuses)*
                 }
 
-                pub struct ThreadOuterControl {
-                    #interrupt
+                impl DynThreadStatus for ThreadStatus {
+                    fn node_statuses(&self) -> Box<dyn Iterator<Item = NodeStatusItem> + '_> {
+                        Box::new([
+                            #(#nodes_status_items,)*
+                        ].into_iter())
+                    }
                 }
 
-                impl ThreadOuterControl {
-                    #outer_interrupt_impl
+                pub struct ThreadOuterControl {
+                    #interrupt
+                    pub status: Arc<Mutex<ThreadStatus>>,
                 }
 
                 pub struct ThreadControl {
                     pub chain_configuration: Arc<ChainConfiguration>,
                     #interrupt
+                    pub status: Arc<Mutex<ThreadStatus>>,
                     #(pub #inputs: Option<ThreadInput<#input_types>>,)*
                     #(pub #outputs: Option<ThreadOutput<#output_types>>,)*
-                    pub status: Arc<Mutex<ThreadStatus>>,
                 }
 
                 impl ThreadControl {
@@ -455,12 +467,126 @@ impl<'a> Chain<'a> {
             module.import("std::sync", "Arc");
             module.import("std::sync", "Mutex");
             module.import("quirky_binder_support::prelude", "*");
-            module.fragment(struct_def.to_string());
+            module.fragment(thread_structs_definitions.to_string());
         }
 
-        {
-            let error_type = self.customizer.error_type.to_full_name();
+        let error_type = self.customizer.error_type.to_full_name();
 
+        let chain_threads_structs_definitions = {
+            let chain_statuses = self.threads.iter().map(|thread| {
+                let thread_module = format_ident!("thread_{}", thread.id);
+                let thread_status = format_ident!("thread_status_{}", thread.id);
+                quote! {
+                    pub #thread_status: Arc<Mutex<#thread_module::ThreadStatus>>,
+                }
+            });
+
+            let chain_status_items = self.threads.iter().map(|thread| {
+                let thread_status = format_ident!("thread_status_{}", thread.id);
+                quote! {
+                    self.#thread_status
+                }
+            });
+
+            let chain_threads_joins = self.threads.iter().map(|thread| {
+                let interrupt = match thread.thread_type {
+                    ChainThreadType::Regular => None,
+                    ChainThreadType::Background => {
+                        self.module.import("std::sync", "Condvar");
+                        let thread_interrupt = format_ident!("thread_interrupt_{}", thread.id);
+                        Some(quote! {
+                            pub #thread_interrupt: Arc<(Mutex<bool>, Condvar)>,
+                        })
+                    }
+                };
+                let thread_join = format_ident!("thread_join_{}", thread.id);
+                quote! {
+                    #interrupt
+                    pub #thread_join: std::thread::JoinHandle<Result<(), #error_type>>,
+                }
+            });
+
+            let join_result = if !self.threads.is_empty() {
+                quote! {
+                    let mut result = Ok(());
+                }
+            } else {
+                quote! {
+                    #[allow(clippy::let_and_return)]
+                    let result = Ok(());
+                }
+            };
+
+            let join_regular_threads = self
+                .threads
+                .iter()
+                .filter(|thread| thread.thread_type == ChainThreadType::Regular)
+                .map(|thread| {
+                    let thread_join = format_ident!("thread_join_{}", thread.id);
+                    quote! {
+                        result = result.and(self.#thread_join.join().unwrap());
+                    }
+                });
+
+            let interrupt_background_threads = self
+                .threads
+                .iter()
+                .filter(|thread| thread.thread_type == ChainThreadType::Background)
+                .map(|thread| {
+                    let thread_interrupt = format_ident!("thread_interrupt_{}", thread.id);
+                    quote! {{
+                        let mut is_interrupted = self.#thread_interrupt.0.lock().unwrap();
+                        *is_interrupted = true;
+                        self.#thread_interrupt.1.notify_all();
+                    }}
+                });
+
+            let join_background_threads = self
+                .threads
+                .iter()
+                .filter(|thread| thread.thread_type == ChainThreadType::Background)
+                .map(|thread| {
+                    let thread_join = format_ident!("thread_join_{}", thread.id);
+                    quote! {
+                        result = result.and(self.#thread_join.join().unwrap());
+                    }
+                });
+
+            quote! {
+                pub struct ChainStatus {
+                    #(#chain_statuses)*
+                }
+
+                impl ChainStatus {
+                    pub fn statuses(&self) -> Box<dyn Iterator<Item = Arc<Mutex<dyn DynThreadStatus>>> + Send> {
+                        Box::new([
+                            #((#chain_status_items.clone() as Arc<Mutex<dyn DynThreadStatus>>),)*
+                        ].into_iter())
+                    }
+                }
+
+                #[must_use]
+                pub struct ChainJoinHandle {
+                    #(#chain_threads_joins)*
+                }
+
+                impl ChainJoinHandle {
+                    pub fn join_all(self) -> Result<(), #error_type> {
+                        #join_result
+
+                        #(#join_regular_threads)*
+
+                        #(#interrupt_background_threads)*
+
+                        #(#join_background_threads)*
+
+                        result
+                    }
+                }
+            }
+        };
+
+        {
             let channels = (0..self.pipe_count).map(|pipe| {
                 let tx = format_ident!("tx_{}", pipe);
                 let rx = format_ident!("rx_{}", pipe);
@@ -526,27 +652,21 @@ impl<'a> Chain<'a> {
                         let thread_status = Arc::new(Mutex::new(#thread_module::ThreadStatus::default()));
                         let thread_outer_control = #thread_module::ThreadOuterControl {
                             #interrupt
+                            status: thread_status.clone(),
                         };
                         let thread_control = #thread_module::ThreadControl {
                             #config_assignment
                             #interrupt_clone
+                            status: thread_status.clone(),
                             #(#inputs)*
                             #(#outputs)*
-                            status: thread_status.clone(),
                         };
                     }
                 });
 
             let thread_vars = self.threads.iter().map(|thread| {
-                let thread_outer_control = format_ident!(
-                    "{}thread_outer_control_{}",
-                    match thread.thread_type {
-                        ChainThreadType::Regular => "_",
-                        ChainThreadType::Background => "",
-                    },
-                    thread.id
-                );
-                let join_thread = format_ident!("join_{}", thread.id);
+                let thread_outer_control = format_ident!("thread_outer_control_{}", thread.id);
+                let join_thread = format_ident!("thread_join_{}", thread.id);
                 quote! { (#thread_outer_control, #join_thread) }
             });
 
@@ -562,38 +682,42 @@ impl<'a> Chain<'a> {
                 }
             });
 
-            let join_regular_threads = self
-                .threads
-                .iter()
-                .filter(|thread| thread.thread_type == ChainThreadType::Regular)
-                .map(|thread| {
-                    let join_thread = format_ident!("join_{}", thread.id);
-                    quote! {
-                        #join_thread.join().unwrap()?;
-                    }
-                });
-
-            let interrupt_background_threads = self
-                .threads
-                .iter()
-                .filter(|thread| thread.thread_type == ChainThreadType::Background)
-                .map(|thread| {
+            let result = {
+                let status_members = self.threads.iter().map(|thread| {
                     let thread_outer_control = format_ident!("thread_outer_control_{}", thread.id);
-                    quote! {{
-                        #thread_outer_control.interrupt();
-                    }}
-                });
-
-            let join_background_threads = self
-                .threads
-                .iter()
-                .filter(|thread| thread.thread_type == ChainThreadType::Background)
-                .map(|thread| {
-                    let join_thread = format_ident!("join_{}", thread.id);
+                    let thread_status = format_ident!("thread_status_{}", thread.id);
                     quote! {
-                        #join_thread.join().unwrap()?;
+                        #thread_status: #thread_outer_control.status,
                     }
                 });
+                let join_members = self.threads.iter().map(|thread| {
+                    let interrupt = match thread.thread_type {
+                        ChainThreadType::Regular => None,
+                        ChainThreadType::Background => {
+                            let thread_outer_control =
+                                format_ident!("thread_outer_control_{}", thread.id);
+                            let thread_interrupt = format_ident!("thread_interrupt_{}", thread.id);
+                            Some(quote! {
+                                #thread_interrupt: #thread_outer_control.interrupt,
+                            })
+                        }
+                    };
+                    let thread_join = format_ident!("thread_join_{}", thread.id);
+                    quote! {
+                        #interrupt
+                        #thread_join,
+                    }
+                });
+                quote! {
+                    let status = ChainStatus {
+                        #(#status_members)*
+                    };
+                    let join_handle = ChainJoinHandle {
+                        #(#join_members)*
+                    };
+                    Ok((status, join_handle))
+                }
+            };
 
             self.module.import("std::sync", "Arc");
             self.module.import("std::sync", "Mutex");
@@ -612,8 +736,10 @@ impl<'a> Chain<'a> {
             };
             let main_name = format_ident!("{}", &self.customizer.main_name);
             let main_def = quote! {
+                #chain_threads_structs_definitions
+
                 #main_attrs
-                pub fn #main_name(chain_configuration: ChainConfiguration) -> Result<(), #error_type> {
+                pub fn #main_name(chain_configuration: ChainConfiguration) -> Result<(ChainStatus, ChainJoinHandle), #error_type> {
                     #[allow(unused_variables)]
                     let chain_configuration = Arc::new(chain_configuration);
 
@@ -625,13 +751,7 @@ impl<'a> Chain<'a> {
                         #spawn_threads
                     };)*
 
-                    #(#join_regular_threads)*
-
-                    #(#interrupt_background_threads)*
-
-                    #(#join_background_threads)*
-
-                    Ok(())
+                    #result
                 }
             };
             self.module.fragment(main_def.to_string());

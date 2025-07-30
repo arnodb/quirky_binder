@@ -14,5 +14,6 @@ quirky_binder_support::tracking_allocator_static!();
 
 #[quirky_binder_support::tracking_allocator_main]
 fn main() {
-    chain::main(ChainConfiguration::default()).unwrap();
+    let (_, join) = chain::main(ChainConfiguration::default()).unwrap();
+    join.join_all().unwrap();
 }

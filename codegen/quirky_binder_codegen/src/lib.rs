@@ -198,7 +198,8 @@ impl ModuleCode {
                     writeln!(file, r#"
     #[test]
     fn {}() {{
-       main(ChainConfiguration::default()).unwrap();
+       let (_, join) = main(ChainConfiguration::default()).unwrap();
+       join.join_all().unwrap();
     }}
 "#, #test_name)?;
                 }
