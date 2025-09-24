@@ -1,3 +1,53 @@
+use std::sync::{Arc, Mutex};
+
+/// ChainStatus
+pub trait DynChainStatus {
+    fn nodes_length(&self) -> usize;
+
+    fn nodes(&self) -> impl Iterator<Item = NodeDescriptor<'_>>;
+
+    fn edges_length(&self) -> usize;
+
+    fn edges(&self) -> impl Iterator<Item = EdgeDescriptor<'_>>;
+
+    fn statuses(&self) -> impl Iterator<Item = Arc<Mutex<dyn DynThreadStatus>>>;
+}
+
+impl<T: DynChainStatus> DynChainStatus for &T {
+    fn nodes_length(&self) -> usize {
+        (*self).nodes_length()
+    }
+
+    fn nodes(&self) -> impl Iterator<Item = NodeDescriptor<'_>> {
+        (*self).nodes()
+    }
+
+    fn edges_length(&self) -> usize {
+        (*self).edges_length()
+    }
+
+    fn edges(&self) -> impl Iterator<Item = EdgeDescriptor<'_>> {
+        (*self).edges()
+    }
+
+    fn statuses(&self) -> impl Iterator<Item = Arc<Mutex<dyn DynThreadStatus>>> {
+        (*self).statuses()
+    }
+}
+
+/// Node
+pub struct NodeDescriptor<'a> {
+    pub name: &'a str,
+}
+
+/// Edge
+pub struct EdgeDescriptor<'a> {
+    pub tail_name: &'a str,
+    pub tail_index: usize,
+    pub head_name: &'a str,
+    pub head_index: usize,
+}
+
 /// Node state
 #[derive(Debug)]
 pub enum NodeState {

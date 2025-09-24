@@ -45,43 +45,87 @@ impl<T> WithTraceElement for ChainResultWithTrace<T> {
     }
 }
 
+/// Chain thread data.
 #[derive(Debug)]
 struct ChainThread {
+    /// Identifier, so that it does not have to be passed separately.
     id: usize,
+    /// The thread name.
     name: FullyQualifiedName,
+    /// The thread type.
     thread_type: ChainThreadType,
+    /// Name of the main function called by this thread.
     main: Option<FullyQualifiedName>,
+    /// Nodes data.
+    ///
+    /// * node name
+    /// * number of inputs
+    /// * number of outputs
+    ///
+    /// It does not contain clusters.
     nodes_data: Vec<(FullyQualifiedName, usize, usize)>,
+    /// Input streams.
     input_streams: Box<[NodeStream]>,
+    /// Output streams.
     output_streams: Box<[NodeStream]>,
+    /// Input pipes.
     input_pipes: Option<Box<[usize]>>,
+    /// Output pipes.
     output_pipes: Option<Box<[usize]>>,
 }
 
+/// Thread type.
 #[derive(Clone, Copy, PartialEq, Eq, Default, Deserialize, Debug)]
 pub enum ChainThreadType {
+    /// Regular chain thread, it eventually completes processing.
     #[default]
     Regular,
+    /// Background thread, it has to be interrupted in order to complete the processing.
     Background,
 }
 
+/// Chain source data.
 #[derive(Clone)]
 pub struct ChainSourceThread {
+    /// Identifier of the thread which is the source of the data.
     pub thread_id: usize,
+    /// Which node is the source of the data.
+    pub node_name: FullyQualifiedName,
+    /// Which stream of this thread is the source of the data.
     pub stream_index: usize,
+    /// Whether or not it's piped.
     pub piped: bool,
 }
 
+/// The main structure used to generate the chain.
 #[derive(new)]
 pub struct Chain<'a> {
+    /// The chain customizer.
     customizer: &'a ChainCustomizer,
+    /// The Rust module being generated.
     module: &'a mut Module,
+    /// Thread information.
+    ///
+    /// Some functions return thread IDs as `usize`, they are indices in this vector.
     #[new(default)]
     threads: Vec<ChainThread>,
+    /// Threads that are currently identified as the source for a stream.
+    ///
+    /// This structure is updated when new filters are added to the thread: the original source is
+    /// removed (because it is consumed) and new ones are added (outputs of the added filters).
     #[new(default)]
     thread_by_source: HashMap<NodeStreamSource, ChainSourceThread>,
+    /// Pipe sequence used to identify pipes in this chain.
     #[new(default)]
     pipe_count: usize,
+    /// Links from one node's (tail) output to another node's (head) input.
+    ///
+    /// * node name of the tail
+    /// * stream index of the tail
+    /// * node name of the head
+    /// * stream index of the head
+    #[new(default)]
+    nodes_links: Vec<(FullyQualifiedName, usize, FullyQualifiedName, usize)>,
 }
 
 impl<'a> Chain<'a> {
@@ -143,6 +187,7 @@ impl<'a> Chain<'a> {
                 output_stream.source().clone(),
                 ChainSourceThread {
                     thread_id,
+                    node_name: name.clone(),
                     stream_index: i,
                     piped: false,
                 },
@@ -216,6 +261,12 @@ impl<'a> Chain<'a> {
         let source_thread = self.get_source_thread(input.source());
         let thread_id = source_thread.thread_id;
         let thread = &self.threads[thread_id];
+        let link = (
+            source_thread.node_name.clone(),
+            source_thread.stream_index,
+            name.clone(),
+            0,
+        );
         if let Some(output_pipes) = &thread.output_pipes {
             let input_pipe = output_pipes[source_thread.stream_index];
             let streams: Box<[NodeStream]> =
@@ -234,11 +285,13 @@ impl<'a> Chain<'a> {
                 true,
                 None,
             );
+            self.nodes_links.push(link);
             if let Some(output) = output {
-                self.update_thread_single_stream(thread_id, output);
+                self.update_thread_single_stream(thread_id, name, output);
             }
             ChainSourceThread {
                 thread_id,
+                node_name: name.clone(),
                 stream_index: 0,
                 piped: true,
             }
@@ -249,14 +302,20 @@ impl<'a> Chain<'a> {
             thread
                 .nodes_data
                 .push((name.clone(), 1, if output.is_some() { 1 } else { 0 }));
+            self.nodes_links.push(link);
             if let Some(output) = output {
-                self.update_thread_single_stream(source_thread.thread_id, output);
+                self.update_thread_single_stream(source_thread.thread_id, name, output);
             }
             source_thread
         }
     }
 
-    fn update_thread_single_stream(&mut self, thread_id: usize, stream: &NodeStream) {
+    fn update_thread_single_stream(
+        &mut self,
+        thread_id: usize,
+        node_name: &FullyQualifiedName,
+        stream: &NodeStream,
+    ) {
         let thread = self.threads.get_mut(thread_id).expect("thread");
         assert_eq!(thread.output_streams.len(), 1);
         self.thread_by_source
@@ -266,6 +325,7 @@ impl<'a> Chain<'a> {
             stream.source().clone(),
             ChainSourceThread {
                 thread_id,
+                node_name: node_name.clone(),
                 stream_index: 0,
                 piped: false,
             },
@@ -278,9 +338,24 @@ impl<'a> Chain<'a> {
         pipe
     }
 
-    fn pipe_single_thread(&mut self, source: &NodeStreamSource) -> usize {
+    fn pipe_single_thread(
+        &mut self,
+        source: &NodeStreamSource,
+        name: &FullyQualifiedName,
+        input_index: usize,
+    ) -> usize {
         let source_thread = self.get_source_thread(source).clone();
         let thread = &mut self.threads[source_thread.thread_id];
+
+        let link = (
+            source_thread.node_name.clone(),
+            source_thread.stream_index,
+            name.clone(),
+            input_index,
+        );
+
+        self.nodes_links.push(link);
+
         if let Some(output_pipes) = &thread.output_pipes {
             return output_pipes[source_thread.stream_index];
         }
@@ -334,7 +409,8 @@ impl<'a> Chain<'a> {
     ) -> usize {
         let input_pipes = inputs
             .iter()
-            .map(|input| self.pipe_single_thread(input.source()))
+            .enumerate()
+            .map(|(input_index, input)| self.pipe_single_thread(input.source(), name, input_index))
             .collect::<Vec<usize>>();
         self.new_thread(
             name.clone(),
@@ -473,6 +549,40 @@ impl<'a> Chain<'a> {
         let error_type = self.customizer.error_type.to_full_name();
 
         let chain_threads_structs_definitions = {
+            let chain_nodes = self
+                .threads
+                .iter()
+                .flat_map(|thread| {
+                    thread.nodes_data.iter().map(|(name, _, _)| {
+                        let name = name.to_full_name().to_string();
+                        quote! {
+                            NodeDescriptor {
+                                name: #name,
+                            }
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
+            let chain_nodes_length = chain_nodes.len();
+
+            let chain_edges = self
+                .nodes_links
+                .iter()
+                .map(|(tail_name, tail_index, head_name, head_index)| {
+                    let tail_name = tail_name.to_full_name().to_string();
+                    let head_name = head_name.to_full_name().to_string();
+                    quote! {
+                        EdgeDescriptor {
+                            tail_name: #tail_name,
+                            tail_index: #tail_index,
+                            head_name: #head_name,
+                            head_index: #head_index,
+                        }
+                    }
+                })
+                .collect::<Vec<_>>();
+            let chain_edges_length = chain_edges.len();
+
             let chain_statuses = self.threads.iter().map(|thread| {
                 let thread_module = format_ident!("thread_{}", thread.id);
                 let thread_status = format_ident!("thread_status_{}", thread.id);
@@ -557,11 +667,31 @@ impl<'a> Chain<'a> {
                     #(#chain_statuses)*
                 }
 
-                impl ChainStatus {
-                    pub fn statuses(&self) -> Box<dyn Iterator<Item = Arc<Mutex<dyn DynThreadStatus>>> + Send> {
-                        Box::new([
+                impl DynChainStatus for ChainStatus {
+                    fn nodes_length(&self) -> usize {
+                        #chain_nodes_length
+                    }
+
+                    fn nodes(&self) -> impl Iterator<Item = NodeDescriptor<'_>> {
+                        [
+                            #(#chain_nodes,)*
+                        ].into_iter()
+                    }
+
+                    fn edges_length(&self) -> usize {
+                        #chain_edges_length
+                    }
+
+                    fn edges(&self) -> impl Iterator<Item = EdgeDescriptor<'_>> {
+                        [
+                            #(#chain_edges,)*
+                        ].into_iter()
+                    }
+
+                    fn statuses(&self) -> impl Iterator<Item = Arc<Mutex<dyn DynThreadStatus>>> {
+                        [
                             #((#chain_status_items.clone() as Arc<Mutex<dyn DynThreadStatus>>),)*
-                        ].into_iter())
+                        ].into_iter()
                     }
                 }
 
