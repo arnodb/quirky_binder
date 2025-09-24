@@ -19,7 +19,7 @@ use crate::ast::{
 
 pub type SpannedResult<I, O> = IResult<I, O, SpannedError<I>>;
 
-pub fn module(input: &str) -> SpannedResult<&str, Module> {
+pub fn module(input: &str) -> SpannedResult<&str, Module<'_>> {
     ps(many_till(
         ts(alt((
             use_declaration.map(Into::into),
@@ -32,7 +32,7 @@ pub fn module(input: &str) -> SpannedResult<&str, Module> {
     .parse(input)
 }
 
-pub fn use_declaration(input: &str) -> SpannedResult<&str, UseDeclaration> {
+pub fn use_declaration(input: &str) -> SpannedResult<&str, UseDeclaration<'_>> {
     preceded(
         ts(keyword("use")),
         cut(terminated(use_tree, ps(token(";")))),
@@ -93,7 +93,7 @@ fn use_sub_tree(input: &str) -> SpannedResult<&str, &str> {
     .parse(input)
 }
 
-fn graph_definition(input: &str) -> SpannedResult<&str, GraphDefinition> {
+fn graph_definition(input: &str) -> SpannedResult<&str, GraphDefinition<'_>> {
     tuple((
         opt(keyword("pub")),
         ps(graph_definition_signature),
@@ -108,7 +108,9 @@ fn graph_definition(input: &str) -> SpannedResult<&str, GraphDefinition> {
     .parse(input)
 }
 
-pub fn graph_definition_signature(input: &str) -> SpannedResult<&str, GraphDefinitionSignature> {
+pub fn graph_definition_signature(
+    input: &str,
+) -> SpannedResult<&str, GraphDefinitionSignature<'_>> {
     tuple((
         opt_streams0,
         ps(identifier),
@@ -149,7 +151,7 @@ fn params(input: &str) -> SpannedResult<&str, Vec<&str>> {
     .parse(input)
 }
 
-fn graph(input: &str) -> SpannedResult<&str, Graph> {
+fn graph(input: &str) -> SpannedResult<&str, Graph<'_>> {
     stream_lines
         .map(|stream_lines| Graph {
             annotations: Default::default(),
@@ -158,17 +160,17 @@ fn graph(input: &str) -> SpannedResult<&str, Graph> {
         .parse(input)
 }
 
-fn stream_lines(input: &str) -> SpannedResult<&str, Vec<StreamLine>> {
+fn stream_lines(input: &str) -> SpannedResult<&str, Vec<StreamLine<'_>>> {
     preceded(tag("{"), ps(many_till(ts(stream_line), tag("}"))))
         .map(|(stream_lines, _)| stream_lines)
         .parse(input)
 }
 
-fn stream_line(input: &str) -> SpannedResult<&str, StreamLine> {
+fn stream_line(input: &str) -> SpannedResult<&str, StreamLine<'_>> {
     preceded(tag("("), opened_stream_line)(input)
 }
 
-fn opened_stream_line(input: &str) -> SpannedResult<&str, StreamLine> {
+fn opened_stream_line(input: &str) -> SpannedResult<&str, StreamLine<'_>> {
     pair(
         ps(pair(stream_line_inputs, ps(filter))
             .map(|(inputs, filter)| ConnectedFilter { inputs, filter })),
@@ -197,7 +199,7 @@ fn opened_stream_line(input: &str) -> SpannedResult<&str, StreamLine> {
     .parse(input)
 }
 
-fn stream_line_inputs(input: &str) -> SpannedResult<&str, Vec<StreamLineInput>> {
+fn stream_line_inputs(input: &str) -> SpannedResult<&str, Vec<StreamLineInput<'_>>> {
     opt(alt((
         preceded(tag("<"), cut(pair(ds(identifier), filter_input_streams)))
             .map(|(main_input, extra_streams)| (Some(main_input), extra_streams)),
@@ -216,7 +218,7 @@ fn stream_line_inputs(input: &str) -> SpannedResult<&str, Vec<StreamLineInput>> 
     .parse(input)
 }
 
-fn stream_line_filter(input: &str) -> SpannedResult<&str, ConnectedFilter> {
+fn stream_line_filter(input: &str) -> SpannedResult<&str, ConnectedFilter<'_>> {
     pair(filter_input_streams, ps(filter))
         .map(|((main_stream, extra_streams), filter)| ConnectedFilter {
             inputs: assemble_inputs(StreamLineInput::Main(main_stream), extra_streams),
@@ -231,7 +233,7 @@ fn filter_input_streams(input: &str) -> SpannedResult<&str, (&str, Vec<&str>)> {
         .parse(input)
 }
 
-pub fn filter(input: &str) -> SpannedResult<&str, Filter> {
+pub fn filter(input: &str) -> SpannedResult<&str, Filter<'_>> {
     tuple((
         simple_path,
         ps(opt(preceded(token("#"), cut(ps(identifier))))),

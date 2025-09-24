@@ -141,7 +141,7 @@ impl<'a> Visit<'a> for RecordsDrawingVisitor<'a> {
     }
 }
 
-pub fn draw_records(graph: &Graph) -> Drawing {
+pub fn draw_records(graph: &Graph) -> Drawing<'_> {
     let mut visitor = RecordsDrawingVisitor::new(graph);
     visitor.visit_graph(graph);
     visitor.helper.into()

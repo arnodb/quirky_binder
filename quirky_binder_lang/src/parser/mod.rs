@@ -6,7 +6,7 @@ use crate::ast::{Module, StreamLineInput};
 pub mod crafted_impl;
 
 #[cfg(feature = "crafted_parser")]
-pub fn parse_crafted(input: &str) -> Result<Module, SpannedError<&str>> {
+pub fn parse_crafted(input: &str) -> Result<Module<'_>, SpannedError<&str>> {
     use self::crafted_impl::lexer::lexer;
     let mut lexer = lexer(input);
     self::crafted_impl::module(&mut lexer)
@@ -16,7 +16,7 @@ pub fn parse_crafted(input: &str) -> Result<Module, SpannedError<&str>> {
 pub mod nom_impl;
 
 #[cfg(feature = "nom_parser")]
-pub fn parse_nom(input: &str) -> Result<Module, SpannedError<&str>> {
+pub fn parse_nom(input: &str) -> Result<Module<'_>, SpannedError<&str>> {
     self::nom_impl::module(input)
         .map(|(tail, module)| {
             assert_eq!("", tail);
@@ -28,7 +28,7 @@ pub fn parse_nom(input: &str) -> Result<Module, SpannedError<&str>> {
 #[cfg(not(any(feature = "crafted_parser", feature = "nom_parser")))]
 compile_error!("Need to have at least one parser");
 
-pub fn parse_module(input: &str) -> Result<Module, SpannedError<&str>> {
+pub fn parse_module(input: &str) -> Result<Module<'_>, SpannedError<&str>> {
     // TODO outside customization
     match None::<()> {
         Some(_) => {
@@ -86,7 +86,7 @@ pub enum SpannedErrorKind {
 }
 
 impl SpannedErrorKind {
-    pub fn description(&self) -> Cow<str> {
+    pub fn description(&self) -> Cow<'_, str> {
         match self {
             Self::Identifier => "identifier".into(),
             Self::Token(token) => (*token).into(),

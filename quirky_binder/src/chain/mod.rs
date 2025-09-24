@@ -437,7 +437,7 @@ impl<'a> Chain<'a> {
                 }
 
                 impl DynThreadStatus for ThreadStatus {
-                    fn node_statuses(&self) -> Box<dyn Iterator<Item = NodeStatusItem> + '_> {
+                    fn node_statuses(&self) -> Box<dyn Iterator<Item = NodeStatusItem<'_>> + '_> {
                         Box::new([
                             #(#nodes_status_items,)*
                         ].into_iter())

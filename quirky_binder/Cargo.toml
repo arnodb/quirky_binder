@@ -21,8 +21,8 @@ quirky_binder_codegen_macro = { version = "0.1.1-dev", path = "../codegen/quirky
 quirky_binder_lang = { version = "0.1.1-dev", path = "../quirky_binder_lang" }
 quirky_binder_support = { version = "0.1.1-dev", path = "../quirky_binder_support" }
 quote = "1"
-ron = "0.9.0-alpha.0"
-serde = { version = "1", features = ["derive"] }
+ron = "0.11"
+serde = { version = ">=1,<=1.0.219", features = ["derive"] }
 syn = { version = "1", features = ["full", "extra-traits"] }
 thiserror = "1"
 truc = { git = "https://github.com/arnodb/truc.git" }

@@ -39,5 +39,5 @@ pub struct NodeStatusItem<'a> {
 
 /// Interface to access multi-node thread statuses.
 pub trait DynThreadStatus: Send {
-    fn node_statuses(&self) -> Box<dyn Iterator<Item = NodeStatusItem> + '_>;
+    fn node_statuses(&self) -> Box<dyn Iterator<Item = NodeStatusItem<'_>> + '_>;
 }

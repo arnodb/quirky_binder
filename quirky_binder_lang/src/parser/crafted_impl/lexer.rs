@@ -171,7 +171,7 @@ where
     }
 }
 
-pub fn lexer(input: &str) -> Lexer<impl Iterator<Item = Token>> {
+pub fn lexer(input: &str) -> Lexer<'_, impl Iterator<Item = Token<'_>>> {
     let tokens = Token::lexer(input)
         .spanned()
         .map(|(res, range)| res.unwrap_or_else(|()| Token::UnrecognizedToken(&input[range])));

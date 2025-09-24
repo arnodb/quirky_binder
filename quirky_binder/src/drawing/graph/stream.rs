@@ -137,7 +137,7 @@ impl<'a> Visit<'a> for StreamsDrawingVisitor<'a> {
     }
 }
 
-pub fn draw_streams(graph: &Graph) -> Drawing {
+pub fn draw_streams(graph: &Graph) -> Drawing<'_> {
     let mut visitor = StreamsDrawingVisitor::new(graph);
     visitor.visit_graph(graph);
     visitor.helper.into()

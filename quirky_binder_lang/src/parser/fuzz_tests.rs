@@ -124,7 +124,7 @@ fn fuzz_use_declaration() {
 
         fn crafted_parser(
             input: &str,
-        ) -> Result<crate::ast::UseDeclaration, super::SpannedError<&str>> {
+        ) -> Result<crate::ast::UseDeclaration<'_>, super::SpannedError<&str>> {
             let mut lexer = lexer(input);
             crate::parser::crafted_impl::use_declaration(&mut lexer, None)
         }
@@ -169,7 +169,7 @@ fn fuzz_graph_definition_signature() {
 
         fn crafted_parser(
             input: &str,
-        ) -> Result<crate::ast::GraphDefinitionSignature, super::SpannedError<&str>> {
+        ) -> Result<crate::ast::GraphDefinitionSignature<'_>, super::SpannedError<&str>> {
             let mut lexer = lexer(input);
             crate::parser::crafted_impl::graph_definition_signature(&mut lexer)
         }
@@ -212,7 +212,9 @@ fn fuzz_filter() {
     let crafted_parser = {
         use crate::parser::crafted_impl::lexer::lexer;
 
-        fn crafted_parser(input: &str) -> Result<crate::ast::Filter, super::SpannedError<&str>> {
+        fn crafted_parser(
+            input: &str,
+        ) -> Result<crate::ast::Filter<'_>, super::SpannedError<&str>> {
             let mut lexer = lexer(input);
             crate::parser::crafted_impl::filter(&mut lexer)
         }
