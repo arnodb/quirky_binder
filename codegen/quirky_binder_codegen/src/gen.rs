@@ -474,6 +474,12 @@ fn quirky_binder_stream_lines<'a>(
                             error_emitter.part_to_location(filter.filter.name);
                         quote! { #quirky_binder_crate::chain::Location::new(#line, #col) }
                     };
+                    let params_location = {
+                        let Location { line, col } =
+                            error_emitter.part_to_location(filter.filter.params);
+                        quote! { #quirky_binder_crate::chain::Location::new(#line, #col) }
+                    };
+                    // XXX RON error locations might be inaccurate due to handlebars interpolation.
                     body.push(quote! {
                         let #var_name = {
                             #ron_params
@@ -481,7 +487,15 @@ fn quirky_binder_stream_lines<'a>(
                                 graph,
                                 name.sub(stringify!(#var_name)),
                                 [#(#inputs,)*],
-                                graph.params().from_ron_str(&ron_params_str).expect("params"),
+                                graph.params().from_ron_str(&ron_params_str)
+                                    .map_err(|err| {
+                                        let location = #params_location + #quirky_binder_crate::chain::Location::new(
+                                            err.span.start.line,
+                                            err.span.start.col,
+                                        );
+                                        ChainError::ParseParams{ msg: err.to_string() }
+                                            .with_trace_element(|| TraceElement::new(#source.into(), #caller.into(), location))
+                                    })?,
                             )
                         }
                             .with_trace_element(|| TraceElement::new(#source.into(), #caller.into(), #filter_location))?;

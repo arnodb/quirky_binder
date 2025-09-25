@@ -1,3 +1,5 @@
+use std::ops::{Add, AddAssign};
+
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub struct Span {
     pub start: usize,
@@ -57,6 +59,38 @@ impl Location {
 
     fn next_col(mut self) -> Self {
         self.col += 1;
+        self
+    }
+}
+
+impl Default for Location {
+    fn default() -> Self {
+        Self { line: 1, col: 1 }
+    }
+}
+
+impl AddAssign<Location> for Location {
+    fn add_assign(&mut self, rhs: Location) {
+        if rhs.line < 1 {
+            panic!("unexpected line {}", rhs.line);
+        }
+        if rhs.col < 1 {
+            panic!("unexpected col {}", rhs.col);
+        }
+        if rhs.line == 1 {
+            self.col += rhs.col - 1;
+        } else {
+            self.line += rhs.line - 1;
+            self.col = rhs.col;
+        }
+    }
+}
+
+impl Add<Location> for Location {
+    type Output = Location;
+
+    fn add(mut self, rhs: Location) -> Self::Output {
+        self.add_assign(rhs);
         self
     }
 }

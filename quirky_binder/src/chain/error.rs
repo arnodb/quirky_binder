@@ -38,6 +38,8 @@ pub enum ChainError {
         actual: String,
     },
     #[error("{msg}")]
+    ParseParams { msg: String },
+    #[error("{msg}")]
     Other { msg: String },
 }
 
