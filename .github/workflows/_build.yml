@@ -83,7 +83,7 @@ jobs:
           cargo clippy --all ${{ inputs.rust_features }} --all-targets -- -D warnings
           echo "Clippy OK" >> "$GITHUB_STEP_SUMMARY"
 
-      - id: prepate-tests
+      - id: prepare-tests
         name: Prepare tests
         run: |
           ./scripts/init_tests.sh

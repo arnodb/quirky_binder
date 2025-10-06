@@ -15,7 +15,7 @@ jobs:
       with_clippy: true
       with_audit: true
 
-  main_1_65_0:
+  main_1_82_0:
     name: Rust 1.82.0
     uses: ./.github/workflows/_build.yml
     with:
