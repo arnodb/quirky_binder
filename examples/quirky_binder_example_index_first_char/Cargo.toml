@@ -8,6 +8,7 @@ rust-version = "1.82.0"
 anyhow = "1"
 fallible-iterator = "0.3"
 itertools = "0.10"
+quirky_binder_capnp = { path = "../../capnp/quirky_binder_capnp" }
 quirky_binder_support = { path = "../../quirky_binder_support" }
 serde = "1"
 static_assertions = "1"

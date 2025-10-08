@@ -52,6 +52,16 @@ jobs:
         run: |
           cargo install cargo-quickinstall
 
+      - id: disable-man-db-updates
+        name: Disable man-db updates
+        run: |
+          echo "set man-db/auto-update false" | sudo debconf-communicate
+          sudo dpkg-reconfigure man-db
+
+      - id: install-capnproto
+        name: Install capnproto
+        run: sudo apt-get install -y capnproto
+
       - id: install-wasm-pack
         name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | bash

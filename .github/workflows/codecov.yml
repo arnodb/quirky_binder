@@ -28,6 +28,16 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
+      - id: disable-man-db-updates
+        name: Disable man-db updates
+        run: |
+          echo "set man-db/auto-update false" | sudo debconf-communicate
+          sudo dpkg-reconfigure man-db
+
+      - id: install-capnproto
+        name: Install capnproto
+        run: sudo apt-get install -y capnproto
+
       - name: Prepare tests
         run: |
           ./scripts/init_tests.sh

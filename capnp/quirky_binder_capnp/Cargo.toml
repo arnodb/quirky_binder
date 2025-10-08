@@ -1,0 +1,25 @@
+[package]
+name = "quirky_binder_capnp"
+version = "0.1.1-dev"
+edition = "2021"
+rust-version = "1.82.0"
+license-file = "../../LICENSE"
+description = "Quirky Binder Cap'n Proto"
+documentation = "https://docs.rs/quirky_binder_capnp"
+repository = "https://github.com/arnodb/quirky_binder"
+readme = "../../README.md"
+
+[dependencies]
+capnp = "0.21"
+capnp-rpc = "0.21"
+futures = "0.3"
+quirky_binder_support = { path = "../../quirky_binder_support" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+teleop = "0.1"
+
+[build-dependencies]
+capnpc = "0.21"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage,coverage_nightly)'] }

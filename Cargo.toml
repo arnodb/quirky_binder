@@ -8,6 +8,7 @@ members = [
     "codegen/quirky_binder_codegen_macro",
     "contrib/quirky_binder_csv",
     "contrib/quirky_binder_git2",
+    "capnp/quirky_binder_capnp",
     "tests/quirky_binder_tests",
     "tests/quirky_binder_tests_csv",
     "tests/quirky_binder_tests_git2",

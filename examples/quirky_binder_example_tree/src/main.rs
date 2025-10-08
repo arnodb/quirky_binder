@@ -1,4 +1,5 @@
-use quirky_binder_support::chain::configuration::ChainConfiguration;
+use quirky_binder_capnp::run_chain;
+use quirky_binder_support::prelude::*;
 
 #[macro_use]
 extern crate static_assertions;
@@ -13,7 +14,7 @@ mod chain {
 quirky_binder_support::tracking_allocator_static!();
 
 #[quirky_binder_support::tracking_allocator_main]
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut chain_configuration = ChainConfiguration::new();
 
     let mut args = std::env::args();
@@ -25,6 +26,7 @@ fn main() {
         .variables
         .insert("root".to_owned(), root);
 
-    let (_, join) = chain::main(chain_configuration).unwrap();
-    join.join_all().unwrap();
+    let (chain_status, join) = chain::main(chain_configuration).unwrap();
+
+    run_chain(chain_status, || join.join_all())
 }
