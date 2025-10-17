@@ -341,7 +341,7 @@ impl<'a> Chain<'a> {
     fn pipe_single_thread(
         &mut self,
         source: &NodeStreamSource,
-        name: &FullyQualifiedName,
+        node_name: &FullyQualifiedName,
         input_index: usize,
     ) -> usize {
         let source_thread = self.get_source_thread(source).clone();
@@ -350,7 +350,7 @@ impl<'a> Chain<'a> {
         let link = (
             source_thread.node_name.clone(),
             source_thread.stream_index,
-            name.clone(),
+            node_name.clone(),
             input_index,
         );
 
@@ -371,15 +371,19 @@ impl<'a> Chain<'a> {
             NodeStatisticsOption::WithoutStatistics,
         );
 
+        let output =
+            self.format_thread_output(source_thread.thread_id, 0, &source_thread.node_name);
+
         let pipe_def = quote! {
             pub fn quirky_binder_pipe(mut thread_control: ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
+                let thread_status = thread_control.status.clone();
                 move || {
-                    let tx = thread_control.output_0.take().expect("output 0");
+                    let mut output = #output;
                     #input
                     while let Some(record) = input.next()? {
-                        tx.send(Some(record))?;
+                        output.send(Some(record))?;
                     }
-                    tx.send(None)?;
+                    output.send(None)?;
                     Ok(())
                 }
             }
@@ -403,23 +407,25 @@ impl<'a> Chain<'a> {
 
     pub fn pipe_inputs(
         &mut self,
-        name: &FullyQualifiedName,
+        node_name: &FullyQualifiedName,
         inputs: &[NodeStream],
         outputs: &[NodeStream],
     ) -> usize {
         let input_pipes = inputs
             .iter()
             .enumerate()
-            .map(|(input_index, input)| self.pipe_single_thread(input.source(), name, input_index))
+            .map(|(input_index, input)| {
+                self.pipe_single_thread(input.source(), node_name, input_index)
+            })
             .collect::<Vec<usize>>();
         self.new_thread(
-            name.clone(),
+            node_name.clone(),
             ChainThreadType::Regular,
             inputs.to_vec().into_boxed_slice(),
             outputs.to_vec().into_boxed_slice(),
             Some(input_pipes.into_boxed_slice()),
             false,
-            Some(name.clone()),
+            Some(node_name.clone()),
         )
     }
 
@@ -1220,6 +1226,7 @@ impl<'a> Chain<'a> {
                 #collect_statistics
         }
     }
+
     pub fn format_source_thread_input(
         &self,
         source_thread: &ChainSourceThread,
@@ -1247,6 +1254,34 @@ impl<'a> Chain<'a> {
         };
         quote! {
             let #mutable_input input = #input;
+        }
+    }
+
+    pub fn format_thread_output(
+        &self,
+        thread_id: usize,
+        stream_index: usize,
+        node_name: &FullyQualifiedName,
+    ) -> TokenStream {
+        let output = format_ident!("output_{}", stream_index);
+        let node_status_ident = self.node_status_ident(thread_id, node_name);
+        quote! {
+            InstrumentedThreadOutput::new(
+                {
+                    let thread_status = thread_status.clone();
+                    move || {
+                        thread_status
+                            .lock()
+                            .unwrap()
+                            .#node_status_ident
+                            .output_written[#stream_index] += 1;
+                    }
+                },
+                thread_control
+                    .#output
+                    .take()
+                    .unwrap_or_else(|| panic!("output {}", #stream_index)),
+            )
         }
     }
 }

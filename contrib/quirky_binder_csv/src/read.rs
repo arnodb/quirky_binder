@@ -133,6 +133,8 @@ impl DynNode for ReadCsv {
             &self.outputs,
         );
 
+        let output = chain.format_thread_output(thread_id, 0, &self.name);
+
         let input_file = &self.input_file;
 
         let has_headers = self.has_headers;
@@ -175,7 +177,7 @@ impl DynNode for ReadCsv {
             };
 
         let thread_body = quote! {
-            let output = thread_control.output_0.take().expect("output 0");
+            let mut output = #output;
             move || {
                 use std::fs::File;
                 use std::io::BufReader;

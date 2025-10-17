@@ -139,6 +139,8 @@ impl DynNode for WalkCommits {
             &self.outputs,
         );
 
+        let output = chain.format_thread_output(thread_id, 0, &self.name);
+
         let repository = &self.repository;
 
         let pushes = &self.pushes;
@@ -200,7 +202,7 @@ impl DynNode for WalkCommits {
         let new_record_fields = quote!(#(#new_record_fields),*);
 
         let thread_body = quote! {
-            let output = thread_control.output_0.take().expect("output 0");
+            let mut output = #output;
             move || {
                 use anyhow::Context;
                 use git2::Repository;

@@ -167,6 +167,7 @@ impl DynNode for Join {
                 node_name: &self.name,
             },
         );
+        let output = chain.format_thread_output(thread_id, 0, &self.name);
 
         let primary_input_def = chain.stream_definition_fragments(&self.inputs[0]);
         let secondary_input_def = chain.stream_definition_fragments(&self.inputs[1]);
@@ -227,7 +228,7 @@ impl DynNode for Join {
 
                 let mut primary_input = #primary_input;
                 let mut secondary_input = #secondary_input;
-                let output = thread_control.output_0.take().expect("output");
+                let mut output = #output;
 
                 let cmp = #cmp;
 

@@ -106,6 +106,8 @@ impl DynNode for ExtractFields {
                 node_name: &self.name,
             },
         );
+        let output_0 = chain.format_thread_output(thread_id, 0, &self.name);
+        let output_1 = chain.format_thread_output(thread_id, 1, &self.name);
 
         let def_output_1 = chain.stream_definition_fragments(&self.outputs[1]);
 
@@ -131,8 +133,8 @@ impl DynNode for ExtractFields {
             let thread_status = thread_status.clone();
             move || {
                 let mut input_0 = #input_0;
-                let output_0 = thread_control.output_0.take().expect("output 0");
-                let output_1 = thread_control.output_1.take().expect("output 1");
+                let mut output_0 = #output_0;
+                let mut output_1 = #output_1;
                 while let Some(record) = input_0.next()? {
                     #(#datum_clones)*
                     let record_1 = #output_record_1::new(

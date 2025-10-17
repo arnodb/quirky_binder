@@ -140,6 +140,8 @@ impl DynNode for FunctionProduce {
             &self.outputs,
         );
 
+        let output = chain.format_thread_output(thread_id, 0, &self.name);
+
         let def = chain.stream_definition_fragments(self.outputs.single());
         let record = def.record();
         let unpacked_record = def.unpacked_record();
@@ -161,7 +163,7 @@ impl DynNode for FunctionProduce {
         let body = &self.body;
 
         let thread_body = quote! {
-            let output = thread_control.output_0.take().expect("output 0");
+            let mut output = #output;
             let new_record = |#new_record_args| {
                 #record::new(#unpacked_record { #new_record_fields })
             };
