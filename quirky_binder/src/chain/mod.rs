@@ -371,12 +371,14 @@ impl<'a> Chain<'a> {
             NodeStatisticsOption::WithoutStatistics,
         );
 
-        let output =
-            self.format_thread_output(source_thread.thread_id, 0, &source_thread.node_name);
+        let output = self.format_thread_output(
+            source_thread.thread_id,
+            0,
+            NodeStatisticsOption::WithoutStatistics,
+        );
 
         let pipe_def = quote! {
             pub fn quirky_binder_pipe(mut thread_control: ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
-                let thread_status = thread_control.status.clone();
                 move || {
                     let mut output = #output;
                     #input
@@ -1245,21 +1247,31 @@ impl<'a> Chain<'a> {
         &self,
         thread_id: usize,
         stream_index: usize,
-        node_name: &FullyQualifiedName,
+        statistics_option: NodeStatisticsOption,
     ) -> TokenStream {
         let output = format_ident!("output_{}", stream_index);
         let error_type = self.customizer.error_type.to_full_name();
-        let node_status_ident = self.node_status_ident(thread_id, node_name);
+        let collect_statistics = match statistics_option {
+            NodeStatisticsOption::WithStatistics { node_name } => {
+                let node_status_ident = self.node_status_ident(thread_id, node_name);
+                quote! {
+                    {
+                        let thread_status = thread_status.clone();
+                        move |_| {
+                            let mut lock = thread_status.lock().unwrap();
+                            lock.#node_status_ident.output_written[#stream_index] += 1;
+                            Ok(())
+                        }
+                    }
+                }
+            }
+            NodeStatisticsOption::WithoutStatistics => {
+                quote! { |_| Ok(()) }
+            }
+        };
         quote! {
             InstrumentedThreadOutput::<_, _, #error_type>::new(
-                {
-                    let thread_status = thread_status.clone();
-                    move |_| {
-                        let mut lock = thread_status.lock().unwrap();
-                        lock.#node_status_ident.output_written[#stream_index] += 1;
-                        Ok(())
-                    }
-                },
+                #collect_statistics,
                 thread_control
                     .#output
                     .take()

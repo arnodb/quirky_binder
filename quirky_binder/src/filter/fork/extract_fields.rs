@@ -106,8 +106,20 @@ impl DynNode for ExtractFields {
                 node_name: &self.name,
             },
         );
-        let output_0 = chain.format_thread_output(thread_id, 0, &self.name);
-        let output_1 = chain.format_thread_output(thread_id, 1, &self.name);
+        let output_0 = chain.format_thread_output(
+            thread_id,
+            0,
+            NodeStatisticsOption::WithStatistics {
+                node_name: &self.name,
+            },
+        );
+        let output_1 = chain.format_thread_output(
+            thread_id,
+            1,
+            NodeStatisticsOption::WithStatistics {
+                node_name: &self.name,
+            },
+        );
 
         let def_output_1 = chain.stream_definition_fragments(&self.outputs[1]);
 

@@ -139,7 +139,13 @@ impl DynNode for WalkCommits {
             &self.outputs,
         );
 
-        let output = chain.format_thread_output(thread_id, 0, &self.name);
+        let output = chain.format_thread_output(
+            thread_id,
+            0,
+            NodeStatisticsOption::WithStatistics {
+                node_name: &self.name,
+            },
+        );
 
         let repository = &self.repository;
 

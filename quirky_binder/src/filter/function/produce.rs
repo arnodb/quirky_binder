@@ -140,7 +140,13 @@ impl DynNode for FunctionProduce {
             &self.outputs,
         );
 
-        let output = chain.format_thread_output(thread_id, 0, &self.name);
+        let output = chain.format_thread_output(
+            thread_id,
+            0,
+            NodeStatisticsOption::WithStatistics {
+                node_name: &self.name,
+            },
+        );
 
         let def = chain.stream_definition_fragments(self.outputs.single());
         let record = def.record();

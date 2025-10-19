@@ -167,7 +167,13 @@ impl DynNode for Join {
                 node_name: &self.name,
             },
         );
-        let output = chain.format_thread_output(thread_id, 0, &self.name);
+        let output = chain.format_thread_output(
+            thread_id,
+            0,
+            NodeStatisticsOption::WithStatistics {
+                node_name: &self.name,
+            },
+        );
 
         let primary_input_def = chain.stream_definition_fragments(&self.inputs[0]);
         let secondary_input_def = chain.stream_definition_fragments(&self.inputs[1]);
