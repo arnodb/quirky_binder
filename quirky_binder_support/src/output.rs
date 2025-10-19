@@ -4,20 +4,25 @@ use std::sync::mpsc::{SendError, SyncSender};
 pub struct ThreadOutput<R>(SyncSender<Option<R>>);
 
 #[derive(new)]
-pub struct InstrumentedThreadOutput<F, R>
+pub struct InstrumentedThreadOutput<F, R, E>
 where
-    F: FnMut(),
+    F: FnMut(&R) -> Result<(), E>,
+    E: From<SendError<Option<R>>>,
 {
     inspect: F,
     output: ThreadOutput<R>,
 }
 
-impl<F, R> InstrumentedThreadOutput<F, R>
+impl<F, R, E> InstrumentedThreadOutput<F, R, E>
 where
-    F: FnMut(),
+    F: FnMut(&R) -> Result<(), E>,
+    E: From<SendError<Option<R>>>,
 {
-    pub fn send(&mut self, t: Option<R>) -> Result<(), SendError<Option<R>>> {
-        (self.inspect)();
-        self.output.0.send(t)
+    pub fn send(&mut self, r: Option<R>) -> Result<(), E> {
+        if let Some(r) = &r {
+            (self.inspect)(r)?;
+        }
+        self.output.0.send(r)?;
+        Ok(())
     }
 }

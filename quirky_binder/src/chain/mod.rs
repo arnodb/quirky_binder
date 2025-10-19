@@ -961,23 +961,16 @@ impl<'a> Chain<'a> {
                     .inspect({
                         let thread_status = thread_status.clone();
                         move |_| {
-                            thread_status
-                                .lock()
-                                .unwrap()
-                                .#node_status_ident
-                                .output_written[0] += 1;
+                            let mut lock = thread_status.lock().unwrap();
+                            lock.#node_status_ident.output_written[0] += 1;
                             Ok(())
                         }
                     })
                     .map_err({
-                        use quirky_binder_support::prelude::*;
                         let thread_status = thread_status.clone();
                         move |err: #error_type| {
-                            thread_status
-                                .lock()
-                                .unwrap()
-                                .#node_status_ident
-                                .state = NodeState::Error(err.to_string());
+                            let mut lock = thread_status.lock().unwrap();
+                            lock.#node_status_ident.state = NodeState::Error(err.to_string());
                             err
                         }
                     })
@@ -985,6 +978,7 @@ impl<'a> Chain<'a> {
         };
 
         let mut import_scope = ImportScope::default();
+        import_scope.add_import("quirky_binder_support", "prelude::*");
         import_scope.add_import("fallible_iterator", "FallibleIterator");
 
         let module = self.get_or_new_module(
@@ -1023,14 +1017,10 @@ impl<'a> Chain<'a> {
                 move || {
                     thread_body()
                         .map_err({
-                            use quirky_binder_support::prelude::*;
                             let thread_status = thread_status.clone();
                             move |err: #error_type| {
-                                thread_status
-                                    .lock()
-                                    .unwrap()
-                                    .#node_status_ident
-                                    .state = NodeState::Error(err.to_string());
+                                let mut lock = thread_status.lock().unwrap();
+                                lock.#node_status_ident.state = NodeState::Error(err.to_string());
                                 err
                             }
                         })
@@ -1039,9 +1029,9 @@ impl<'a> Chain<'a> {
         };
 
         let mut import_scope = ImportScope::default();
+        import_scope.add_import("quirky_binder_support::prelude", "*");
         if !node.inputs().is_empty() {
             import_scope.add_import("fallible_iterator", "FallibleIterator");
-            import_scope.add_import("quirky_binder_support::prelude", "*");
         }
 
         let module =
@@ -1167,11 +1157,8 @@ impl<'a> Chain<'a> {
                     .inspect({
                         let thread_status = thread_status.clone();
                         move |_| {
-                            thread_status
-                                .lock()
-                                .unwrap()
-                                .#node_status_ident
-                                .input_read[#stream_index] += 1;
+                            let mut lock = thread_status.lock().unwrap();
+                            lock.#node_status_ident.input_read[#stream_index] += 1;
                             Ok(())
                         }
                     })
@@ -1204,11 +1191,8 @@ impl<'a> Chain<'a> {
                     .try_inspect({
                         let thread_status = thread_status.clone();
                         move |_| {
-                            thread_status
-                                .lock()
-                                .unwrap()
-                                .#node_status_ident
-                                .input_read[#stream_index] += 1;
+                            let mut lock = thread_status.lock().unwrap();
+                            lock.#node_status_ident.input_read[#stream_index] += 1;
                             Ok(())
                         }
                     })
@@ -1264,17 +1248,16 @@ impl<'a> Chain<'a> {
         node_name: &FullyQualifiedName,
     ) -> TokenStream {
         let output = format_ident!("output_{}", stream_index);
+        let error_type = self.customizer.error_type.to_full_name();
         let node_status_ident = self.node_status_ident(thread_id, node_name);
         quote! {
-            InstrumentedThreadOutput::new(
+            InstrumentedThreadOutput::<_, _, #error_type>::new(
                 {
                     let thread_status = thread_status.clone();
-                    move || {
-                        thread_status
-                            .lock()
-                            .unwrap()
-                            .#node_status_ident
-                            .output_written[#stream_index] += 1;
+                    move |_| {
+                        let mut lock = thread_status.lock().unwrap();
+                        lock.#node_status_ident.output_written[#stream_index] += 1;
+                        Ok(())
                     }
                 },
                 thread_control
