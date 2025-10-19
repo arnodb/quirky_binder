@@ -30,7 +30,9 @@ struct NodeStatusItem {
 
 struct NodeState {
     union {
-        good @0 :Void;
-        error @1 :Text;
+        waiting @0 :Void;
+        running @1 :Void;
+        success @2 :Void;
+        error @3 :Text;
     }
 }

@@ -90,8 +90,14 @@ where
 
                 status.set_node_name(s.node_name.to_owned());
                 match s.state {
-                    NodeState::Good => {
-                        status.reborrow().init_state().set_good(());
+                    NodeState::Waiting => {
+                        status.reborrow().init_state().set_waiting(());
+                    }
+                    NodeState::Running => {
+                        status.reborrow().init_state().set_running(());
+                    }
+                    NodeState::Success => {
+                        status.reborrow().init_state().set_success(());
                     }
                     NodeState::Error(err) => {
                         status.reborrow().init_state().set_error(err);

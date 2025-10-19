@@ -941,6 +941,7 @@ impl<'a> Chain<'a> {
         let error_type = self.customizer.error_type.to_full_name();
 
         let node_status_ident = self.node_status_ident(thread.thread_id, name);
+        let node_name = name.to_string();
 
         let input = self.format_source_thread_input(
             &thread,
@@ -968,11 +969,19 @@ impl<'a> Chain<'a> {
                             Ok(())
                         }
                     })
+                    .inspect_end({
+                        let thread_status = thread_status.clone();
+                        move || {
+                            let mut lock = thread_status.lock().unwrap();
+                            lock.#node_status_ident.state.transition_to(NodeState::Success, #node_name);
+                            Ok(())
+                        }
+                    })
                     .map_err({
                         let thread_status = thread_status.clone();
                         move |err: #error_type| {
                             let mut lock = thread_status.lock().unwrap();
-                            lock.#node_status_ident.state = NodeState::Error(err.to_string());
+                            lock.#node_status_ident.state.transition_to(NodeState::Error(err.to_string()), #node_name);
                             err
                         }
                     })
@@ -1025,7 +1034,12 @@ impl<'a> Chain<'a> {
                                 lock.#node_status_ident.state = NodeState::Error(err.to_string());
                                 err
                             }
-                        })
+                        })?;
+                    {
+                        let mut lock = thread_status.lock().unwrap();
+                        lock.#node_status_ident.state = NodeState::Success;
+                    }
+                    Ok(())
                 }
             }
         };
@@ -1155,11 +1169,17 @@ impl<'a> Chain<'a> {
         let collect_statistics = match statistics_option {
             NodeStatisticsOption::WithStatistics { node_name } => {
                 let node_status_ident = self.node_status_ident(thread_id, node_name);
+                let node_name = node_name.to_string();
                 Some(quote! {
                     .inspect({
                         let thread_status = thread_status.clone();
+                        let mut started = false;
                         move |_| {
                             let mut lock = thread_status.lock().unwrap();
+                            if !started {
+                                started = true;
+                                lock.#node_status_ident.state.transition_to(NodeState::Running, #node_name);
+                            }
                             lock.#node_status_ident.input_read[#stream_index] += 1;
                             Ok(())
                         }
@@ -1189,11 +1209,17 @@ impl<'a> Chain<'a> {
         let collect_statistics = match statistics_option {
             NodeStatisticsOption::WithStatistics { node_name } => {
                 let node_status_ident = self.node_status_ident(thread_id, node_name);
+                let node_name = node_name.to_string();
                 Some(quote! {
                     .try_inspect({
                         let thread_status = thread_status.clone();
+                        let mut started = false;
                         move |_| {
                             let mut lock = thread_status.lock().unwrap();
+                            if !started {
+                                started = true;
+                                lock.#node_status_ident.state.transition_to(NodeState::Running, #node_name);
+                            }
                             lock.#node_status_ident.input_read[#stream_index] += 1;
                             Ok(())
                         }

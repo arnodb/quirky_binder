@@ -51,10 +51,30 @@ pub struct EdgeDescriptor<'a> {
 /// Node state
 #[derive(Debug)]
 pub enum NodeState {
-    /// Everything is fine
-    Good,
-    /// An error occurred in the node
+    /// The node is waiting for data to process.
+    Waiting,
+    /// The node is running.
+    Running,
+    /// The node successfully completed its processing.
+    Success,
+    /// An error occurred in the node.
     Error(String),
+}
+
+impl NodeState {
+    pub fn transition_to(&mut self, new_state: Self, node_name: &str) {
+        match (&self, &new_state) {
+            // Running to Running is allowed when there are multiple inputs
+            (Self::Running, Self::Waiting)
+            | (Self::Success, Self::Waiting | Self::Running | Self::Success)
+            | (Self::Error(_), Self::Waiting | Self::Running | Self::Success | Self::Error(_)) => {
+                eprintln!("Should not transition from {self:?} to {new_state:?} in {node_name}");
+            }
+            (_, _) => {
+                *self = new_state;
+            }
+        }
+    }
 }
 
 /// Node status container
@@ -71,7 +91,7 @@ pub struct NodeStatus<const I: usize, const O: usize> {
 impl<const I: usize, const O: usize> Default for NodeStatus<I, O> {
     fn default() -> Self {
         Self {
-            state: NodeState::Good,
+            state: NodeState::Waiting,
             input_read: [0; I],
             output_written: [0; O],
         }
