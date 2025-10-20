@@ -10,7 +10,7 @@ fallible-iterator = "0.3"
 quirky_binder_support = { path = "../../quirky_binder_support" }
 serde = "1"
 static_assertions = "1"
-truc_runtime = { git = "https://github.com/arnodb/truc.git" }
+truc_runtime = "0.3"
 
 # quirky_binder_monitor
 chrono = { version = "0.4", optional = true }
@@ -24,4 +24,4 @@ quirky_binder_monitor = ["chrono", "self-meter", "tracking-allocator"]
 [build-dependencies]
 quirky_binder = { path = "../../quirky_binder" }
 quirky_binder_csv = { path = "../../contrib/quirky_binder_csv" }
-truc = { git = "https://github.com/arnodb/truc.git" }
+truc = "0.3"

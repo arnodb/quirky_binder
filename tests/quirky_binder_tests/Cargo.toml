@@ -13,8 +13,8 @@ rand = "0.8"
 rand_chacha = "0.3"
 serde = "1"
 static_assertions = "1"
-truc_runtime = { git = "https://github.com/arnodb/truc.git" }
+truc_runtime = "0.3"
 
 [build-dependencies]
 quirky_binder = { path = "../../quirky_binder" }
-truc = { git = "https://github.com/arnodb/truc.git" }
+truc = "0.3"

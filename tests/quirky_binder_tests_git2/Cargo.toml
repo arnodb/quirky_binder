@@ -11,9 +11,9 @@ git2 = "0.20"
 quirky_binder_support = { path = "../../quirky_binder_support" }
 serde = "1"
 static_assertions = "1"
-truc_runtime = { git = "https://github.com/arnodb/truc.git" }
+truc_runtime = "0.3"
 
 [build-dependencies]
 quirky_binder = { path = "../../quirky_binder" }
 quirky_binder_git2 = { path = "../../contrib/quirky_binder_git2" }
-truc = { git = "https://github.com/arnodb/truc.git" }
+truc = "0.3"
