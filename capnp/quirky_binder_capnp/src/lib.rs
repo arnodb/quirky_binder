@@ -14,10 +14,12 @@ mod linux {
     use std::{
         pin::pin,
         sync::{Arc, LazyLock},
+        time::{Duration, Instant},
     };
 
-    use futures::{task::LocalSpawnExt, AsyncReadExt, StreamExt};
+    use futures::{task::LocalSpawnExt, AsyncReadExt, FutureExt, StreamExt};
     use quirky_binder_support::status::DynChainStatus;
+    use smol::{lock::Mutex, net::unix::UnixStream, Timer};
     use teleop::{
         attach::unix_socket::listen,
         cancellation::CancellationToken,
@@ -43,13 +45,13 @@ mod linux {
         let spawn = exec.spawner();
 
         exec.run_until(async {
-            let cancellation_token = CancellationToken::new();
+            let end_of_chain_token = CancellationToken::new();
 
             let join_main = std::thread::spawn({
-                let cancellation_token = cancellation_token.clone();
+                let end_of_chain_token = end_of_chain_token.clone();
                 move || {
                     let res = join_chain();
-                    cancellation_token.cancel();
+                    end_of_chain_token.cancel();
                     res
                 }
             });
@@ -63,24 +65,107 @@ mod linux {
                 capnp_rpc::new_client::<teleop_capnp::teleop::Client, _>(server)
             });
 
-            let mut conn_stream = pin!(listen(cancellation_token.clone()));
-            while let Some(stream) = conn_stream.next().await {
-                let (stream, _addr) = stream?;
-                if let Err(e) = spawn.spawn_local({
-                    let cancellation_token = cancellation_token.clone();
-                    let client = client.client.hook.clone();
-                    async move {
-                        let (input, output) = stream.split();
-                        run_server_connection(input, output, client, cancellation_token).await;
+            let connection_count = Arc::new(Mutex::new(0));
+
+            let main_cancellation_token = CancellationToken::new();
+
+            let handle_new_connection =
+                async |stream: UnixStream,
+                       end_of_chain_token: CancellationToken,
+                       main_cancellation_token: CancellationToken| {
+                    {
+                        let mut count = connection_count.lock().await;
+                        (*count) += 1;
                     }
-                }) {
-                    eprintln!("Error while spawning connection handler: {e}");
+                    if let Err(e) = spawn.spawn_local({
+                        let connection_count = connection_count.clone();
+                        let end_of_chain_token = end_of_chain_token.clone();
+                        let main_cancellation_token = main_cancellation_token.clone();
+                        let client = client.client.hook.clone();
+                        async move {
+                            let (input, output) = stream.split();
+                            run_server_connection(
+                                input,
+                                output,
+                                client,
+                                main_cancellation_token.clone(),
+                            )
+                            .await;
+                            {
+                                let mut count = connection_count.lock().await;
+                                (*count) -= 1;
+                                if end_of_chain_token.is_cancelled() && *count == 0 {
+                                    main_cancellation_token.cancel();
+                                }
+                            }
+                        }
+                    }) {
+                        eprintln!("Error while spawning connection handler: {e}");
+                        {
+                            let mut count = connection_count.lock().await;
+                            (*count) -= 1;
+                            if end_of_chain_token.is_cancelled() && *count == 0 {
+                                main_cancellation_token.cancel();
+                            }
+                        }
+                    }
+                };
+
+            let mut conn_stream = pin!(listen(CancellationToken::new()));
+
+            loop {
+                futures::select! {
+                    stream = conn_stream.next().fuse() => {
+                        if let Some(stream) = stream {
+                            let (stream, _addr) = stream?;
+                            handle_new_connection(
+                                stream,
+                                end_of_chain_token.clone(),
+                                main_cancellation_token.clone(),
+                            ).await;
+                        } else {
+                            break;
+                        }
+                    }
+                    () = end_of_chain_token.cancelled().fuse() => {
+                        break;
+                    }
                 }
             }
 
             join_main
                 .join()
                 .map_err(|_err| "Unable to join main thread".to_owned())??;
+
+            let deadline = Instant::now() + Duration::from_millis(10000);
+
+            eprintln!("Waiting for end of teleoperations...");
+            loop {
+                futures::select! {
+                    // Still accept connections (could be a late first one)
+                    stream = conn_stream.next().fuse() => {
+                        if let Some(stream) = stream {
+                            let (stream, _addr) = stream?;
+                            handle_new_connection(
+                                stream,
+                                end_of_chain_token.clone(),
+                                main_cancellation_token.clone(),
+                            ).await;
+                        } else {
+                            break;
+                        }
+                    }
+                    () = main_cancellation_token.cancelled().fuse() => {
+                        eprintln!("All teleop connections closed");
+                        break;
+                    }
+                    _ = FutureExt::fuse(Timer::at(deadline)) => {
+                        eprintln!("Timeout");
+                        main_cancellation_token.cancel();
+                        break;
+                    }
+                }
+            }
 
             Ok::<_, Box<dyn std::error::Error>>(())
         })?;
