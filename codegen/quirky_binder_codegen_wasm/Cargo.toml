@@ -2,7 +2,7 @@
 name = "quirky_binder_codegen_wasm"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.82.0"
+rust-version = "1.85.0"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
