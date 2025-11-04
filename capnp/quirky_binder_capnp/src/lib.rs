@@ -84,13 +84,14 @@ mod linux {
                         let client = client.client.hook.clone();
                         async move {
                             let (input, output) = stream.split();
-                            run_server_connection(
-                                input,
-                                output,
-                                client,
-                                main_cancellation_token.clone(),
-                            )
-                            .await;
+                            futures::select! {
+                                res = run_server_connection(input, output, client).fuse() => {
+                                    if let Err(err) = res {
+                                        eprintln!("Error while running server connection: {err}");
+                                    }
+                                }
+                                () = main_cancellation_token.cancelled().fuse() => {}
+                            }
                             {
                                 let mut count = connection_count.lock().await;
                                 (*count) -= 1;
@@ -111,7 +112,7 @@ mod linux {
                     }
                 };
 
-            let mut conn_stream = pin!(listen(CancellationToken::new()));
+            let mut conn_stream = pin!(listen());
 
             loop {
                 futures::select! {

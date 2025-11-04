@@ -17,7 +17,7 @@ quirky_binder_support = { path = "../../quirky_binder_support" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 smol = "2"
-teleop = "0.1"
+teleop = "0.2"
 
 [build-dependencies]
 capnpc = "0.21"
