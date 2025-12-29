@@ -200,7 +200,7 @@ impl DynNode for Group {
                     None
                 }
             });
-            quote!(#(#idents),*)
+            quote!(#(#idents,)*)
         };
 
         let group_field = self.group_field.ident();
@@ -230,7 +230,7 @@ impl DynNode for Group {
                 },
                 #eq,
                 |#group_ident, #rec_ident| {
-                    let #input_unpacked_record{ #fields, .. } = #rec_ident.unpack();
+                    let #input_unpacked_record{ #fields .. } = #rec_ident.unpack();
                     let #group_record_ident = #group_record::new(#group_unpacked_record { #fields });
                     #group_ident.#mut_group_field().push(#group_record_ident);
                 },
@@ -461,7 +461,7 @@ impl DynNode for SubGroup {
                         None
                     }
                 });
-                quote!(#(#idents),*)
+                quote!(#(#idents,)*)
             };
 
             let out_record_definition =
