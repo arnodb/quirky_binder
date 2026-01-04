@@ -12,7 +12,7 @@ use quirky_binder::{
       function_produce(
         fields: [("hello", "String")],
         body: r#"
-            let record = new_record("world".to_string());
+            let record = "world".to_string().into();
             output.send(Some(record))?;
             output.send(None)?;
             Ok(())
@@ -34,7 +34,7 @@ use quirky_binder::{
       function_produce(
         fields: [("hi", "String")],
         body: r#"
-            let record = new_record("there".to_string());
+            let record = "there".to_string().into();
             output.send(Some(record))?;
             output.send(None)?;
             Ok(())

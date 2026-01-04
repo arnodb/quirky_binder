@@ -37,7 +37,7 @@ use quirky_binder::{
                 let hello: String = row.get(0);
                 let universe: Option<i32> = row.get(1);
 
-                let record = new_record(hello, universe);
+                let record = (hello, universe).into();
                 output.send(Some(record))?;
             }
             output.send(None)?;

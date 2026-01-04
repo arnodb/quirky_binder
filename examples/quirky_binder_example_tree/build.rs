@@ -54,12 +54,12 @@ use quirky_binder::{
                     },
                 }
 
-                let record = new_record(
+                let record = (
                     id,
                     entry.file_name().to_string_lossy().to_string(),
                     entry.path().to_string_lossy().to_string(),
                     parent_id,
-                );
+                ).into();
                 output.send(Some(record))?;
             }
             output.send(None)?;

@@ -24,7 +24,7 @@ use quirky_binder::{
             for _ in 0..1024 {
                 let num: i8 = rng.gen();
 
-                let record = new_record(num);
+                let record = num.into();
                 output.send(Some(record))?;
             }
             output.send(None)?;

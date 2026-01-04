@@ -14,4 +14,4 @@ getset = "0.1"
 quirky_binder = { version = "0.1.1-dev", path = "../../quirky_binder" }
 quote = "1"
 serde = { version = "1", features = ["derive"] }
-truc = "0.3"
+truc = "0.4"

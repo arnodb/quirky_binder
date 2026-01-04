@@ -21,7 +21,6 @@ pub struct FunctionProduce {
     inputs: [NodeStream; 0],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    fields: Vec<(ValidFieldName, ValidFieldType)>,
     body: TokenStream,
 }
 
@@ -113,7 +112,6 @@ impl FunctionProduce {
             name,
             inputs,
             outputs,
-            fields: valid_fields,
             body: valid_body,
         })
     }
@@ -148,31 +146,10 @@ impl DynNode for FunctionProduce {
             },
         );
 
-        let def = chain.stream_definition_fragments(self.outputs.single());
-        let record = def.record();
-        let unpacked_record = def.unpacked_record();
-
-        let (new_record_args, new_record_fields) = {
-            let names = self
-                .fields
-                .iter()
-                .map(|(name, _)| name.ident())
-                .collect::<Vec<_>>();
-            let types = self
-                .fields
-                .iter()
-                .map(|(_, r#type)| r#type.r#type())
-                .collect::<Vec<_>>();
-            (quote!(#(#names: #types),*), quote!(#(#names),*))
-        };
-
         let body = &self.body;
 
         let thread_body = quote! {
             let mut output = #output;
-            let new_record = |#new_record_args| {
-                #record::new(#unpacked_record { #new_record_fields })
-            };
             move || {
                 #body
             }

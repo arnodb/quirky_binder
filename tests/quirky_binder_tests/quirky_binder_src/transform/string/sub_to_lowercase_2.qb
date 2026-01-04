@@ -14,7 +14,7 @@ use quirky_binder::{
       function_produce(
         fields: [("value", "Box<str>")],
         body: r#"
-            let record = new_record("BoîTe".into());
+            let record = Box::<str>::from("BoîTe").into();
             output.send(Some(record))?;
             output.send(None)?;
             Ok(())

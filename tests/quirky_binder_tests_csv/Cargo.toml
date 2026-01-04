@@ -11,9 +11,9 @@ fallible-iterator = "0.3"
 quirky_binder_support = { path = "../../quirky_binder_support" }
 serde = "1"
 static_assertions = "1"
-truc_runtime = "0.3"
+truc_runtime = "0.4"
 
 [build-dependencies]
 quirky_binder = { path = "../../quirky_binder" }
 quirky_binder_csv = { path = "../../contrib/quirky_binder_csv" }
-truc = "0.3"
+truc = "0.4"

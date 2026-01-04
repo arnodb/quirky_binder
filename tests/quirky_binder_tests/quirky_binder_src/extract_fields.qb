@@ -13,7 +13,7 @@ use quirky_binder::{
       function_produce(
         fields: [("value", "String")],
         body: r#"
-            let record = new_record("some value".to_string());
+            let record = "some value".to_string().into();
             output.send(Some(record))?;
             output.send(None)?;
             Ok(())

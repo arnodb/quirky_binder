@@ -14,7 +14,7 @@ use quirky_binder_csv::write_csv;
       function_produce(
         fields: [("hello", "String"), ("universe", "usize")],
         body: r#"
-            let record = new_record("world".to_string(), 42);
+            let record = ("world".to_string(), 42).into();
             output.send(Some(record))?;
             output.send(None)?;
             Ok(())
@@ -30,7 +30,7 @@ use quirky_binder_csv::write_csv;
       function_produce(
         fields: [("hello", "String"), ("universe", "usize")],
         body: r#"
-            let record = new_record("world".to_string(), 42);
+            let record = ("world".to_string(), 42).into();
             output.send(Some(record))?;
             output.send(None)?;
             Ok(())
@@ -41,13 +41,9 @@ use quirky_binder_csv::write_csv;
         add_fields: [("hello", "String")],
         body: r#"
             input.map(|record| {
-                use crate::all_chains::csv::write::streams::quirky_binder_main_0::
-                    quirky_binder_filter_1_0::{UnpackedRecord0, Record1, UnpackedRecord1};
+                use crate::all_chains::csv::write::streams::quirky_binder_main_0::quirky_binder_filter_1_0::UnpackedRecord0;
                 let UnpackedRecord0 { hello, universe } = record.unpack();
-                Ok(Record1::new(UnpackedRecord1 {
-                    universe: universe ^ 0b1111,
-                    hello: hello.chars().rev().collect::<String>(),
-                }))
+                Ok((universe ^ 0b1111, hello.chars().rev().collect::<String>()).into())
             })
 "#
     )

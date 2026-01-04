@@ -23,7 +23,7 @@ use quirky_binder::{
                 // Make sure there can be duplicated
                 let num = rng.gen::<u8>() & 0x3;
 
-                let record = new_record(num);
+                let record = num.into();
                 output.send(Some(record))?;
             }
             output.send(None)?;

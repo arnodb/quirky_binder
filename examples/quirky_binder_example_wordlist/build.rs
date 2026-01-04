@@ -33,7 +33,7 @@ use quirky_binder::{
                 if read > 0 {
                     let value = std::mem::take(&mut buffer);
                     let value = value.trim_end_matches('\n');
-                    let record = new_record(value.to_string().into_boxed_str());
+                    let record = value.to_string().into_boxed_str().into();
                     output.send(Some(record))?;
                 } else {
                     output.send(None)?;

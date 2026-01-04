@@ -4,10 +4,7 @@ use codegen::Scope;
 use truc::{
     generator::{
         config::GeneratorConfig,
-        fragment::{
-            clone::CloneImplGenerator, serde::SerdeImplGenerator, FragmentGenerator,
-            FragmentGeneratorSpecs,
-        },
+        fragment::{FragmentGenerator, FragmentGeneratorSpecs},
     },
     record::{
         definition::{RecordDefinition, RecordVariantId},
@@ -140,13 +137,14 @@ impl Graph {
 
                 module.fragment(truc::generator::generate(
                     &truc_definition,
-                    &GeneratorConfig::default_with_custom_generators([
-                        Box::new(CloneImplGenerator) as Box<dyn FragmentGenerator>,
-                        Box::new(SerdeImplGenerator) as Box<dyn FragmentGenerator>,
-                        Box::new(VariantAliasesGenerator {
+                    &GeneratorConfig::default()
+                        .with_unnamed_fields_fragments()
+                        .with_clone_fragments()
+                        .with_serde_fragments()
+                        .with_fragment_generators([Box::new(VariantAliasesGenerator {
                             reversed_variants_mapping,
-                        }) as Box<dyn FragmentGenerator>,
-                    ]),
+                        })]
+                            as [Box<dyn FragmentGenerator>; 1]),
                 ));
             }
             write!(file, "{root_module}").unwrap();

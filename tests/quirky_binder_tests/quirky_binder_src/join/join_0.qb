@@ -25,7 +25,7 @@ use quirky_binder::{
                 .map(|_| rng.gen())
                 .collect::<BTreeSet<i8>>();
             for num in nums {
-                let record = new_record(num);
+                let record = num.into();
                 output.send(Some(record))?;
             }
             output.send(None)?;
@@ -53,7 +53,7 @@ use quirky_binder::{
                 .map(|_| rng.gen())
                 .collect::<BTreeSet<i8>>();
             for num in nums {
-                let record = new_record(num);
+                let record = num.into();
                 output.send(Some(record))?;
             }
             output.send(None)?;
