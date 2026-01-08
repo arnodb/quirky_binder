@@ -22,6 +22,7 @@ check_all:
     cargo clippy --all-features --all-targets -- -D warnings
     cargo build --all-features
     cargo test --all-features
+    RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
 
     just msrv
     cargo build --all-features
@@ -34,6 +35,9 @@ check_all:
     just stable
     just recipes
     just wasm
+
+doc:
+    RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
 
 [working-directory: 'recipes']
 recipes:
