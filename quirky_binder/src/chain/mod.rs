@@ -6,47 +6,13 @@ pub use quirky_binder_lang::location::Location;
 use serde::Deserialize;
 use syn::{visit_mut::VisitMut, Ident, Type};
 
-use self::error::{ChainError, ChainErrorWithTrace};
 use crate::{chain::type_rewriter::StreamsRewriter, codegen::Module, prelude::*};
 
 pub mod customizer;
 pub mod error;
+pub mod result;
 pub mod trace;
 pub mod type_rewriter;
-
-pub type ChainResultWithTrace<T> = Result<T, ChainErrorWithTrace>;
-
-pub type ChainResult<T> = Result<T, ChainError>;
-
-pub trait WithTraceElement {
-    type WithTraceType;
-
-    fn with_trace_element<Element>(self, element: Element) -> Self::WithTraceType
-    where
-        Element: Fn() -> TraceElement<'static>;
-}
-
-impl<T> WithTraceElement for ChainResult<T> {
-    type WithTraceType = ChainResultWithTrace<T>;
-
-    fn with_trace_element<Element>(self, element: Element) -> Self::WithTraceType
-    where
-        Element: Fn() -> TraceElement<'static>,
-    {
-        self.map_err(|err| err.with_trace_element(element))
-    }
-}
-
-impl<T> WithTraceElement for ChainResultWithTrace<T> {
-    type WithTraceType = ChainResultWithTrace<T>;
-
-    fn with_trace_element<Element>(self, element: Element) -> Self::WithTraceType
-    where
-        Element: Fn() -> TraceElement<'static>,
-    {
-        self.map_err(|err| err.with_trace_element(element))
-    }
-}
 
 /// Chain thread data.
 #[derive(Debug)]

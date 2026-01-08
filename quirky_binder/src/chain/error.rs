@@ -1,4 +1,4 @@
-use super::{Trace, TraceElement, WithTraceElement};
+use super::trace::{Trace, TraceElement, WithTraceElement};
 
 #[derive(Error, Debug)]
 pub enum ChainError {

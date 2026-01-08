@@ -5,9 +5,9 @@ pub use crate::{
     chain::{
         customizer::ChainCustomizer,
         error::{ChainError, ChainErrorWithTrace},
-        trace::{Trace, TraceElement},
-        Chain, ChainResult, ChainResultWithTrace, ChainThreadType, ImportScope,
-        NodeStatisticsOption, StreamCustomizer, WithTraceElement,
+        result::{ChainResult, ChainResultWithTrace},
+        trace::{Trace, TraceElement, WithTraceElement},
+        Chain, ChainThreadType, ImportScope, NodeStatisticsOption, StreamCustomizer,
     },
     graph::{
         builder::{

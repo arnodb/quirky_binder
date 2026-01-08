@@ -77,6 +77,15 @@ impl Display for TraceElement<'_> {
     }
 }
 
+/// Trait to implement in order to attach [`Trace`] capabilities.
+pub trait WithTraceElement {
+    type WithTraceType;
+
+    fn with_trace_element<Element>(self, element: Element) -> Self::WithTraceType
+    where
+        Element: Fn() -> TraceElement<'static>;
+}
+
 /// Generates a callback responsible for creating a [`TraceElement`] with the current source file,
 /// the provided name, and the location in the current source file.
 #[macro_export]
