@@ -3,9 +3,10 @@ pub use serde::Deserialize;
 
 pub use crate::{
     chain::{
+        customizer::ChainCustomizer,
         error::{ChainError, ChainErrorWithTrace},
-        Chain, ChainCustomizer, ChainResult, ChainResultWithTrace, ChainThreadType, ImportScope,
-        NodeStatisticsOption, Trace, TraceElement, WithTraceElement,
+        Chain, ChainResult, ChainResultWithTrace, ChainThreadType, ImportScope,
+        NodeStatisticsOption, StreamCustomizer, Trace, TraceElement, WithTraceElement,
     },
     graph::{
         builder::{

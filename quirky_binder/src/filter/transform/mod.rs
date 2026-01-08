@@ -204,10 +204,6 @@ impl<Spec: TransformSpec> DynNode for Transform<Spec> {
         };
 
         let new_variant_body = if self.new_variant {
-            let def = chain.stream_definition_fragments(self.outputs.single());
-            let record = def.record();
-            let unpacked_record = def.unpacked_record();
-
             let record_definition =
                 &graph.record_definitions()[self.outputs.single().record_type()];
             let variant = &record_definition[self.outputs.single().variant_id()];
@@ -252,7 +248,7 @@ impl<Spec: TransformSpec> DynNode for Transform<Spec> {
 
                 #type_updates
 
-                let record = #record::from(#unpacked_record { #unpacked_fields });
+                let record = Output0::from(UnpackedOutput0 { #unpacked_fields });
             })
         } else {
             None

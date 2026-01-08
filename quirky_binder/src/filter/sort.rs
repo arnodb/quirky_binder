@@ -73,12 +73,8 @@ impl DynNode for Sort {
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
-        let record = chain
-            .stream_definition_fragments(self.outputs.single())
-            .record();
-
         let cmp = fields_cmp(
-            &record,
+            &syn::parse_str::<syn::Type>("Input0").unwrap(),
             self.fields
                 .iter()
                 .map(|field| field.as_ref().map(ValidFieldName::name)),
@@ -193,9 +189,6 @@ impl DynNode for SubSort {
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
-        let record = chain
-            .stream_definition_fragments(self.inputs.single())
-            .record();
         let sub_record = chain
             .sub_stream_definition_fragments(&self.path_sub_stream)
             .record();
@@ -217,7 +210,7 @@ impl DynNode for SubSort {
         );
 
         let inline_body = quote! {
-            fn ci_fn(record: &mut #record) -> impl Iterator<Item = &mut Vec<#sub_record>> {
+            fn ci_fn(record: &mut Input0) -> impl Iterator<Item = &mut Vec<#sub_record>> {
                 #flat_map
             }
             quirky_binder_support::iterator::sort::SubSort::new(

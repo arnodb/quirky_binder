@@ -121,8 +121,6 @@ impl DynNode for ExtractFields {
             },
         );
 
-        let def_output_1 = chain.stream_definition_fragments(&self.outputs[1]);
-
         let record_definition = &graph.record_definitions()[self.outputs[1].record_type()];
         let variant = &record_definition[self.outputs[1].variant_id()];
         let datum_clones = variant.data().map(|d| {
@@ -132,9 +130,6 @@ impl DynNode for ExtractFields {
                 let #name = record.#name().clone();
             }
         });
-
-        let output_record_1 = def_output_1.record();
-        let output_unpacked_record_1 = def_output_1.unpacked_record();
 
         let fields = variant.data().map(|d| {
             let datum = &record_definition[d];
@@ -149,8 +144,8 @@ impl DynNode for ExtractFields {
                 let mut output_1 = #output_1;
                 while let Some(record) = input_0.next()? {
                     #(#datum_clones)*
-                    let record_1 = #output_record_1::new(
-                        #output_unpacked_record_1 { #(#fields),* }
+                    let record_1 = Output1::new(
+                        UnpackedOutput1 { #(#fields),* }
                     );
                     output_0.send(Some(record))?;
                     output_1.send(Some(record_1))?;

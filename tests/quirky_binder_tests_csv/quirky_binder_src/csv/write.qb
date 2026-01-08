@@ -41,8 +41,7 @@ use quirky_binder_csv::write_csv;
         add_fields: [("hello", "String")],
         body: r#"
             input.map(|record| {
-                use crate::all_chains::csv::write::streams::quirky_binder_main_0::quirky_binder_filter_1_0::UnpackedRecord0;
-                let UnpackedRecord0 { hello, universe } = record.unpack();
+                let UnpackedInput0 { hello, universe } = record.unpack();
                 Ok((universe ^ 0b1111, hello.chars().rev().collect::<String>()).into())
             })
 "#

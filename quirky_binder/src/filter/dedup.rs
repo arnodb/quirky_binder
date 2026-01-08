@@ -53,13 +53,13 @@ impl DynNode for Dedup {
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let record = chain
-            .stream_definition_fragments(self.inputs.single())
-            .record();
         let record_definition = &graph.record_definitions()[self.inputs.single().record_type()];
         let variant = &record_definition[self.inputs.single().variant_id()];
 
-        let eq = fields_eq(&record, variant.data().map(|d| record_definition[d].name()));
+        let eq = fields_eq(
+            &syn::parse_str::<syn::Type>("Input0").unwrap(),
+            variant.data().map(|d| record_definition[d].name()),
+        );
 
         let inline_body = quote! {
             quirky_binder_support::iterator::dedup::Dedup::new(input, #eq)
@@ -172,9 +172,6 @@ impl DynNode for SubDedup {
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let record = chain
-            .stream_definition_fragments(self.inputs.single())
-            .record();
         let sub_record = chain
             .sub_stream_definition_fragments(&self.path_sub_stream)
             .record();
@@ -196,7 +193,7 @@ impl DynNode for SubDedup {
         );
 
         let inline_body = quote! {
-            fn ci_fn(record: &mut #record) -> impl Iterator<Item = &mut Vec<#sub_record>> {
+            fn ci_fn(record: &mut Input0) -> impl Iterator<Item = &mut Vec<#sub_record>> {
                 #flat_map
             }
             quirky_binder_support::iterator::dedup::SubDedup::new(

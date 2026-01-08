@@ -23,10 +23,14 @@ quirky_binder_support = { version = "0.1.1-dev", path = "../quirky_binder_suppor
 quote = "1"
 ron = "0.11"
 serde = { version = ">=1,<=1.0.219", features = ["derive"] }
-syn = { version = "1", features = ["full", "extra-traits"] }
+syn = { version = "1", features = ["full", "extra-traits", "visit-mut"] }
 thiserror = "1"
 truc = "0.4"
 which = "4"
+
+[dev-dependencies]
+rand = "0.8"
+rand_chacha = { version = "0.3" }
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage,coverage_nightly)'] }

@@ -124,11 +124,8 @@ impl DynNode for Ungroup {
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
-        let def = chain.stream_definition_fragments(self.outputs.single());
         let def_group = chain.sub_stream_definition_fragments(&self.group_stream);
-
         let group_unpacked_record = def_group.unpacked_record();
-        let unpacked_record_in = def.unpacked_record_in();
 
         let group_field_mut = format_ident!("{}_mut", self.group_field.name());
 
@@ -150,7 +147,7 @@ impl DynNode for Ungroup {
                 let group = std::mem::take(#record_ident.#group_field_mut());
                 Ok(group.into_iter().map(move |item| {
                     let #group_unpacked_record { #grouped_fields } = item.unpack();
-                    Ok((#record_ident.clone(), #unpacked_record_in { #grouped_fields }).into())
+                    Ok((#record_ident.clone(), UnpackedOutputIn0 { #grouped_fields }).into())
                 }).transpose_into_fallible())
             })
         };

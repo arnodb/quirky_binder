@@ -83,11 +83,6 @@ impl DynNode for Anchor {
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
-        let def_output = chain.stream_definition_fragments(self.outputs.single());
-
-        let output_record = def_output.record();
-        let output_unpacked_record_in = def_output.unpacked_record_in();
-
         let anchor_field = self.anchor_field.ident();
 
         let inline_body = quote! {
@@ -95,9 +90,9 @@ impl DynNode for Anchor {
             input.map(move |record| {
                 let anchor = seq;
                 seq = anchor + 1;
-                Ok(#output_record::from((
+                Ok(Output0::from((
                     record,
-                    #output_unpacked_record_in { #anchor_field: quirky_binder_support::AnchorId::new(anchor) },
+                    UnpackedOutputIn0 { #anchor_field: quirky_binder_support::AnchorId::new(anchor) },
                 )))
             })
         };

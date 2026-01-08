@@ -15,7 +15,7 @@ use truc::record::{
     type_resolver::TypeResolver,
 };
 
-use crate::{chain::ChainCustomizer, stream::StreamRecordType};
+use crate::{chain::customizer::ChainCustomizer, stream::StreamRecordType};
 
 #[derive(Clone, Debug)]
 pub enum QuirkyDatumType {

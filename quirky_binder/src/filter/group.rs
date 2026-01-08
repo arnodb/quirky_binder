@@ -175,13 +175,8 @@ impl DynNode for Group {
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let def_input = chain.stream_definition_fragments(self.inputs.single());
-        let def = chain.stream_definition_fragments(self.outputs.single());
         let def_group = chain.sub_stream_definition_fragments(&self.group_stream);
 
-        let input_unpacked_record = def_input.unpacked_record();
-        let unpacked_record_in = def.unpacked_record_in();
-        let record_and_unpacked_out = def.record_and_unpacked_out();
         let group_record = def_group.record();
         let group_unpacked_record = def_group.unpacked_record();
 
@@ -208,7 +203,12 @@ impl DynNode for Group {
 
         let eq = {
             let fields = self.by_fields.iter().map(ValidFieldName::name);
-            fields_eq_ab(&def.record(), fields.clone(), &def_input.record(), fields)
+            fields_eq_ab(
+                &syn::parse_str::<syn::Type>("Output0").unwrap(),
+                fields.clone(),
+                &syn::parse_str::<syn::Type>("Input0").unwrap(),
+                fields,
+            )
         };
 
         let rec_ident = self.identifier_for("rec");
@@ -219,10 +219,10 @@ impl DynNode for Group {
             quirky_binder_support::iterator::group::Group::new(
                 input,
                 |#rec_ident| {
-                    let #record_and_unpacked_out { record: mut #record_ident, #fields } =
-                        #record_and_unpacked_out::from((
+                    let Output0AndUnpackedOut { record: mut #record_ident, #fields } =
+                        Output0AndUnpackedOut::from((
                             #rec_ident,
-                            #unpacked_record_in { #group_field: Vec::new() },
+                            UnpackedOutputIn0 { #group_field: Vec::new() },
                         ));
                     let #group_record_ident = #group_record::new(#group_unpacked_record { #fields });
                     #record_ident.#mut_group_field().push(#group_record_ident);
@@ -230,7 +230,7 @@ impl DynNode for Group {
                 },
                 #eq,
                 |#group_ident, #rec_ident| {
-                    let #input_unpacked_record{ #fields .. } = #rec_ident.unpack();
+                    let UnpackedInput0 { #fields .. } = #rec_ident.unpack();
                     let #group_record_ident = #group_record::new(#group_unpacked_record { #fields });
                     #group_ident.#mut_group_field().push(#group_record_ident);
                 },

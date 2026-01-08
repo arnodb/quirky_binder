@@ -175,24 +175,15 @@ impl DynNode for Join {
             },
         );
 
-        let primary_input_def = chain.stream_definition_fragments(&self.inputs[0]);
-        let secondary_input_def = chain.stream_definition_fragments(&self.inputs[1]);
-        let output_def = chain.stream_definition_fragments(self.outputs.single());
-
-        let secondary_unpacked_record = secondary_input_def.unpacked_record();
-
         let cmp = fields_cmp_ab(
-            &primary_input_def.record(),
+            &syn::parse_str::<syn::Type>("Input0").unwrap(),
             self.primary_fields.iter().map(ValidFieldName::name),
-            &secondary_input_def.record(),
+            &syn::parse_str::<syn::Type>("Input1").unwrap(),
             self.secondary_fields.iter().map(ValidFieldName::name),
         );
 
         let has_joined_fields = !self.joined_fields.is_empty();
         let build_output = if has_joined_fields {
-            let record_and_unpacked_out = output_def.record_and_unpacked_out();
-            let unpacked_record_in = output_def.unpacked_record_in();
-
             let (joined_fields, joined_fields_defaults) = {
                 let names = self
                     .joined_fields
@@ -210,11 +201,11 @@ impl DynNode for Join {
             quote! {
                 if equal {
                     let secondary_record = secondary_record.take().expect("secondary_record");
-                    let #secondary_unpacked_record{ #joined_fields .. } = secondary_record.unpack();
-                    let #record_and_unpacked_out { record } = #record_and_unpacked_out::from((primary_record, #unpacked_record_in { #joined_fields }));
+                    let UnpackedInput1 { #joined_fields .. } = secondary_record.unpack();
+                    let Output0AndUnpackedOut { record } = Output0AndUnpackedOut::from((primary_record, UnpackedOutputIn0 { #joined_fields }));
                     output.send(Some(record))?;
                 } else {
-                    let #record_and_unpacked_out { record } = #record_and_unpacked_out::from((primary_record, #unpacked_record_in { #joined_fields_defaults }));
+                    let Output0AndUnpackedOut { record } = Output0AndUnpackedOut::from((primary_record, UnpackedOutputIn0 { #joined_fields_defaults }));
                     output.send(Some(record))?;
                 }
             }

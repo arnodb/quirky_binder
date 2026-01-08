@@ -4,12 +4,14 @@ use itertools::Itertools;
 use proc_macro2::TokenStream;
 pub use quirky_binder_lang::location::Location;
 use serde::Deserialize;
-use syn::{Ident, Type};
+use syn::{visit_mut::VisitMut, Ident, Type};
 
 use self::error::{ChainError, ChainErrorWithTrace};
-use crate::{codegen::Module, prelude::*};
+use crate::{chain::type_rewriter::StreamsRewriter, codegen::Module, prelude::*};
 
+pub mod customizer;
 pub mod error;
+pub mod type_rewriter;
 
 pub type ChainResultWithTrace<T> = Result<T, ChainErrorWithTrace>;
 
@@ -129,28 +131,6 @@ pub struct Chain<'a> {
 }
 
 impl<'a> Chain<'a> {
-    pub fn stream_definition_fragments(
-        &self,
-        stream: &'a NodeStream,
-    ) -> RecordDefinitionFragments<'a> {
-        RecordDefinitionFragments::new(
-            stream.record_type(),
-            stream.variant_id(),
-            &self.customizer.streams_module_name,
-        )
-    }
-
-    pub fn sub_stream_definition_fragments(
-        &self,
-        stream: &'a NodeSubStream,
-    ) -> RecordDefinitionFragments<'a> {
-        RecordDefinitionFragments::new(
-            stream.record_type(),
-            stream.variant_id(),
-            &self.customizer.streams_module_name,
-        )
-    }
-
     #[allow(clippy::too_many_arguments)]
     fn new_thread(
         &mut self,
@@ -923,6 +903,12 @@ impl<'a> Chain<'a> {
         }
     }
 
+    fn rewrite_body(&self, body: &TokenStream, node: &dyn DynNode) -> syn::Block {
+        let mut block = syn::parse2::<syn::Block>(quote! {{ #body }}).expect("Block");
+        StreamsRewriter::new(node, self).visit_block_mut(&mut block);
+        block
+    }
+
     pub fn implement_inline_node(
         &mut self,
         node: &dyn DynNode,
@@ -950,15 +936,15 @@ impl<'a> Chain<'a> {
             NodeStatisticsOption::WithStatistics { node_name: name },
         );
 
+        let inline_body = self.rewrite_body(inline_body, node);
+
         let fn_def = quote! {
             pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
                 let thread_status = thread_control.status.clone();
 
                 #input
 
-                let output = {
-                    #inline_body
-                };
+                let output = #inline_body;
 
                 output
                     .inspect({
@@ -1017,14 +1003,14 @@ impl<'a> Chain<'a> {
 
         let node_status_ident = self.node_status_ident(thread_id, name);
 
+        let thread_body = self.rewrite_body(thread_body, node);
+
         let fn_def = quote! {
             pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
                 let thread_status = thread_control.status.clone();
 
                 #[allow(unused_mut)]
-                let mut thread_body = {
-                    #thread_body
-                };
+                let mut thread_body = #thread_body;
                 move || {
                     thread_body()
                         .map_err({
@@ -1128,19 +1114,15 @@ impl<'a> Chain<'a> {
             (body, access)
         });
 
-        let def = self.stream_definition_fragments(output);
-        let unpacked_record_in = def.unpacked_record_in();
-        let record_and_unpacked_out = def.record_and_unpacked_out();
-
         let inline_body = quote! {
             #preamble
 
             input.map(move |record| {
-                let #record_and_unpacked_out {
+                let Output0AndUnpackedOut {
                     mut record,
                     #first_access,
-                } = #record_and_unpacked_out::from((
-                    record, #unpacked_record_in { #first_access: Vec::new() },
+                } = Output0AndUnpackedOut::from((
+                    record, UnpackedOutputIn0 { #first_access: Vec::new() },
                 ));
                 #body
                 Ok(record)
@@ -1307,37 +1289,31 @@ impl<'a> Chain<'a> {
     }
 }
 
-pub const DEFAULT_CHAIN_ROOT_MODULE_NAME: [&str; 2] = ["crate", "chain"];
-pub const DEFAULT_CHAIN_STREAMS_MODULE_NAME: &str = "streams";
-pub const DEFAULT_CHAIN_ERROR_TYPE: [&str; 2] = ["anyhow", "Error"];
-pub const DEFAULT_CHAIN_ERROR_MACRO: [&str; 2] = ["anyhow", "anyhow"];
-pub const DEFAULT_CHAIN_MAIN_NAME: &str = "main";
+pub trait StreamCustomizer {
+    fn stream_definition_fragments<'c>(
+        &'c self,
+        stream: &'c NodeStream,
+    ) -> RecordDefinitionFragments<'c>;
 
-pub struct ChainCustomizer {
-    pub streams_module_name: FullyQualifiedName,
-    pub module_name: FullyQualifiedName,
-    pub custom_module_imports: Vec<(String, String)>,
-    pub error_type: FullyQualifiedName,
-    pub error_macro: FullyQualifiedName,
-    pub main_name: String,
-    pub main_attrs: Vec<String>,
+    fn sub_stream_definition_fragments<'c>(
+        &'c self,
+        stream: &'c NodeSubStream,
+    ) -> RecordDefinitionFragments<'c>;
 }
 
-impl Default for ChainCustomizer {
-    fn default() -> Self {
-        Self {
-            streams_module_name: FullyQualifiedName::new_n(
-                DEFAULT_CHAIN_ROOT_MODULE_NAME
-                    .iter()
-                    .chain([DEFAULT_CHAIN_STREAMS_MODULE_NAME].iter()),
-            ),
-            module_name: FullyQualifiedName::new_n(DEFAULT_CHAIN_ROOT_MODULE_NAME.iter()),
-            custom_module_imports: vec![],
-            error_type: FullyQualifiedName::new_n(DEFAULT_CHAIN_ERROR_TYPE.iter()),
-            error_macro: FullyQualifiedName::new_n(DEFAULT_CHAIN_ERROR_MACRO.iter()),
-            main_name: DEFAULT_CHAIN_MAIN_NAME.to_string(),
-            main_attrs: Vec::default(),
-        }
+impl<'a> StreamCustomizer for Chain<'a> {
+    fn stream_definition_fragments<'c>(
+        &'c self,
+        stream: &'c NodeStream,
+    ) -> RecordDefinitionFragments<'c> {
+        self.customizer.stream_definition_fragments(stream)
+    }
+
+    fn sub_stream_definition_fragments<'c>(
+        &'c self,
+        stream: &'c NodeSubStream,
+    ) -> RecordDefinitionFragments<'c> {
+        self.customizer.sub_stream_definition_fragments(stream)
     }
 }
 
