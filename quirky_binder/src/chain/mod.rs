@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, fmt::Display};
+use std::collections::HashMap;
 
 use itertools::Itertools;
 use proc_macro2::TokenStream;
@@ -11,6 +11,7 @@ use crate::{chain::type_rewriter::StreamsRewriter, codegen::Module, prelude::*};
 
 pub mod customizer;
 pub mod error;
+pub mod trace;
 pub mod type_rewriter;
 
 pub type ChainResultWithTrace<T> = Result<T, ChainErrorWithTrace>;
@@ -1340,79 +1341,6 @@ impl Drop for ImportScope {
     fn drop(&mut self) {
         assert!(self.used);
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct Trace<'a> {
-    elements: Vec<TraceElement<'a>>,
-}
-
-impl<'a> Trace<'a> {
-    pub fn new_leaf(element: TraceElement<'a>) -> Self {
-        Trace {
-            elements: vec![element],
-        }
-    }
-
-    pub fn push(mut self, element: TraceElement<'a>) -> Self {
-        self.elements.push(element);
-        self
-    }
-
-    pub fn to_owned(&self) -> Trace<'static> {
-        Trace {
-            elements: self.elements.iter().map(TraceElement::to_owned).collect(),
-        }
-    }
-}
-
-impl Display for Trace<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (index, element) in self.elements.iter().enumerate() {
-            f.write_fmt(format_args!("{index:4}: {element}"))?;
-        }
-        Ok(())
-    }
-}
-
-#[derive(Clone, Debug, new)]
-pub struct TraceElement<'a> {
-    source: Cow<'a, str>,
-    name: Cow<'a, str>,
-    location: Location,
-}
-
-impl TraceElement<'_> {
-    pub fn to_owned(&self) -> TraceElement<'static> {
-        TraceElement {
-            source: self.source.clone().into_owned().into(),
-            name: self.name.clone().into_owned().into(),
-            location: self.location,
-        }
-    }
-}
-
-impl Display for TraceElement<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "{}\n             at {}:{}:{}\n",
-            self.name, self.source, self.location.line, self.location.col
-        ))
-    }
-}
-
-#[macro_export]
-macro_rules! trace_element {
-    ($name:expr) => {
-        || {
-            TraceElement::new(
-                std::file!().into(),
-                ($name).into(),
-                $crate::chain::Location::new(std::line!() as usize, std::column!() as usize),
-            )
-            .to_owned()
-        }
-    };
 }
 
 pub enum NodeStatisticsOption<'a> {
