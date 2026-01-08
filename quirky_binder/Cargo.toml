@@ -11,7 +11,7 @@ readme = "../README.md"
 
 [dependencies]
 codegen = "0.2"
-derive-new = "0.5"
+derive-new = "0.7"
 derive_more = "0.99"
 getset = "0.1"
 handlebars = "4"

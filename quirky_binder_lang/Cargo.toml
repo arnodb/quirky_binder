@@ -19,7 +19,7 @@ nom_parser = ["nom"]
 
 [dependencies]
 annotate-snippets = { version = "0.9", features = ["color"] }
-derive-new = "0.5"
+derive-new = "0.7"
 logos = { version = "0.13", optional = true }
 nom = { version = "7", optional = true }
 peekmore = { version = "1", optional = true }
