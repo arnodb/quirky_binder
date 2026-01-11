@@ -7,6 +7,7 @@ pub mod function;
 pub mod group;
 pub mod hof;
 pub mod monitor;
+pub mod pipe;
 pub mod sort;
 pub mod transform;
 pub mod ungroup;
