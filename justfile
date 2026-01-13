@@ -17,11 +17,16 @@ watch_clippy:
 test *args:
     cargo test --all-features {{args}}
 
+test_threads:
+    RUSTC_BOOTSTRAP=1 RUSTDOCFLAGS="-Z unstable-options --output-format json" cargo doc -p quirky_binder_tests --no-deps --all-features --document-private-items
+    cd tests/quirky_binder_tests_threads && cargo test -p quirky_binder_tests_threads --all-features
+
 check_all:
     just stable
     cargo clippy --all-features --all-targets -- -D warnings
     cargo build --all-features
     cargo test --all-features
+    just test_threads
     RUSTDOCFLAGS="-D warnings" cargo doc --all-features --no-deps
 
     just msrv

@@ -106,6 +106,13 @@ jobs:
         name: Compile and run tests
         run: cargo test ${{ inputs.rust_features }} --verbose
 
+      - id: test-threads
+        name: Run threads tests (stable only)
+        if: ${{ inputs.rust_toolchain == 'stable' }}
+        run: |
+          RUSTC_BOOTSTRAP=1 RUSTDOCFLAGS="-Z unstable-options --output-format json" cargo doc -p quirky_binder_tests --no-deps --all-features --document-private-items
+          cd tests/quirky_binder_tests_threads && cargo test -p quirky_binder_tests_threads --all-features
+
       - id: doc
         name: Doc
         if: ${{ inputs.with_doc }}
