@@ -11,7 +11,7 @@ pub struct UngroupParams<'a> {
     group_field: FieldParam<'a>,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct Ungroup {
     name: FullyQualifiedName,
     #[getset(get = "pub")]
@@ -180,7 +180,7 @@ pub struct SubUngroupParams<'a> {
     group_field: FieldParam<'a>,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct SubUngroup {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

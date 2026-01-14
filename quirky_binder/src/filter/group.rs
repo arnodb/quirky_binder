@@ -19,7 +19,7 @@ pub struct GroupParams<'a> {
     group_field: &'a str,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct Group {
     name: FullyQualifiedName,
     #[getset(get = "pub")]
@@ -265,7 +265,7 @@ pub struct SubGroupParams<'a> {
     group_field: &'a str,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct SubGroup {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

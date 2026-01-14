@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, fmt::Display};
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Module {
     imports: BTreeSet<String>,
     modules: Vec<(String, Module)>,

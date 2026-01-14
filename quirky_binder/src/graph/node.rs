@@ -1,11 +1,12 @@
 use std::{
     collections::hash_map::DefaultHasher,
+    fmt::Debug,
     hash::{Hash, Hasher},
 };
 
 use crate::prelude::*;
 
-pub trait DynNode {
+pub trait DynNode: Debug {
     fn name(&self) -> &FullyQualifiedName;
 
     fn inputs(&self) -> &[NodeStream];
@@ -30,7 +31,7 @@ pub trait DynNode {
     }
 }
 
-#[derive(new)]
+#[derive(Debug, new)]
 pub struct NodeCluster<const IN: usize, const OUT: usize> {
     name: FullyQualifiedName,
     ordered_nodes: Vec<Box<dyn DynNode>>,

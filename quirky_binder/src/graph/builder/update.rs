@@ -387,6 +387,7 @@ impl OutputBuilderForUpdate<'_, '_, '_, DerivedExtra> {
     }
 }
 
+#[derive(Debug)]
 pub struct PathUpdateElement {
     pub field: ValidFieldName,
     pub sub_input_stream: NodeSubStream,

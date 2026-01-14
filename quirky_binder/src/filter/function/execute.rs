@@ -12,7 +12,7 @@ pub struct FunctionExecuteParams<'a> {
     body: &'a str,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct FunctionExecute {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

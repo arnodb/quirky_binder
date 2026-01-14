@@ -10,7 +10,7 @@ use truc::record::type_resolver::StaticTypeResolver;
 
 const TOKENIZE_TRACE_NAME: &str = "tokenize";
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct Tokenize {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

@@ -14,7 +14,7 @@ pub struct FunctionProduceParams<'a> {
     body: &'a str,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct FunctionProduce {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

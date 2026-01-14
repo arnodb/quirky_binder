@@ -17,7 +17,7 @@ pub struct JoinParams<'a> {
     secondary_fields: FieldsParam<'a>,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct Join {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

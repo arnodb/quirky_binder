@@ -10,7 +10,7 @@ pub struct AnchorParams<'a> {
     anchor_field: &'a str,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct Anchor {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

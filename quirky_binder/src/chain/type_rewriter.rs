@@ -119,6 +119,7 @@ mod tests {
         use rand::Rng;
         use rand_chacha::rand_core::SeedableRng;
 
+        #[derive(Debug)]
         struct TestNode {
             name: FullyQualifiedName,
             inputs: Vec<NodeStream>,

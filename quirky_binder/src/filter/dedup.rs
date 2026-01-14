@@ -4,7 +4,7 @@ use crate::{prelude::*, support::eq::fields_eq, trace_element};
 
 const DEDUP_TRACE_NAME: &str = "dedup";
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct Dedup {
     name: FullyQualifiedName,
     #[getset(get = "pub")]
@@ -92,7 +92,7 @@ pub struct SubDedupParams<'a> {
     path_fields: FieldsParam<'a>,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct SubDedup {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

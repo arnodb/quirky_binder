@@ -54,7 +54,7 @@ pub enum ChainThreadType {
 }
 
 /// Chain source data.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ChainSourceThread {
     /// Identifier of the thread which is the source of the data.
     pub thread_id: usize,
@@ -67,7 +67,7 @@ pub struct ChainSourceThread {
 }
 
 /// The main structure used to generate the chain.
-#[derive(new)]
+#[derive(Debug, new)]
 pub struct Chain<'a> {
     /// The chain customizer.
     customizer: &'a ChainCustomizer,

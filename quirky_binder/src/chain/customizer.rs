@@ -10,6 +10,7 @@ pub const DEFAULT_CHAIN_ERROR_TYPE: [&str; 2] = ["anyhow", "Error"];
 pub const DEFAULT_CHAIN_ERROR_MACRO: [&str; 2] = ["anyhow", "anyhow"];
 pub const DEFAULT_CHAIN_MAIN_NAME: &str = "main";
 
+#[derive(Debug)]
 pub struct ChainCustomizer {
     pub streams_module_name: FullyQualifiedName,
     pub module_name: FullyQualifiedName,

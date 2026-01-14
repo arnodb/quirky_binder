@@ -46,6 +46,7 @@ fn unwrap_field_type<'a>(
     }
 }
 
+#[derive(Debug)]
 enum NoneStrategy {
     Skip,
     Fail { error: proc_macro2::TokenStream },
@@ -61,6 +62,7 @@ pub struct UnwrapParams<'a> {
     skip_nones: bool,
 }
 
+#[derive(Debug)]
 pub struct Unwrap {
     none_strategy: NoneStrategy,
 }
@@ -157,6 +159,7 @@ pub struct SubUnwrapParams<'a> {
     skip_nones: bool,
 }
 
+#[derive(Debug)]
 pub struct SubUnwrap {
     none_strategy: NoneStrategy,
 }

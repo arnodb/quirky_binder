@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, fmt::Debug};
 
 use proc_macro2::TokenStream;
 use truc::record::definition::DatumDefinition;
@@ -22,7 +22,7 @@ impl Default for TransformParams<'_> {
     }
 }
 
-pub trait TransformSpec {
+pub trait TransformSpec: Debug {
     fn validate_type_update_field(
         &self,
         _name: ValidFieldName,
@@ -44,7 +44,7 @@ pub trait TransformSpec {
     fn type_update_field(&self, name: &str, src: TokenStream) -> TokenStream;
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct Transform<Spec: TransformSpec> {
     spec: Spec,
     name: FullyQualifiedName,
@@ -296,7 +296,7 @@ impl Default for SubTransformParams<'_> {
     }
 }
 
-pub trait SubTransformSpec {
+pub trait SubTransformSpec: Debug {
     fn validate_type_update_field(
         &self,
         _name: ValidFieldName,
@@ -318,7 +318,7 @@ pub trait SubTransformSpec {
     fn type_update_field(&self, name: &str, src: TokenStream) -> TokenStream;
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct SubTransform<Spec: SubTransformSpec> {
     spec: Spec,
     name: FullyQualifiedName,

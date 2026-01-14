@@ -11,7 +11,7 @@ pub struct FunctionTerminateParams<'a> {
     body: &'a str,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct FunctionTerminate<const N: usize> {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

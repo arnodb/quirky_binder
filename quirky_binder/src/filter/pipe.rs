@@ -2,7 +2,7 @@ use crate::{prelude::*, trace_element};
 
 const PIPE_TRACE_NAME: &str = "pipe";
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct Pipe {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

@@ -14,7 +14,7 @@ pub struct WalkCommitsParams<'a> {
     fields: FieldsParam<'a>,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct WalkCommits {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

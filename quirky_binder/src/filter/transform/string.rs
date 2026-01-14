@@ -23,6 +23,7 @@ pub struct SubTransformStringParams<'a> {
 
 const TO_LOWERCASE_TRACE_NAME: &str = "to_lowercase";
 
+#[derive(Debug)]
 pub struct ToLowercase;
 
 impl TransformSpec for ToLowercase {
@@ -72,6 +73,7 @@ pub fn to_lowercase(
 
 const SUB_TO_LOWERCASE_TRACE_NAME: &str = "sub_to_lowercase";
 
+#[derive(Debug)]
 pub struct SubToLowercase;
 
 impl SubTransformSpec for SubToLowercase {
@@ -122,6 +124,7 @@ pub fn sub_to_lowercase(
 
 const REVERSE_CHARS_TRACE_NAME: &str = "reverse_chars";
 
+#[derive(Debug)]
 pub struct ReverseChars;
 
 impl TransformSpec for ReverseChars {
@@ -169,6 +172,7 @@ pub fn reverse_chars(
 
 const SUB_REVERSE_CHARS_TRACE_NAME: &str = "sub_reverse_chars";
 
+#[derive(Debug)]
 pub struct SubReverseChars;
 
 impl SubTransformSpec for SubReverseChars {

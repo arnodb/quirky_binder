@@ -11,7 +11,7 @@ pub struct SortParams<'a> {
     fields: DirectedFieldsParam<'a>,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct Sort {
     name: FullyQualifiedName,
     #[getset(get = "pub")]
@@ -112,7 +112,7 @@ pub struct SubSortParams<'a> {
     fields: DirectedFieldsParam<'a>,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct SubSort {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

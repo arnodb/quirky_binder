@@ -13,7 +13,7 @@ pub struct FunctionUpdateParams<'a> {
     body: &'a str,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct FunctionUpdate {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

@@ -11,7 +11,7 @@ pub struct WriteCsvParams<'a> {
     has_headers: bool,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct WriteCsv {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

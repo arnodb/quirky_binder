@@ -2,7 +2,7 @@ use crate::{prelude::*, trace_element};
 
 const ACCUMULATE_TRACE_NAME: &str = "accumulate";
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct Accumulate {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

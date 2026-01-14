@@ -4,7 +4,7 @@ use crate::{prelude::*, trace_element};
 
 const DEBUG_TRACE_NAME: &str = "debug";
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct Debug {
     name: FullyQualifiedName,
     #[getset(get = "pub")]

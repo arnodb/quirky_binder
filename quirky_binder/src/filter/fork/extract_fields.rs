@@ -11,7 +11,7 @@ pub struct ExtractFieldsParams<'a> {
     fields: FieldsParam<'a>,
 }
 
-#[derive(Getters)]
+#[derive(Debug, Getters)]
 pub struct ExtractFields {
     name: FullyQualifiedName,
     #[getset(get = "pub")]
