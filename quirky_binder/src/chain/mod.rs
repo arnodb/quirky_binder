@@ -328,9 +328,9 @@ impl<'a> Chain<'a> {
 
         let pipe_def = quote! {
             pub fn quirky_binder_pipe(mut thread_control: ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
+                let mut output = #output;
+                #input
                 move || {
-                    let mut output = #output;
-                    #input
                     while let Some(record) = input.next()? {
                         output.send(Some(record))?;
                     }
@@ -884,32 +884,58 @@ impl<'a> Chain<'a> {
         block
     }
 
-    pub fn implement_inline_node(
+    pub fn implement_inline_node<'i, I>(
         &mut self,
         node: &dyn DynNode,
-        input: &NodeStream,
+        inputs: I,
         output: &NodeStream,
         inline_body: &TokenStream,
-    ) {
+    ) where
+        I: IntoIterator<Item = &'i NodeStream, IntoIter: Clone>,
+    {
         let name = node.name();
 
-        let thread = self.get_thread_by_source(input, name, Some(output));
+        let inputs = inputs
+            .into_iter()
+            .map(|input| (input, self.get_thread_by_source(input, name, Some(output))))
+            .collect::<Vec<(&NodeStream, ChainSourceThread)>>();
+        let thread_id = if let Some((_, source_thread)) = inputs.first() {
+            source_thread.thread_id
+        } else {
+            self.new_thread(
+                name.clone(),
+                ChainThreadType::Regular,
+                inputs
+                    .iter()
+                    .map(|(input, _)| *input)
+                    .cloned()
+                    .collect::<Vec<NodeStream>>()
+                    .into_boxed_slice(),
+                Box::new([output.clone()]),
+                None,
+                false,
+                None,
+            )
+        };
 
         let record = self.stream_definition_fragments(output).record();
 
         let fn_name = format_ident!("{}", **name.last().expect("local name"));
-        let thread_module = format_ident!("thread_{}", thread.thread_id);
+        let thread_module = format_ident!("thread_{}", thread_id);
         let error_type = self.customizer.error_type.to_full_name();
 
-        let node_status_ident = self.node_status_ident(thread.thread_id, name);
+        let node_status_ident = self.node_status_ident(thread_id, name);
         let node_name = name.to_string();
 
-        let input = self.format_source_thread_input(
-            &thread,
-            input.source(),
-            false,
-            NodeStatisticsOption::WithStatistics { node_name: name },
-        );
+        let inputs = inputs.into_iter().map(|(input, source_thread)| {
+            assert_eq!(source_thread.thread_id, thread_id);
+            self.format_source_thread_input(
+                &source_thread,
+                input.source(),
+                false,
+                NodeStatisticsOption::WithStatistics { node_name: name },
+            )
+        });
 
         let inline_body = self.rewrite_body(inline_body, node);
 
@@ -917,7 +943,7 @@ impl<'a> Chain<'a> {
             pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
                 let thread_status = thread_control.status.clone();
 
-                #input
+                #(#inputs)*
 
                 let output = #inline_body;
 
@@ -953,11 +979,8 @@ impl<'a> Chain<'a> {
         import_scope.add_import("quirky_binder_support", "prelude::*");
         import_scope.add_import("fallible_iterator", "FallibleIterator");
 
-        let module = self.get_or_new_module(
-            name.iter().take(name.len() - 1),
-            self.customizer,
-            thread.thread_id,
-        );
+        let module =
+            self.get_or_new_module(name.iter().take(name.len() - 1), self.customizer, thread_id);
 
         module.fragment(fn_def.to_string());
 
@@ -1104,7 +1127,7 @@ impl<'a> Chain<'a> {
             })
         };
 
-        self.implement_inline_node(node, input, output, &inline_body);
+        self.implement_inline_node(node, Some(input), output, &inline_body);
     }
 
     fn node_status_ident(&self, thread_id: usize, node_name: &FullyQualifiedName) -> Ident {

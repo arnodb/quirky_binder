@@ -1,8 +1,8 @@
 use quirky_binder::{
     filter::{
         function::{
+            emit::function_emit,
             execute::function_execute,
-            produce::function_produce,
             update::function_update,
         },
     },
@@ -11,13 +11,12 @@ use quirky_binder_csv::write_csv;
 
 {
   (
-      function_produce(
+      function_emit(
         fields: [("hello", "String"), ("universe", "usize")],
         body: r#"
+            use fallible_iterator::IteratorExt;
             let record = ("world".to_string(), 42).into();
-            output.send(Some(record))?;
-            output.send(None)?;
-            Ok(())
+            Some(Ok(record)).into_iter().transpose_into_fallible()
 "#,
       )
     - write_csv(
@@ -27,13 +26,12 @@ use quirky_binder_csv::write_csv;
   )
 
   (
-      function_produce(
+      function_emit(
         fields: [("hello", "String"), ("universe", "usize")],
         body: r#"
+            use fallible_iterator::IteratorExt;
             let record = ("world".to_string(), 42).into();
-            output.send(Some(record))?;
-            output.send(None)?;
-            Ok(())
+            Some(Ok(record)).into_iter().transpose_into_fallible()
 "#,
       )
     - function_update(

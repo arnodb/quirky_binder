@@ -14,7 +14,7 @@ use quirky_binder::{
             join::join,
         },
         function::{
-            produce::function_produce,
+            emit::function_emit,
             terminate::function_terminate,
         },
         group::group,
@@ -25,7 +25,7 @@ use quirky_binder::{
 
 {
   (
-      function_produce#read_fs(
+      function_emit#read_fs(
         fields: [("id", "usize"), ("file_name", "String"), ("path", "String"), ("parent_id", "Option<usize>")],
         order_fields: Some(["id"]),
         distinct_fields: Some(["id"]),
@@ -33,37 +33,39 @@ use quirky_binder::{
             use std::collections::BTreeMap;
             use std::collections::btree_map::Entry;
             use std::path::PathBuf;
+            use fallible_iterator::IteratorExt;
             use walkdir::WalkDir;
 
             let mut full_name_index = BTreeMap::<PathBuf, usize>::new();
 
-            for (id, entry) in WalkDir::new(thread_control.chain_configuration.variables["root"].clone()).into_iter().enumerate() {
-                let entry = entry?;
+            WalkDir::new(thread_control.chain_configuration.variables["root"].clone())
+                .into_iter()
+                .transpose_into_fallible()
+                .map_err(anyhow::Error::from)
+                .enumerate()
+                .map(move |(id, entry)| {
+                    let parent_id = entry.path().parent()
+                        .and_then(|parent_path| {
+                            full_name_index.get(parent_path).copied()
+                        });
 
-                let parent_id = entry.path().parent()
-                    .and_then(|parent_path| {
-                        full_name_index.get(parent_path).copied()
-                    });
+                    match full_name_index.entry(entry.path().to_path_buf()) {
+                        Entry::Vacant(vacant) => {
+                            vacant.insert(id);
+                        },
+                        Entry::Occupied(occupied) => {
+                            return Err(anyhow::anyhow!("Already seen file {}", occupied.key().to_string_lossy()));
+                        },
+                    }
 
-                match full_name_index.entry(entry.path().to_path_buf()) {
-                    Entry::Vacant(vacant) => {
-                        vacant.insert(id);
-                    },
-                    Entry::Occupied(occupied) => {
-                        return Err(anyhow::anyhow!("Already seen file {}", occupied.key().to_string_lossy()));
-                    },
-                }
-
-                let record = (
-                    id,
-                    entry.file_name().to_string_lossy().to_string(),
-                    entry.path().to_string_lossy().to_string(),
-                    parent_id,
-                ).into();
-                output.send(Some(record))?;
-            }
-            output.send(None)?;
-            Ok(())
+                    let record = (
+                        id,
+                        entry.file_name().to_string_lossy().to_string(),
+                        entry.path().to_string_lossy().to_string(),
+                        parent_id,
+                    ).into();
+                    Ok(record)
+                })
 "#,
       )
     - extract_fields(fields: ["id", "parent_id"]) [extracted]

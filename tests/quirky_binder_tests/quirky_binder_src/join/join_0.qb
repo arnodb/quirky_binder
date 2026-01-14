@@ -2,7 +2,7 @@ use quirky_binder::{
     filter::{
         fork::join::join,
         function::{
-            produce::function_produce,
+            emit::function_emit,
             terminate::function_terminate,
         },
     },
@@ -10,11 +10,12 @@ use quirky_binder::{
 
 {
   (
-      function_produce(
+      function_emit(
         fields: [("num", "i8")],
         body: r#"
             use std::collections::BTreeSet;
 
+            use fallible_iterator::IteratorExt;
             use rand::Rng;
             use rand_chacha::rand_core::SeedableRng;
 
@@ -24,12 +25,13 @@ use quirky_binder::{
             let nums = (0..1024)
                 .map(|_| rng.gen())
                 .collect::<BTreeSet<i8>>();
-            for num in nums {
-                let record = num.into();
-                output.send(Some(record))?;
-            }
-            output.send(None)?;
-            Ok(())
+            nums
+                .into_iter()
+                .map(|num| {
+                    let record = num.into();
+                    Ok(record)
+                })
+                .transpose_into_fallible()
 "#,
         order_fields: Some(["num"]),
         distinct_fields: Some(["num"]),
@@ -38,11 +40,12 @@ use quirky_binder::{
   )
 
   (
-      function_produce(
+      function_emit(
         fields: [("other_num", "i8")],
         body: r#"
             use std::collections::BTreeSet;
 
+            use fallible_iterator::IteratorExt;
             use rand::Rng;
             use rand_chacha::rand_core::SeedableRng;
 
@@ -52,12 +55,13 @@ use quirky_binder::{
             let nums = (0..1024)
                 .map(|_| rng.gen())
                 .collect::<BTreeSet<i8>>();
-            for num in nums {
-                let record = num.into();
-                output.send(Some(record))?;
-            }
-            output.send(None)?;
-            Ok(())
+            nums
+                .into_iter()
+                .map(|num| {
+                    let record = num.into();
+                    Ok(record)
+                })
+                .transpose_into_fallible()
 "#,
         order_fields: Some(["other_num"]),
         distinct_fields: Some(["other_num"]),

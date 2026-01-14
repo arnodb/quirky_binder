@@ -2,7 +2,7 @@ use quirky_binder::{
     filter::{
         fork::extract_fields::extract_fields,
         function::{
-            produce::function_produce,
+            emit::function_emit,
             terminate::function_terminate,
         },
     },
@@ -10,13 +10,12 @@ use quirky_binder::{
 
 {
   (
-      function_produce(
+      function_emit(
         fields: [("value", "String")],
         body: r#"
+            use fallible_iterator::IteratorExt;
             let record = "some value".to_string().into();
-            output.send(Some(record))?;
-            output.send(None)?;
-            Ok(())
+            Some(Ok(record)).into_iter().transpose_into_fallible()
 "#,
       )
     - extract_fields(fields: ["value"]) [extracted]

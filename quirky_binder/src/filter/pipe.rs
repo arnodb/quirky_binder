@@ -59,7 +59,7 @@ impl DynNode for Pipe {
 
         chain.implement_inline_node(
             self,
-            self.inputs.single(),
+            self.inputs.some_single(),
             self.outputs.single(),
             &inline_body,
         );

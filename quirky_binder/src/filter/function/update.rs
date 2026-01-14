@@ -114,7 +114,7 @@ impl DynNode for FunctionUpdate {
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
         let body = &self.body;
 
-        chain.implement_inline_node(self, self.inputs.single(), self.outputs.single(), body);
+        chain.implement_inline_node(self, self.inputs.some_single(), self.outputs.single(), body);
     }
 }
 

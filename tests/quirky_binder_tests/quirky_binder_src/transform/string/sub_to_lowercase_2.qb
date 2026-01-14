@@ -1,7 +1,7 @@
 use quirky_binder::{
     filter::{
         function::{
-            produce::function_produce,
+            emit::function_emit,
             terminate::function_terminate,
         },
         group::{group, sub_group},
@@ -11,13 +11,12 @@ use quirky_binder::{
 
 {
   (
-      function_produce(
+      function_emit(
         fields: [("value", "Box<str>")],
         body: r#"
+            use fallible_iterator::IteratorExt;
             let record = Box::<str>::from("BoîTe").into();
-            output.send(Some(record))?;
-            output.send(None)?;
-            Ok(())
+            Some(Ok(record)).into_iter().transpose_into_fallible()
 "#,
       )
     - group(by_fields: [], group_field: "group")

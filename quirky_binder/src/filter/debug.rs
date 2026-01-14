@@ -99,7 +99,7 @@ impl DynNode for Debug {
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
         chain.implement_inline_node(
             self,
-            self.inputs.single(),
+            self.inputs.some_single(),
             self.outputs.single(),
             &quote! {
                 #[allow(clippy::let_and_return)]
