@@ -6,7 +6,7 @@ extern crate quote;
 use std::{collections::BTreeMap, path::Path};
 
 use quirky_binder::{prelude::*, quirky_binder, trace_element};
-use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
+use truc::record::type_resolver::StaticTypeResolver;
 
 const TOKENIZE_TRACE_NAME: &str = "tokenize";
 

@@ -629,22 +629,6 @@ pub(crate) fn generate_module<'a>(
                 ];
                 Ok(graph.build(entry_nodes))
             }
-
-            pub fn quirky_binder_generate<R, NGB>(
-                out_dir: &Path,
-                type_resolver: R,
-                new_graph_builder: NGB,
-            ) -> Result<(), GraphGenerationError>
-            where
-                R: TypeResolver + Copy,
-                NGB: Fn() -> GraphBuilder,
-            {
-                let graph = quirky_binder_main(new_graph_builder())?;
-
-                graph.generate(out_dir, type_resolver)?;
-
-                Ok(())
-            }
         }
     });
     error_emitter.error()?;

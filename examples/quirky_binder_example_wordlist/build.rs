@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, path::Path};
 
 use quirky_binder::{prelude::*, quirky_binder};
 use quirky_binder_support::AnchorId;
-use truc::record::type_resolver::{StaticTypeResolver, TypeResolver};
+use truc::record::type_resolver::StaticTypeResolver;
 
 fn main() {
     quirky_binder!(inline(
