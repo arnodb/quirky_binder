@@ -40,7 +40,7 @@ impl<R> TryFallibleIterator for Receive<R> {
                 |r| Ok(Some(r)),
             )
         } else {
-            Ok(None)
+            Ok(Some(None))
         }
     }
 }

@@ -68,6 +68,7 @@ use quirky_binder::{
                             read += 1;
                         } else {
                             closed = true;
+                            break;
                         }
                     }
                     if closed {
@@ -83,6 +84,7 @@ use quirky_binder::{
                             read += 1;
                         } else {
                             closed = true;
+                            break;
                         }
                     }
                     if closed {
@@ -100,6 +102,7 @@ use quirky_binder::{
                             read += 1;
                         } else {
                             closed = true;
+                            break;
                         }
                     }
                     if closed {
@@ -115,6 +118,7 @@ use quirky_binder::{
                             read += 1;
                         } else {
                             closed = true;
+                            break;
                         }
                     }
                     if closed {
