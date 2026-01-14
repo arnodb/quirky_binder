@@ -82,7 +82,7 @@ impl DynNode for WriteCsv {
 
             (thread.thread_id, vec![input])
         } else {
-            let thread_id = chain.pipe_inputs(&self.name, &self.inputs, &self.outputs);
+            let thread_id = chain.pipe_inputs_with_thread(&self.name, &self.inputs, &self.outputs);
 
             let inputs = (0..self.inputs.len())
                 .map(|input_index| {

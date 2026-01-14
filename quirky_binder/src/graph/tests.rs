@@ -6,7 +6,7 @@ use truc::record::type_resolver::StaticTypeResolver;
 use crate::{codegen::Module, prelude::*};
 
 #[test]
-fn pipe_generates_noop_thread() {
+fn pipe_should_not_generate_noop_thread() {
     quirky_binder_internal!(inline(
         r###"
 use crate::{
@@ -68,6 +68,6 @@ use crate::{
         node.gen_chain(&graph, &mut chain);
     }
 
-    assert_eq!(chain.threads().len(), 3);
-    assert_eq!(chain.pipe_count(), 2);
+    assert_eq!(chain.threads().len(), 2);
+    assert_eq!(chain.pipe_count(), 1);
 }

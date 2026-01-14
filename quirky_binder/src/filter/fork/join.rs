@@ -151,7 +151,7 @@ impl DynNode for Join {
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
-        let thread_id = chain.pipe_inputs(&self.name, &self.inputs, &self.outputs);
+        let thread_id = chain.pipe_inputs_with_thread(&self.name, &self.inputs, &self.outputs);
 
         let primary_input = chain.format_thread_input(
             thread_id,

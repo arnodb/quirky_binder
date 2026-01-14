@@ -3,9 +3,7 @@
     "quirky_binder_main_0 :: quirky_binder_filter_0_0"
   ],
   "1": [
-    "quirky_binder_main_0 :: quirky_binder_filter_0_1"
-  ],
-  "2": [
+    "quirky_binder_main_0 :: quirky_binder_filter_0_1",
     "quirky_binder_main_0 :: quirky_binder_filter_0_2"
   ]
 }

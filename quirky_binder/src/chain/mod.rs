@@ -356,7 +356,13 @@ impl<'a> Chain<'a> {
         pipe
     }
 
-    pub fn pipe_inputs(
+    pub fn pipe_inputs(&mut self, node_name: &FullyQualifiedName, inputs: &[NodeStream]) {
+        for (input_index, input) in inputs.iter().enumerate() {
+            self.pipe_single_thread(input.source(), node_name, input_index);
+        }
+    }
+
+    pub fn pipe_inputs_with_thread(
         &mut self,
         node_name: &FullyQualifiedName,
         inputs: &[NodeStream],

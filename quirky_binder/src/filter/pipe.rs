@@ -51,37 +51,18 @@ impl DynNode for Pipe {
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
-        let thread_id = chain.pipe_inputs(&self.name, &self.inputs, &self.outputs);
+        chain.pipe_inputs(&self.name, &self.inputs);
 
-        let input = chain.format_thread_input(
-            thread_id,
-            0,
-            NodeStatisticsOption::WithStatistics {
-                node_name: &self.name,
-            },
-        );
-        let output = chain.format_thread_output(
-            thread_id,
-            0,
-            NodeStatisticsOption::WithStatistics {
-                node_name: &self.name,
-            },
-        );
-
-        let thread_body = quote! {
-            let thread_status = thread_status.clone();
-            move || {
-                let mut input = #input;
-                let mut output = #output;
-                while let Some(record) = input.next()? {
-                    output.send(Some(record))?;
-                }
-                output.send(None)?;
-                Ok(())
-            }
+        let inline_body = quote! {
+            input
         };
 
-        chain.implement_node_thread(self, thread_id, &thread_body);
+        chain.implement_inline_node(
+            self,
+            self.inputs.single(),
+            self.outputs.single(),
+            &inline_body,
+        );
     }
 }
 
