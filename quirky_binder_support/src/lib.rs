@@ -8,8 +8,6 @@ extern crate assert_matches;
 extern crate derive_more;
 #[macro_use]
 extern crate derive_new;
-#[macro_use]
-extern crate lazy_static;
 
 pub use quirky_binder_codegen_macro::{tracking_allocator_main, tracking_allocator_static};
 
