@@ -16,7 +16,7 @@ pub mod type_rewriter;
 
 /// Chain thread data.
 #[derive(Debug)]
-struct ChainThread {
+pub(crate) struct ChainThread {
     /// Identifier, so that it does not have to be passed separately.
     id: usize,
     /// The thread name.
@@ -67,7 +67,7 @@ pub struct ChainSourceThread {
 }
 
 /// The main structure used to generate the chain.
-#[derive(Debug, new)]
+#[derive(Debug, Getters, CopyGetters, new)]
 pub struct Chain<'a> {
     /// The chain customizer.
     customizer: &'a ChainCustomizer,
@@ -77,6 +77,7 @@ pub struct Chain<'a> {
     ///
     /// Some functions return thread IDs as `usize`, they are indices in this vector.
     #[new(default)]
+    #[getset(get = "pub(crate)")]
     threads: Vec<ChainThread>,
     /// Threads that are currently identified as the source for a stream.
     ///
@@ -86,6 +87,7 @@ pub struct Chain<'a> {
     thread_by_source: HashMap<NodeStreamSource, ChainSourceThread>,
     /// Pipe sequence used to identify pipes in this chain.
     #[new(default)]
+    #[getset(get_copy = "pub(crate)")]
     pipe_count: usize,
     /// Links from one node's (tail) output to another node's (head) input.
     ///

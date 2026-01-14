@@ -19,6 +19,10 @@ pub mod error;
 pub mod node;
 pub mod visit;
 
+#[cfg(test)]
+#[cfg_attr(coverage_nightly, coverage(off))]
+mod tests;
+
 pub struct Graph {
     chain_customizer: ChainCustomizer,
     record_definitions: BTreeMap<StreamRecordType, RecordDefinition<QuirkyDatumType>>,
