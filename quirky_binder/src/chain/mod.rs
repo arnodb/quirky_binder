@@ -884,38 +884,35 @@ impl<'a> Chain<'a> {
         block
     }
 
-    pub fn implement_inline_node<'i, I>(
+    pub fn implement_inline_node(
         &mut self,
         node: &dyn DynNode,
-        inputs: I,
+        input: Option<&NodeStream>,
         output: &NodeStream,
         inline_body: &TokenStream,
-    ) where
-        I: IntoIterator<Item = &'i NodeStream, IntoIter: Clone>,
-    {
+    ) {
         let name = node.name();
 
-        let inputs = inputs
-            .into_iter()
-            .map(|input| (input, self.get_thread_by_source(input, name, Some(output))))
-            .collect::<Vec<(&NodeStream, ChainSourceThread)>>();
-        let thread_id = if let Some((_, source_thread)) = inputs.first() {
-            source_thread.thread_id
+        let (thread_id, input) = if let Some(input) = input {
+            let source_thread = self.get_thread_by_source(input, name, Some(output));
+            let input = self.format_source_thread_input(
+                &source_thread,
+                input.source(),
+                false,
+                NodeStatisticsOption::WithStatistics { node_name: name },
+            );
+            (source_thread.thread_id, Some(input))
         } else {
-            self.new_thread(
+            let thread_id = self.new_thread(
                 name.clone(),
                 ChainThreadType::Regular,
-                inputs
-                    .iter()
-                    .map(|(input, _)| *input)
-                    .cloned()
-                    .collect::<Vec<NodeStream>>()
-                    .into_boxed_slice(),
+                Box::new([]),
                 Box::new([output.clone()]),
                 None,
                 false,
                 None,
-            )
+            );
+            (thread_id, None)
         };
 
         let record = self.stream_definition_fragments(output).record();
@@ -927,23 +924,13 @@ impl<'a> Chain<'a> {
         let node_status_ident = self.node_status_ident(thread_id, name);
         let node_name = name.to_string();
 
-        let inputs = inputs.into_iter().map(|(input, source_thread)| {
-            assert_eq!(source_thread.thread_id, thread_id);
-            self.format_source_thread_input(
-                &source_thread,
-                input.source(),
-                false,
-                NodeStatisticsOption::WithStatistics { node_name: name },
-            )
-        });
-
         let inline_body = self.rewrite_body(inline_body, node);
 
         let fn_def = quote! {
             pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
                 let thread_status = thread_control.status.clone();
 
-                #(#inputs)*
+                #input
 
                 let output = #inline_body;
 
