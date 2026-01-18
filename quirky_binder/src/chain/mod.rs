@@ -292,6 +292,7 @@ impl<'a> Chain<'a> {
         source: &NodeStreamSource,
         node_name: &FullyQualifiedName,
         input_index: usize,
+        add_node_link: bool,
     ) -> usize {
         let source_thread = self.get_source_thread(source).clone();
         let thread = &mut self.threads[source_thread.thread_id];
@@ -303,7 +304,9 @@ impl<'a> Chain<'a> {
             input_index,
         );
 
-        self.nodes_links.push(link);
+        if add_node_link {
+            self.nodes_links.push(link);
+        }
 
         if let Some(output_pipes) = &thread.output_pipes {
             return output_pipes[source_thread.stream_index];
@@ -358,7 +361,7 @@ impl<'a> Chain<'a> {
 
     pub fn pipe_inputs(&mut self, node_name: &FullyQualifiedName, inputs: &[NodeStream]) {
         for (input_index, input) in inputs.iter().enumerate() {
-            self.pipe_single_thread(input.source(), node_name, input_index);
+            self.pipe_single_thread(input.source(), node_name, input_index, false);
         }
     }
 
@@ -372,7 +375,7 @@ impl<'a> Chain<'a> {
             .iter()
             .enumerate()
             .map(|(input_index, input)| {
-                self.pipe_single_thread(input.source(), node_name, input_index)
+                self.pipe_single_thread(input.source(), node_name, input_index, true)
             })
             .collect::<Vec<usize>>();
         self.new_thread(
