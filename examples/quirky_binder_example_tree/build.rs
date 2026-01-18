@@ -38,7 +38,7 @@ use quirky_binder::{
 
             let mut full_name_index = BTreeMap::<PathBuf, usize>::new();
 
-            WalkDir::new(thread_control.chain_configuration.variables["root"].clone())
+            WalkDir::new(chain_configuration.variables["root"].clone())
                 .into_iter()
                 .transpose_into_fallible()
                 .map_err(anyhow::Error::from)

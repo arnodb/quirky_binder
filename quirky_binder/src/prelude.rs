@@ -3,7 +3,7 @@ pub use serde::Deserialize;
 
 pub use crate::{
     chain::{
-        customizer::ChainCustomizer,
+        customizer::{ChainCustomizer, ThreadsCustomizer},
         error::{ChainError, ChainErrorWithTrace},
         result::{ChainResult, ChainResultWithTrace},
         trace::{Trace, TraceElement, WithTraceElement},

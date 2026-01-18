@@ -4,7 +4,7 @@ use itertools::Itertools;
 use proc_macro2::TokenStream;
 pub use quirky_binder_lang::location::Location;
 use serde::Deserialize;
-use syn::{visit_mut::VisitMut, Ident, Type};
+use syn::{visit_mut::VisitMut, Expr, Ident, Type};
 
 use crate::{chain::type_rewriter::StreamsRewriter, codegen::Module, prelude::*};
 
@@ -763,14 +763,17 @@ impl<'a> Chain<'a> {
                 quote! { (#thread_outer_control, #join_thread) }
             });
 
+            let spawn_thread =
+                syn::parse_str::<Expr>(&self.customizer.threads.spawn).expect("spawn_thread");
+
             let spawn_threads = self.threads.iter().map(|thread| {
                 let thread_main =
-                    syn::parse_str::<syn::Expr>(&thread.main.as_ref().expect("main").to_string())
+                    syn::parse_str::<Expr>(&thread.main.as_ref().expect("main").to_string())
                         .expect("thread_main");
                 quote! {
                     (
                         thread_outer_control,
-                        std::thread::spawn(#thread_main(thread_control)),
+                        #spawn_thread(#thread_main(thread_control)),
                     )
                 }
             });
@@ -928,6 +931,8 @@ impl<'a> Chain<'a> {
 
         let fn_def = quote! {
             pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FallibleIterator<Item = #record, Error = #error_type> {
+                #[allow(unused)]
+                let chain_configuration = thread_control.chain_configuration.clone();
                 let thread_status = thread_control.status.clone();
 
                 #input
@@ -992,6 +997,8 @@ impl<'a> Chain<'a> {
 
         let fn_def = quote! {
             pub fn #fn_name(#[allow(unused_mut)] mut thread_control: #thread_module::ThreadControl) -> impl FnOnce() -> Result<(), #error_type> {
+                #[allow(unused)]
+                let chain_configuration = thread_control.chain_configuration.clone();
                 let thread_status = thread_control.status.clone();
 
                 #[allow(unused_mut)]

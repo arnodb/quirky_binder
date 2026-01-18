@@ -19,6 +19,7 @@ pub struct ChainCustomizer {
     pub error_macro: FullyQualifiedName,
     pub main_name: String,
     pub main_attrs: Vec<String>,
+    pub threads: ThreadsCustomizer,
 }
 
 impl Default for ChainCustomizer {
@@ -33,8 +34,9 @@ impl Default for ChainCustomizer {
             custom_module_imports: vec![],
             error_type: FullyQualifiedName::new_n(DEFAULT_CHAIN_ERROR_TYPE.iter()),
             error_macro: FullyQualifiedName::new_n(DEFAULT_CHAIN_ERROR_MACRO.iter()),
-            main_name: DEFAULT_CHAIN_MAIN_NAME.to_string(),
+            main_name: DEFAULT_CHAIN_MAIN_NAME.to_owned(),
             main_attrs: Vec::default(),
+            threads: ThreadsCustomizer::default(),
         }
     }
 }
@@ -60,5 +62,20 @@ impl StreamCustomizer for ChainCustomizer {
             stream.variant_id(),
             &self.streams_module_name,
         )
+    }
+}
+
+#[derive(Debug)]
+pub struct ThreadsCustomizer {
+    pub spawn: String,
+}
+
+pub const DEFAULT_THREADS_SPAWN: &str = "std::thread::spawn";
+
+impl Default for ThreadsCustomizer {
+    fn default() -> Self {
+        Self {
+            spawn: DEFAULT_THREADS_SPAWN.to_owned(),
+        }
     }
 }
