@@ -22,7 +22,7 @@ fn test_threads() {
     let actual_walk = WalkDir::new(&actual_dir).min_depth(1).sort_by_file_name();
     let expected_walk = WalkDir::new(expected_dir).min_depth(1).sort_by_file_name();
 
-    let take_snapshot = std::env::var("TAKE_SNAPSHOT").is_ok();
+    let update_snapshot = std::env::var("UPDATE_SNAPSHOT").is_ok();
 
     for either in actual_walk.into_iter().map(Result::unwrap).merge_join_by(
         expected_walk.into_iter().map(Result::unwrap),
@@ -35,7 +35,7 @@ fn test_threads() {
         if let Some((
             short_name,
             (actual_content, actual_json),
-            (mut expected_content, mut expected_json),
+            (mut expected_content, expected_json),
         )) = match either {
             EitherOrBoth::Left(actual) => {
                 if actual.path().is_file() {
@@ -97,15 +97,21 @@ fn test_threads() {
                 }
             }
         } {
-            if take_snapshot {
-                let expected = expected_dir.join(&short_name);
-                std::fs::create_dir_all(expected.parent().unwrap()).unwrap();
-                std::fs::write(&expected, &actual_content).unwrap();
-                expected_content = std::fs::read_to_string(expected).unwrap();
-                expected_json =
-                    serde_json::from_str::<serde_json::Value>(&expected_content).unwrap();
-            }
             if actual_json != expected_json {
+                if update_snapshot {
+                    let expected = expected_dir.join(&short_name);
+                    std::fs::create_dir_all(expected.parent().unwrap()).unwrap();
+                    std::fs::write(&expected, &actual_content).unwrap();
+                    expected_content = std::fs::read_to_string(expected).unwrap();
+                    // expected_json does not need to be updated
+                } else {
+                    let mut short_name_new = short_name.file_name().unwrap().to_owned();
+                    short_name_new.push(".new");
+                    let mut path = short_name.clone();
+                    path.set_file_name(short_name_new);
+                    let expected_new = expected_dir.join(path);
+                    std::fs::write(&expected_new, &actual_content).unwrap();
+                }
                 assert_eq!(
                     actual_content,
                     expected_content,

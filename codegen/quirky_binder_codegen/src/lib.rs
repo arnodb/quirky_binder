@@ -105,6 +105,7 @@ impl ModuleCode {
 
     fn generate(
         &self,
+        file_path: &Path,
         path: &[&str],
         config: &ModuleConfiguration,
     ) -> Result<TokenStream, CodegenError> {
@@ -116,7 +117,8 @@ impl ModuleCode {
                 graph.generate(out_dir, type_resolver)?;
             }
         });
-        let all_chains_generate = self.generate_all_chains(path.last().map(Deref::deref), config);
+        let all_chains_generate =
+            self.generate_all_chains(file_path, path.last().map(Deref::deref), config);
         let sub_modules = self
             .sub_modules
             .iter()
@@ -127,7 +129,7 @@ impl ModuleCode {
                     vec.push(name);
                     vec
                 };
-                let sub_code = sub_module.generate(&sub_path, config)?;
+                let sub_code = sub_module.generate(&file_path.join(name), &sub_path, config)?;
                 Ok(quote! {
                     pub mod #name_ident {
                         use quirky_binder::prelude::*;
@@ -187,21 +189,91 @@ impl ModuleCode {
         })
     }
 
-    fn generate_all_chains(&self, name: Option<&str>, config: &ModuleConfiguration) -> TokenStream {
+    fn generate_all_chains(
+        &self,
+        file_path: &Path,
+        name: Option<&str>,
+        config: &ModuleConfiguration,
+    ) -> TokenStream {
         let local = self.code.as_ref().map(|_| {
-            let test_name = name.map_or_else(
-                || Cow::Borrowed("test"),
-                |name| format!("test_{name}").into(),
-            );
             let test_local = config.test.then(|| {
+                let test_name = name.map_or_else(
+                    || Cow::Borrowed("test"),
+                    |name| format!("test_{name}").into(),
+                );
+                let suffixed = |suffix| {
+                    let mut name = file_path.file_name().unwrap().to_owned();
+                    name.push(suffix);
+                    let mut path = file_path.to_path_buf();
+                    path.set_file_name(name);
+                    path
+                };
+                let nodes_test_name = format!("{}_nodes", test_name);
+                let expected_nodes = suffixed(".nodes.snap").to_string_lossy().to_string();
+                let expected_nodes_new = suffixed(".nodes.snap.new").to_string_lossy().to_string();
+                let edges_test_name = format!("{}_edges", test_name);
+                let expected_edges = suffixed(".edges.snap").to_string_lossy().to_string();
+                let expected_edges_new = suffixed(".edges.snap.new").to_string_lossy().to_string();
                 quote! {
-                    writeln!(file, r#"
+                    writeln!(
+                        file,
+                        r#"
     #[test]
-    fn {}() {{
-       let (_, join) = main(ChainConfiguration::default()).unwrap();
-       join.join_all().unwrap();
+    fn {test_name}() {{
+        let (_, join) = main(ChainConfiguration::default()).unwrap();
+        join.join_all().unwrap();
     }}
-"#, #test_name)?;
+
+    #[test]
+    fn {nodes_test_name}() {{
+        let chain_status = ChainStatus::default();
+        let actual = format!("{{:#?}}", chain_status.nodes().collect::<Vec<_>>());
+        let get_expected = || {{
+            std::fs::read_to_string({expected_nodes})
+                .unwrap_or_else(|_| "".to_owned())
+        }};
+        let mut expected = get_expected();
+        if actual != expected {{
+            let update_snapshot = std::env::var("UPDATE_SNAPSHOT").is_ok();
+            if update_snapshot {{
+                std::fs::write({expected_nodes}, &actual).expect("write snapshot");
+                expected = get_expected();
+            }} else {{
+                std::fs::write({expected_nodes_new}, &actual).expect("write new snapshot");
+            }}
+            assert_eq!(actual, expected);
+        }}
+    }}
+
+    #[test]
+    fn {edges_test_name}() {{
+        let chain_status = ChainStatus::default();
+        let actual = format!("{{:#?}}", chain_status.edges().collect::<Vec<_>>());
+        let get_expected = || {{
+            std::fs::read_to_string({expected_edges})
+                .unwrap_or_else(|_| "".to_owned())
+        }};
+        let mut expected = get_expected();
+        if actual != expected {{
+            let update_snapshot = std::env::var("UPDATE_SNAPSHOT").is_ok();
+            if update_snapshot {{
+                std::fs::write({expected_edges}, &actual).expect("write snapshot");
+                expected = get_expected();
+            }} else {{
+                std::fs::write({expected_edges_new}, &actual).expect("write new snapshot");
+            }}
+            assert_eq!(actual, expected);
+        }}
+    }}
+"#,
+                        test_name = #test_name,
+                        nodes_test_name = #nodes_test_name,
+                        expected_nodes = stringify!(#expected_nodes),
+                        expected_nodes_new = stringify!(#expected_nodes_new),
+                        edges_test_name = #edges_test_name,
+                        expected_edges = stringify!(#expected_edges),
+                        expected_edges_new = stringify!(#expected_edges_new),
+                    )?;
                 }
             });
             quote! {
@@ -339,5 +411,5 @@ pub fn parse_and_generate_glob_modules(
         return Err(err);
     }
     let config = ModuleConfiguration { test };
-    tree.generate(&[], &config)
+    tree.generate(&prefix, &[], &config)
 }

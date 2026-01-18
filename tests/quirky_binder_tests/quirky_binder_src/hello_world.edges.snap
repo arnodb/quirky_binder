@@ -1,0 +1,8 @@
+[
+    EdgeDescriptor {
+        tail_name: "quirky_binder_main_0 :: quirky_binder_filter_0_0",
+        tail_index: 0,
+        head_name: "quirky_binder_main_0 :: quirky_binder_filter_0_1",
+        head_index: 0,
+    },
+]

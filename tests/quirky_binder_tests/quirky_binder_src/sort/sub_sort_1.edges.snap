@@ -1,0 +1,32 @@
+[
+    EdgeDescriptor {
+        tail_name: "quirky_binder_main_0 :: quirky_binder_filter_0_0",
+        tail_index: 0,
+        head_name: "quirky_binder_main_0 :: quirky_binder_filter_0_1",
+        head_index: 0,
+    },
+    EdgeDescriptor {
+        tail_name: "quirky_binder_main_0 :: quirky_binder_filter_0_1",
+        tail_index: 0,
+        head_name: "quirky_binder_main_0 :: quirky_binder_filter_0_2",
+        head_index: 0,
+    },
+    EdgeDescriptor {
+        tail_name: "quirky_binder_main_0 :: quirky_binder_filter_0_2",
+        tail_index: 0,
+        head_name: "quirky_binder_main_0 :: quirky_binder_filter_0_3",
+        head_index: 0,
+    },
+    EdgeDescriptor {
+        tail_name: "quirky_binder_main_0 :: quirky_binder_filter_0_3",
+        tail_index: 0,
+        head_name: "quirky_binder_main_0 :: quirky_binder_filter_0_4",
+        head_index: 0,
+    },
+    EdgeDescriptor {
+        tail_name: "quirky_binder_main_0 :: quirky_binder_filter_0_4",
+        tail_index: 0,
+        head_name: "quirky_binder_main_0 :: quirky_binder_filter_0_5",
+        head_index: 0,
+    },
+]

@@ -13,6 +13,9 @@ serde = "1"
 static_assertions = "1"
 truc_runtime = "0.4"
 
+[dev-dependencies]
+pretty_assertions = "1"
+
 [build-dependencies]
 quirky_binder = { path = "../../quirky_binder" }
 quirky_binder_git2 = { path = "../../contrib/quirky_binder_git2" }

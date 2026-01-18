@@ -1,0 +1,14 @@
+[
+    NodeDescriptor {
+        name: "quirky_binder_main_0 :: quirky_binder_filter_0_0",
+    },
+    NodeDescriptor {
+        name: "quirky_binder_main_0 :: quirky_binder_filter_1_0",
+    },
+    NodeDescriptor {
+        name: "quirky_binder_main_0 :: quirky_binder_filter_2_0",
+    },
+    NodeDescriptor {
+        name: "quirky_binder_main_0 :: quirky_binder_filter_2_1",
+    },
+]

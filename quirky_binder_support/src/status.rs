@@ -36,11 +36,13 @@ impl<T: DynChainStatus> DynChainStatus for &T {
 }
 
 /// Node
+#[derive(Debug)]
 pub struct NodeDescriptor<'a> {
     pub name: &'a str,
 }
 
 /// Edge
+#[derive(Debug)]
 pub struct EdgeDescriptor<'a> {
     pub tail_name: &'a str,
     pub tail_index: usize,

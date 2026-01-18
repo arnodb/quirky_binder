@@ -626,6 +626,7 @@ impl<'a> Chain<'a> {
                 });
 
             quote! {
+                #[derive(Default)]
                 pub struct ChainStatus {
                     #(#chain_statuses)*
                 }
