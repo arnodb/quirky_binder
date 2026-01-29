@@ -600,7 +600,14 @@ impl<'a> Chain<'a> {
                 .map(|thread| {
                     let thread_join = format_ident!("thread_join_{}", thread.id);
                     quote! {
-                        result = result.and(self.#thread_join.join().unwrap());
+                        result = result
+                            .and(self.#thread_join
+                                .join()
+                                .unwrap()
+                                .inspect_err(|err| {
+                                    eprintln!("{err}");
+                                })
+                            );
                     }
                 });
 
