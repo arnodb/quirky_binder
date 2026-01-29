@@ -1,5 +1,3 @@
-use capnp::capability::Promise;
-use capnp_rpc::pry;
 use quirky_binder_support::prelude::*;
 
 use crate::quirky_binder_capnp;
@@ -28,14 +26,14 @@ where
 
 impl<T, U> quirky_binder_capnp::state::Server for StateServer<T, U>
 where
-    T: DynChainStatus,
-    U: AsRef<T>,
+    T: DynChainStatus + 'static,
+    U: AsRef<T> + 'static,
 {
-    fn graph(
-        &mut self,
+    async fn graph(
+        self: capnp::capability::Rc<Self>,
         _: quirky_binder_capnp::state::GraphParams,
         mut results: quirky_binder_capnp::state::GraphResults,
-    ) -> ::capnp::capability::Promise<(), ::capnp::Error> {
+    ) -> Result<(), capnp::Error> {
         let mut graph = results.get().init_graph();
 
         let mut nodes = graph.reborrow().init_nodes(
@@ -65,14 +63,14 @@ where
             edge.set_head_index(e.head_index.try_into().unwrap());
         }
 
-        Promise::ok(())
+        Ok(())
     }
 
-    fn node_statuses(
-        &mut self,
+    async fn node_statuses(
+        self: capnp::capability::Rc<Self>,
         _: quirky_binder_capnp::state::NodeStatusesParams,
         mut results: quirky_binder_capnp::state::NodeStatusesResults,
-    ) -> capnp::capability::Promise<(), capnp::Error> {
+    ) -> Result<(), capnp::Error> {
         let length: usize = self
             .chain_status
             .as_ref()
@@ -103,25 +101,25 @@ where
                         status.reborrow().init_state().set_error(err);
                     }
                 }
-                pry!(status.set_input_read(
+                status.set_input_read(
                     &*s.input_read
                         .iter()
                         .copied()
                         .map(|a| u32::try_from(a).unwrap())
                         .collect::<Vec<_>>(),
-                ));
-                pry!(status.set_output_written(
+                )?;
+                status.set_output_written(
                     &*s.output_written
                         .iter()
                         .copied()
                         .map(|a| u32::try_from(a).unwrap())
                         .collect::<Vec<_>>(),
-                ));
+                )?;
 
                 i += 1;
             }
         }
 
-        Promise::ok(())
+        Ok(())
     }
 }

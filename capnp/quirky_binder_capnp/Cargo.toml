@@ -10,18 +10,18 @@ repository = "https://github.com/arnodb/quirky_binder"
 readme = "../../README.md"
 
 [dependencies]
-capnp = "0.21"
-capnp-rpc = "0.21"
+capnp = "0.25"
+capnp-rpc = "0.25"
 futures = "0.3"
 quirky_binder_support = { path = "../../quirky_binder_support" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nix = { version = "0.30", features = ["user"] }
 smol = "2"
-teleop = "0.2"
+teleop = { git = "https://github.com/arnodb/teleop.git" }
 
 [build-dependencies]
-capnpc = "0.21"
+capnpc = "0.25"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage,coverage_nightly)'] }
