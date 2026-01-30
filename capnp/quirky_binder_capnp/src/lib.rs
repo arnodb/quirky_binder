@@ -22,11 +22,18 @@ mod linux {
         path::PathBuf,
         pin::pin,
         str::FromStr,
-        sync::{Arc, LazyLock},
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc, LazyLock,
+        },
         time::{Duration, Instant},
     };
 
-    use futures::{task::LocalSpawnExt, AsyncReadExt, FutureExt, StreamExt};
+    use futures::{
+        channel::oneshot::{channel, Canceled},
+        task::LocalSpawnExt,
+        AsyncReadExt, FutureExt, StreamExt,
+    };
     pub use nix::unistd::Pid;
     use nix::{
         sys::signal::kill,
@@ -34,9 +41,9 @@ mod linux {
     };
     use quirky_binder_support::status::DynChainStatus;
     use smol::{lock::Mutex, net::unix::UnixStream, Timer};
+    use smol_cancellation_token::CancellationToken;
     use teleop::{
         attach::unix_socket::listen,
-        cancellation::CancellationToken,
         operate::capnp::{run_server_connection, teleop_capnp, TeleopServer},
     };
 
@@ -72,16 +79,53 @@ mod linux {
         exec.run_until(async {
             let _reveal_process = reveal_process()?;
 
-            let end_of_chain_token = CancellationToken::new();
+            // We need to know when the chain ends and to remember it.
+            let (end_of_chain_sender, end_of_chain_receiver) = channel();
+            let chain_complete = Arc::new(AtomicBool::new(false));
 
             let join_main = std::thread::spawn({
-                let end_of_chain_token = end_of_chain_token.clone();
+                let chain_complete = chain_complete.clone();
                 move || {
                     let res = join_chain();
-                    end_of_chain_token.cancel();
+                    chain_complete.store(true, Ordering::Release);
+                    let _ = end_of_chain_sender.send(());
                     res
                 }
             });
+
+            // Signal that teleoperations should end.
+            let teleop_token = CancellationToken::new();
+
+            let mut chain_fut = pin!(
+                // Wait for chain end
+                end_of_chain_receiver
+                    // Then join the thread to release resources
+                    .then(async |res| -> Result<(), Box<dyn std::error::Error>> {
+                        join_main
+                            .join()
+                            .map_err(|_err| "Unable to join main thread".to_owned())??;
+                        // Joining the thread will fail first, this error handling is unreachable.
+                        res.map_err(|Canceled| "Main thread panicked".to_owned())?;
+                        Ok(())
+                    })
+                    // Then wait for end of teleoperations with a maximum delay
+                    .then(async |res| {
+                        eprintln!("Waiting for end of teleoperations...");
+                        // Note that the loop still accepts late connections just in case. That is
+                        // why there is a timeout.
+                        let deadline = Instant::now() + Duration::from_millis(10000);
+                        futures::select! {
+                            () = teleop_token.cancelled().fuse() => {
+                                eprintln!("All teleop connections closed");
+                            }
+                            _ = FutureExt::fuse(Timer::at(deadline)) => {
+                                eprintln!("Timeout");
+                                teleop_token.cancel();
+                            }
+                        }
+                        res
+                    })
+            );
 
             let client = LazyLock::new(|| {
                 let mut server = TeleopServer::new();
@@ -94,50 +138,48 @@ mod linux {
 
             let connection_count = Arc::new(Mutex::new(0));
 
-            let main_cancellation_token = CancellationToken::new();
-
-            let handle_new_connection =
-                async |stream: UnixStream,
-                       end_of_chain_token: CancellationToken,
-                       main_cancellation_token: CancellationToken| {
-                    {
-                        let mut count = connection_count.lock().await;
-                        (*count) += 1;
-                    }
-                    if let Err(e) = spawn.spawn_local({
-                        let connection_count = connection_count.clone();
-                        let end_of_chain_token = end_of_chain_token.clone();
-                        let main_cancellation_token = main_cancellation_token.clone();
-                        let client = client.client.hook.clone();
-                        async move {
-                            let (input, output) = stream.split();
-                            futures::select! {
-                                res = run_server_connection(input, output, client).fuse() => {
-                                    if let Err(err) = res {
-                                        eprintln!("Error while running server connection: {err}");
-                                    }
-                                }
-                                () = main_cancellation_token.cancelled().fuse() => {}
-                            }
-                            {
-                                let mut count = connection_count.lock().await;
-                                (*count) -= 1;
-                                if end_of_chain_token.is_cancelled() && *count == 0 {
-                                    main_cancellation_token.cancel();
+            // New connection handler, takes care of counting the connections and early stopping
+            // teleoperations if at least one connection was opened and all connections are then
+            // closed.
+            let handle_new_connection = async |stream: UnixStream| {
+                {
+                    let mut count = connection_count.lock().await;
+                    (*count) += 1;
+                }
+                if let Err(e) = spawn.spawn_local({
+                    let chain_complete = chain_complete.clone();
+                    let teleop_token = teleop_token.clone();
+                    let connection_count = connection_count.clone();
+                    let client = client.client.hook.clone();
+                    async move {
+                        let (input, output) = stream.split();
+                        futures::select! {
+                            res = run_server_connection(input, output, client).fuse() => {
+                                if let Err(err) = res {
+                                    eprintln!("Error while running server connection: {err}");
                                 }
                             }
+                            () = teleop_token.cancelled().fuse() => {}
                         }
-                    }) {
-                        eprintln!("Error while spawning connection handler: {e}");
                         {
                             let mut count = connection_count.lock().await;
                             (*count) -= 1;
-                            if end_of_chain_token.is_cancelled() && *count == 0 {
-                                main_cancellation_token.cancel();
+                            if chain_complete.load(Ordering::Acquire) && *count == 0 {
+                                teleop_token.cancel();
                             }
                         }
                     }
-                };
+                }) {
+                    eprintln!("Error while spawning connection handler: {e}");
+                    {
+                        let mut count = connection_count.lock().await;
+                        (*count) -= 1;
+                        if chain_complete.load(Ordering::Acquire) && *count == 0 {
+                            teleop_token.cancel();
+                        }
+                    }
+                }
+            };
 
             let mut conn_stream = pin!(listen());
 
@@ -146,50 +188,12 @@ mod linux {
                     stream = conn_stream.next().fuse() => {
                         if let Some(stream) = stream {
                             let (stream, _addr) = stream?;
-                            handle_new_connection(
-                                stream,
-                                end_of_chain_token.clone(),
-                                main_cancellation_token.clone(),
-                            ).await;
+                            handle_new_connection(stream).await;
                         } else {
                             break;
                         }
                     }
-                    () = end_of_chain_token.cancelled().fuse() => {
-                        break;
-                    }
-                }
-            }
-
-            join_main
-                .join()
-                .map_err(|_err| "Unable to join main thread".to_owned())??;
-
-            let deadline = Instant::now() + Duration::from_millis(10000);
-
-            eprintln!("Waiting for end of teleoperations...");
-            loop {
-                futures::select! {
-                    // Still accept connections (could be a late first one)
-                    stream = conn_stream.next().fuse() => {
-                        if let Some(stream) = stream {
-                            let (stream, _addr) = stream?;
-                            handle_new_connection(
-                                stream,
-                                end_of_chain_token.clone(),
-                                main_cancellation_token.clone(),
-                            ).await;
-                        } else {
-                            break;
-                        }
-                    }
-                    () = main_cancellation_token.cancelled().fuse() => {
-                        eprintln!("All teleop connections closed");
-                        break;
-                    }
-                    _ = FutureExt::fuse(Timer::at(deadline)) => {
-                        eprintln!("Timeout");
-                        main_cancellation_token.cancel();
+                    _ = chain_fut => {
                         break;
                     }
                 }
