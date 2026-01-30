@@ -23,7 +23,7 @@ derive-new = "0.7"
 logos = { version = "0.13", optional = true }
 nom = { version = "7", optional = true }
 peekmore = { version = "1", optional = true }
-ron = "0.9.0-alpha.0"
+ron = "0.12"
 serde = { version = "1", features = ["derive"] }
 
 [dev-dependencies]

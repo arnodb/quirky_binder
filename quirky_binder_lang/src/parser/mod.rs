@@ -13,6 +13,7 @@ pub fn parse_crafted(input: &str) -> Result<Module<'_>, SpannedError<&str>> {
 }
 
 #[cfg(feature = "nom_parser")]
+#[allow(clippy::result_large_err)]
 pub mod nom_impl;
 
 #[cfg(feature = "nom_parser")]
