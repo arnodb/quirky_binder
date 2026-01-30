@@ -18,4 +18,4 @@ proc-macro-error = "1"
 proc-macro2 = "1"
 quirky_binder_lang = { version = "0.1.1-dev", path = "../../quirky_binder_lang" }
 quote = "1"
-syn = { version = "1", features = ["full"] }
+syn = { version = "2", features = ["full"] }
