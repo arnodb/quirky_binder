@@ -16,10 +16,10 @@ futures = "0.3"
 quirky_binder_support = { path = "../../quirky_binder_support" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-nix = { version = "0.30", features = ["user"] }
+nix = { version = "0.31", features = ["user"] }
 smol = "2"
 smol-cancellation-token = "0.1"
-teleop = { git = "https://github.com/arnodb/teleop.git" }
+teleop = "0.3"
 
 [build-dependencies]
 capnpc = "0.25"
