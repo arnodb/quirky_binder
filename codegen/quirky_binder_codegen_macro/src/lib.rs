@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use annotate_snippets::display_list::DisplayList;
 use proc_macro2::Ident;
-use proc_macro_error::{abort_if_dirty, emit_error, proc_macro_error};
+use proc_macro_error2::{abort_if_dirty, emit_error, proc_macro_error};
 use quirky_binder_codegen::{
     parse_and_generate_file_module, parse_and_generate_glob_modules, parse_and_generate_module,
     CodegenError, ErrorEmitter,

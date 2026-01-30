@@ -14,7 +14,6 @@ annotate-snippets = { version = "0.9", features = ["color"] }
 glob = "0.3"
 Inflector = "0.11"
 itertools = "0.10"
-proc-macro-error = "1"
 proc-macro2 = "1"
 quirky_binder_lang = { version = "0.1.1-dev", path = "../../quirky_binder_lang" }
 quote = "1"
