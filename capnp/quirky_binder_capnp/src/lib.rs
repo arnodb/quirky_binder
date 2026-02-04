@@ -22,18 +22,11 @@ mod linux {
         path::PathBuf,
         pin::pin,
         str::FromStr,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc, LazyLock,
-        },
+        sync::{Arc, LazyLock},
         time::{Duration, Instant},
     };
 
-    use futures::{
-        channel::oneshot::{channel, Canceled},
-        task::LocalSpawnExt,
-        AsyncReadExt, FutureExt, StreamExt,
-    };
+    use futures::{task::LocalSpawnExt, AsyncReadExt, FutureExt, StreamExt};
     pub use nix::unistd::Pid;
     use nix::{
         sys::signal::kill,
@@ -80,18 +73,19 @@ mod linux {
             let _reveal_process = reveal_process()?;
 
             // We need to know when the chain ends and to remember it.
-            let (end_of_chain_sender, end_of_chain_receiver) = channel();
-            let chain_complete = Arc::new(AtomicBool::new(false));
+            let (end_of_chain_sender, end_of_chain_receiver) = futures::channel::oneshot::channel();
 
-            let join_main = std::thread::spawn({
-                let chain_complete = chain_complete.clone();
-                move || {
-                    let res = join_chain();
-                    chain_complete.store(true, Ordering::Release);
-                    let _ = end_of_chain_sender.send(());
-                    res
-                }
+            let join_main = std::thread::spawn(move || {
+                let res = join_chain();
+                let _ = end_of_chain_sender.send(());
+                res
             });
+
+            // We need to know whether or not at least 1 connection was opened and what is the
+            // current number of open connections.
+            // If it goes down to 0 then it is considered the end of teleoperations.
+            let (mut count_sender, mut count_receiver) = async_broadcast::broadcast::<usize>(1);
+            count_sender.set_overflow(true);
 
             // Signal that teleoperations should end.
             let teleop_token = CancellationToken::new();
@@ -105,7 +99,9 @@ mod linux {
                             .join()
                             .map_err(|_err| "Unable to join main thread".to_owned())??;
                         // Joining the thread will fail first, this error handling is unreachable.
-                        res.map_err(|Canceled| "Main thread panicked".to_owned())?;
+                        res.map_err(|futures::channel::oneshot::Canceled| {
+                            "Main thread panicked".to_owned()
+                        })?;
                         Ok(())
                     })
                     // Then wait for end of teleoperations with a maximum delay
@@ -113,15 +109,32 @@ mod linux {
                         eprintln!("Waiting for end of teleoperations...");
                         // Note that the loop still accepts late connections just in case. That is
                         // why there is a timeout.
-                        let deadline = Instant::now() + Duration::from_millis(10000);
-                        futures::select! {
-                            () = teleop_token.cancelled().fuse() => {
-                                eprintln!("All teleop connections closed");
+                        let mut deadline = FutureExt::fuse(Timer::at(
+                            Instant::now() + Duration::from_millis(10000),
+                        ));
+                        loop {
+                            futures::select! {
+                                res = count_receiver.recv().fuse() => {
+                                    match res {
+                                        Ok(0) => {
+                                            eprintln!("All teleop connections closed");
+                                            break;
+                                        }
+                                        Ok(_) => { /* maybe next time */ }
+                                        Err(err) => {
+                                            eprintln!("Broadcast error {err}");
+                                            break;
+                                        }
+                                    }
+                                }
+                                _ = deadline => {
+                                    eprintln!("Timeout");
+                                    break;
+                                }
                             }
-                            _ = FutureExt::fuse(Timer::at(deadline)) => {
-                                eprintln!("Timeout");
-                                teleop_token.cancel();
-                            }
+                        }
+                        if !teleop_token.is_cancelled() {
+                            teleop_token.cancel();
                         }
                         res
                     })
@@ -142,12 +155,14 @@ mod linux {
             // teleoperations if at least one connection was opened and all connections are then
             // closed.
             let handle_new_connection = async |stream: UnixStream| {
-                {
+                let count = {
                     let mut count = connection_count.lock().await;
                     (*count) += 1;
-                }
+                    *count
+                };
+                let _ = count_sender.broadcast(count).await;
                 if let Err(e) = spawn.spawn_local({
-                    let chain_complete = chain_complete.clone();
+                    let count_sender = count_sender.clone();
                     let teleop_token = teleop_token.clone();
                     let connection_count = connection_count.clone();
                     let client = client.client.hook.clone();
@@ -161,23 +176,21 @@ mod linux {
                             }
                             () = teleop_token.cancelled().fuse() => {}
                         }
-                        {
+                        let count = {
                             let mut count = connection_count.lock().await;
                             (*count) -= 1;
-                            if chain_complete.load(Ordering::Acquire) && *count == 0 {
-                                teleop_token.cancel();
-                            }
-                        }
+                            *count
+                        };
+                        let _ = count_sender.broadcast(count).await;
                     }
                 }) {
                     eprintln!("Error while spawning connection handler: {e}");
-                    {
+                    let count = {
                         let mut count = connection_count.lock().await;
                         (*count) -= 1;
-                        if chain_complete.load(Ordering::Acquire) && *count == 0 {
-                            teleop_token.cancel();
-                        }
-                    }
+                        *count
+                    };
+                    let _ = count_sender.broadcast(count).await;
                 }
             };
 
@@ -187,6 +200,9 @@ mod linux {
                 futures::select! {
                     stream = conn_stream.next().fuse() => {
                         if let Some(stream) = stream {
+                            if teleop_token.is_cancelled(){
+                                continue;
+                            }
                             let (stream, _addr) = stream?;
                             handle_new_connection(stream).await;
                         } else {
