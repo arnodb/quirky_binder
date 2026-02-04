@@ -22,7 +22,7 @@ quirky_binder_lang = { version = "0.1.1-dev", path = "../quirky_binder_lang" }
 quirky_binder_support = { version = "0.1.1-dev", path = "../quirky_binder_support" }
 quote = "1"
 ron = "0.12"
-serde = { version = ">=1,<=1.0.219", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
 syn = { version = "2", features = ["full", "extra-traits", "visit-mut"] }
 thiserror = "1"
 truc = "0.4"
