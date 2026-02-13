@@ -16,11 +16,11 @@ jobs:
       with_audit: true
       with_doc: true
 
-  main_1_85_0:
-    name: Rust 1.85.0
+  main_1_88_0:
+    name: Rust 1.88.0
     uses: ./.github/workflows/_build.yml
     with:
-      rust_toolchain: 1.85.0
+      rust_toolchain: 1.88.0
       pre_build_script: ./scripts/msrv_pin_dependencies.sh
 
   main_nightly:

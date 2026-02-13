@@ -36,7 +36,7 @@ mod linux {
     use smol::{lock::Mutex, net::unix::UnixStream, Timer};
     use smol_cancellation_token::CancellationToken;
     use teleop::{
-        attach::unix_socket::listen,
+        attach::{attacher::DefaultAttacher, listen},
         operate::capnp::{run_server_connection, teleop_capnp, TeleopServer},
     };
 
@@ -194,7 +194,7 @@ mod linux {
                 }
             };
 
-            let mut conn_stream = pin!(listen());
+            let mut conn_stream = pin!(listen::<DefaultAttacher>());
 
             loop {
                 futures::select! {

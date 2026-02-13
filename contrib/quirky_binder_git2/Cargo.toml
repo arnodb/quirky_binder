@@ -2,7 +2,7 @@
 name = "quirky_binder_git2"
 version = "0.1.1-dev"
 edition = "2021"
-rust-version = "1.85.0"
+rust-version = "1.88.0"
 license-file = "../../LICENSE"
 description = "Quirky Binder - Git2"
 documentation = "https://docs.rs/quirky_binder_git2"

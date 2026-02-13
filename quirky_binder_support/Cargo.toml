@@ -2,7 +2,7 @@
 name = "quirky_binder_support"
 version = "0.1.1-dev"
 edition = "2021"
-rust-version = "1.85.0"
+rust-version = "1.88.0"
 license-file = "../LICENSE"
 description = "Quirky Binder Support"
 documentation = "https://docs.rs/quirky_binder_support"

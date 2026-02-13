@@ -2,7 +2,7 @@
 name = "quirky_binder_capnp"
 version = "0.1.1-dev"
 edition = "2021"
-rust-version = "1.85.0"
+rust-version = "1.88.0"
 license-file = "../../LICENSE"
 description = "Quirky Binder Cap'n Proto"
 documentation = "https://docs.rs/quirky_binder_capnp"
@@ -20,7 +20,7 @@ async-broadcast = "0.7"
 nix = { version = "0.31", features = ["user"] }
 smol = "2"
 smol-cancellation-token = "0.1"
-teleop = "0.3"
+teleop = { git = "https://github.com/arnodb/teleop.git", features = ["inotify"] }
 
 [build-dependencies]
 capnpc = "0.25"
