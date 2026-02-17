@@ -119,30 +119,15 @@ impl SubDedup {
         let path_sub_stream = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!(SUB_DEDUP_TRACE_NAME))?
-            .pass_through(|output_stream, facts_proof| {
-                let path_sub_stream = output_stream.pass_through_path(
-                    &valid_path_fields,
-                    |sub_input_stream, output_stream| {
-                        output_stream
-                            .pass_through_sub_stream(
-                                sub_input_stream,
-                                graph,
-                                |sub_output_stream| {
-                                    sub_output_stream.set_distinct_fact_all_fields();
-                                    Ok(())
-                                },
-                                SUB_DEDUP_TRACE_NAME,
-                            )
-                            .with_trace_element(trace_element!(SUB_DEDUP_TRACE_NAME))
-                    },
-                    graph,
-                    SUB_DEDUP_TRACE_NAME,
-                )?;
-                Ok(facts_proof
-                    .order_facts_updated()
-                    .distinct_facts_updated()
-                    .with_output(path_sub_stream))
-            })?;
+            .pass_through_path(
+                graph,
+                &valid_path_fields,
+                |sub_output_stream| {
+                    sub_output_stream.set_distinct_fact_all_fields();
+                    Ok(())
+                },
+                SUB_DEDUP_TRACE_NAME,
+            )?;
 
         let outputs = streams
             .build()
