@@ -21,13 +21,11 @@ impl Accumulate {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(ACCUMULATE_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .pass_through(|_, facts_proof| {
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(ACCUMULATE_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(Self {
             name,
@@ -70,5 +68,6 @@ pub fn accumulate(
     inputs: [NodeStream; 1],
     params: (),
 ) -> ChainResultWithTrace<Accumulate> {
+    let _trace_name = TraceName::push(ACCUMULATE_TRACE_NAME);
     Accumulate::new(graph, name, inputs, params)
 }

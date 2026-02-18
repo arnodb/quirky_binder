@@ -31,12 +31,12 @@ impl Sort {
         let valid_fields = params
             .fields
             .validate_on_stream(inputs.single(), graph)
-            .with_trace_element(trace_element!(SORT_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(SORT_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .pass_through(|builder, facts_proof| {
                 builder
                     .set_order_fact(
@@ -44,12 +44,10 @@ impl Sort {
                             .iter()
                             .map(|field| field.as_ref().map(ValidFieldName::name)),
                     )
-                    .with_trace_element(trace_element!(SORT_TRACE_NAME))?;
+                    .with_trace_element(trace_element!())?;
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(SORT_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
         Ok(Self {
             name,
             inputs,
@@ -99,6 +97,7 @@ pub fn sort(
     inputs: [NodeStream; 1],
     params: SortParams,
 ) -> ChainResultWithTrace<Sort> {
+    let _trace_name = TraceName::push(SORT_TRACE_NAME);
     Sort::new(graph, name, inputs, params)
 }
 
@@ -134,35 +133,28 @@ impl SubSort {
         let (valid_path_fields, path_def) = params
             .path_fields
             .validate_path_on_stream(inputs.single(), graph)
-            .with_trace_element(trace_element!(SUB_SORT_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
         let valid_fields = params
             .fields
             .validate_on_record_definition(&path_def)
-            .with_trace_element(trace_element!(SUB_SORT_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         let path_sub_stream = streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(SUB_SORT_TRACE_NAME))?
-            .pass_through_path(
-                graph,
-                &valid_path_fields,
-                |sub_output_stream| {
-                    sub_output_stream
-                        .set_order_fact(
-                            valid_fields
-                                .iter()
-                                .map(|field| field.as_ref().map(ValidFieldName::name)),
-                        )
-                        .with_trace_element(trace_element!(SUB_SORT_TRACE_NAME))?;
-                    Ok(())
-                },
-                SUB_SORT_TRACE_NAME,
-            )?;
+            .with_trace_element(trace_element!())?
+            .pass_through_path(graph, &valid_path_fields, |sub_output_stream| {
+                sub_output_stream
+                    .set_order_fact(
+                        valid_fields
+                            .iter()
+                            .map(|field| field.as_ref().map(ValidFieldName::name)),
+                    )
+                    .with_trace_element(trace_element!())?;
+                Ok(())
+            })?;
 
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(SUB_SORT_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(Self {
             name,
@@ -235,5 +227,6 @@ pub fn sub_sort(
     inputs: [NodeStream; 1],
     params: SubSortParams,
 ) -> ChainResultWithTrace<SubSort> {
+    let _trace_name = TraceName::push(SUB_SORT_TRACE_NAME);
     SubSort::new(graph, name, inputs, params)
 }

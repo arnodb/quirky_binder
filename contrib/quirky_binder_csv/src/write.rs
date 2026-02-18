@@ -32,14 +32,14 @@ impl WriteCsv {
         let input = inputs.single();
         let input_stream_def = graph
             .get_stream(input.record_type())
-            .with_trace_element(trace_element!(WRITE_CSV_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .borrow();
         for d in input_stream_def.get_current_data() {
             if input.sub_streams().contains_key(&d) {
                 return Err(ChainError::Other {
                     msg: "Sub streams are not supported".to_owned(),
                 })
-                .with_trace_element(trace_element!(WRITE_CSV_TRACE_NAME));
+                .with_trace_element(trace_element!());
             }
         }
 
@@ -159,5 +159,6 @@ pub fn write_csv(
     inputs: [NodeStream; 1],
     params: WriteCsvParams,
 ) -> ChainResultWithTrace<WriteCsv> {
+    let _trace_name = TraceName::push(WRITE_CSV_TRACE_NAME);
     WriteCsv::new(graph, name, inputs, params)
 }

@@ -37,16 +37,16 @@ impl WalkCommits {
         let valid_fields = params
             .fields
             .validate_new()
-            .with_trace_element(trace_element!(WALK_COMMITS_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .new_main_stream(graph)
-            .with_trace_element(trace_element!(WALK_COMMITS_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         streams
             .new_main_output(graph)
-            .with_trace_element(trace_element!(WALK_COMMITS_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .update(|output_stream, facts_proof| {
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
                 let mut seen = BTreeSet::<&str>::new();
@@ -56,7 +56,7 @@ impl WalkCommits {
                         return Err(ChainError::Other {
                             msg: format!("Duplicate field {name}"),
                         })
-                        .with_trace_element(trace_element!(WALK_COMMITS_TRACE_NAME));
+                        .with_trace_element(trace_element!());
                     }
                     let r#type = match name {
                         "id" => "String",
@@ -75,7 +75,7 @@ impl WalkCommits {
                             return Err(ChainError::Other {
                                 msg: format!("Unknown Git field {name}"),
                             })
-                            .with_trace_element(trace_element!(WALK_COMMITS_TRACE_NAME));
+                            .with_trace_element(trace_element!());
                         }
                     };
                     output_stream_def
@@ -86,15 +86,13 @@ impl WalkCommits {
                             },
                         )
                         .map_err(|err| ChainError::Other { msg: err })
-                        .with_trace_element(trace_element!(WALK_COMMITS_TRACE_NAME))?;
+                        .with_trace_element(trace_element!())?;
                     seen.insert(name);
                 }
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(WALK_COMMITS_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(Self {
             name,
@@ -242,5 +240,6 @@ pub fn walk_commits(
     inputs: [NodeStream; 0],
     params: WalkCommitsParams,
 ) -> ChainResultWithTrace<WalkCommits> {
+    let _trace_name = TraceName::push(WALK_COMMITS_TRACE_NAME);
     WalkCommits::new(graph, name, inputs, params)
 }

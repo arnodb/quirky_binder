@@ -31,7 +31,7 @@ impl Anchor {
             .map_err(|_| ChainError::InvalidFieldName {
                 name: (params.anchor_field).to_owned(),
             })
-            .with_trace_element(trace_element!(ANCHOR_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let anchor_table_id = graph.new_anchor_table();
 
@@ -39,7 +39,7 @@ impl Anchor {
 
         streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(ANCHOR_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .update(|output_stream, facts_proof| {
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
                 output_stream_def
@@ -52,13 +52,11 @@ impl Anchor {
                         },
                     )
                     .map_err(|err| ChainError::Other { msg: err })
-                    .with_trace_element(trace_element!(ANCHOR_TRACE_NAME))?;
+                    .with_trace_element(trace_element!())?;
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(ANCHOR_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(Self {
             name,
@@ -112,5 +110,6 @@ pub fn anchor(
     inputs: [NodeStream; 1],
     params: AnchorParams,
 ) -> ChainResultWithTrace<Anchor> {
+    let _trace_name = TraceName::push(ANCHOR_TRACE_NAME);
     Anchor::new(graph, name, inputs, params)
 }

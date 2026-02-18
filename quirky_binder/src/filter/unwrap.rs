@@ -73,13 +73,13 @@ impl TransformSpec for Unwrap {
         name: ValidFieldName,
         datum: &DatumDefinition<QuirkyDatumType>,
     ) -> ChainResultWithTrace<(ValidFieldName, ValidFieldType)> {
-        let type_name = unwrap_field_type(&name, datum.details())
-            .with_trace_element(trace_element!(UNWRAP_TRACE_NAME))?;
+        let type_name =
+            unwrap_field_type(&name, datum.details()).with_trace_element(trace_element!())?;
         let valid_type = ValidFieldType::try_from(type_name)
             .map_err(|_| ChainError::InvalidFieldType {
                 type_name: type_name.to_owned(),
             })
-            .with_trace_element(trace_element!(UNWRAP_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
         Ok((name, valid_type))
     }
 
@@ -127,6 +127,7 @@ pub fn unwrap(
     inputs: [NodeStream; 1],
     params: UnwrapParams,
 ) -> ChainResultWithTrace<Transform<Unwrap>> {
+    let _trace_name = TraceName::push(UNWRAP_TRACE_NAME);
     Transform::new(
         Unwrap {
             none_strategy: if params.skip_nones {
@@ -144,7 +145,6 @@ pub fn unwrap(
             type_update_fields: params.fields,
             ..Default::default()
         },
-        UNWRAP_TRACE_NAME,
     )
 }
 
@@ -170,13 +170,13 @@ impl SubTransformSpec for SubUnwrap {
         name: ValidFieldName,
         datum: &DatumDefinition<QuirkyDatumType>,
     ) -> ChainResultWithTrace<(ValidFieldName, ValidFieldType)> {
-        let type_name = unwrap_field_type(&name, datum.details())
-            .with_trace_element(trace_element!(SUB_UNWRAP_TRACE_NAME))?;
+        let type_name =
+            unwrap_field_type(&name, datum.details()).with_trace_element(trace_element!())?;
         let valid_type = ValidFieldType::try_from(type_name)
             .map_err(|_| ChainError::InvalidFieldType {
                 type_name: type_name.to_owned(),
             })
-            .with_trace_element(trace_element!(SUB_UNWRAP_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
         Ok((name, valid_type))
     }
 
@@ -224,6 +224,7 @@ pub fn sub_unwrap(
     inputs: [NodeStream; 1],
     params: SubUnwrapParams,
 ) -> ChainResultWithTrace<SubTransform<SubUnwrap>> {
+    let _trace_name = TraceName::push(SUB_UNWRAP_TRACE_NAME);
     SubTransform::new(
         SubUnwrap {
             none_strategy: if params.skip_nones {
@@ -242,6 +243,5 @@ pub fn sub_unwrap(
             type_update_fields: params.fields,
             ..Default::default()
         },
-        SUB_UNWRAP_TRACE_NAME,
     )
 }

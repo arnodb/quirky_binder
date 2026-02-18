@@ -33,16 +33,16 @@ impl Ungroup {
         let valid_group_field = params
             .group_field
             .validate_on_stream(inputs.single(), graph)
-            .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .new_named_stream("group", graph)
-            .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let (group_stream, grouped_fields) = streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .update(|output_stream, facts_proof| {
                 let (group_stream, grouped_fields) = {
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
@@ -52,7 +52,7 @@ impl Ungroup {
                         .ok_or_else(|| ChainError::FieldNotFound {
                             field: valid_group_field.name().to_owned(),
                         })
-                        .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?
+                        .with_trace_element(trace_element!())?
                         .id();
 
                     let group_stream = output_stream.sub_stream(group_datum_id).clone();
@@ -60,11 +60,11 @@ impl Ungroup {
                     output_stream_def
                         .remove_datum(group_datum_id)
                         .map_err(|err| ChainError::Other { msg: err })
-                        .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?;
+                        .with_trace_element(trace_element!())?;
 
                     let sub_stream_def = graph
                         .get_stream(group_stream.record_type())
-                        .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?
+                        .with_trace_element(trace_element!())?
                         .borrow();
                     let grouped_fields = sub_stream_def
                         .get_current_data()
@@ -73,7 +73,7 @@ impl Ungroup {
                             output_stream_def
                                 .add_datum(datum.name(), datum.details().clone())
                                 .map_err(|err| ChainError::Other { msg: err })
-                                .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?;
+                                .with_trace_element(trace_element!())?;
                             Ok(datum.name().to_owned())
                         })
                         .collect::<Result<Vec<_>, _>>()?;
@@ -84,10 +84,10 @@ impl Ungroup {
                 // Reset facts
                 output_stream
                     .set_order_fact::<_, &str>([])
-                    .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?;
+                    .with_trace_element(trace_element!())?;
                 output_stream
                     .set_distinct_fact::<_, &str>([])
-                    .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?;
+                    .with_trace_element(trace_element!())?;
 
                 Ok(facts_proof
                     .order_facts_updated()
@@ -95,9 +95,7 @@ impl Ungroup {
                     .with_output((group_stream, grouped_fields)))
             })?;
 
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(UNGROUP_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(Ungroup {
             name: name.clone(),
@@ -167,6 +165,7 @@ pub fn ungroup(
     inputs: [NodeStream; 1],
     params: UngroupParams,
 ) -> ChainResultWithTrace<Ungroup> {
+    let _trace_name = TraceName::push(UNGROUP_TRACE_NAME);
     Ungroup::new(graph, name, inputs, params)
 }
 
@@ -203,23 +202,23 @@ impl SubUngroup {
         let (valid_path_fields, path_def) = params
             .path_fields
             .validate_path_on_stream(inputs.single(), graph)
-            .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
         let valid_group_field = params
             .group_field
             .validate_on_record_definition(&path_def)
-            .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
         drop(path_def);
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .new_named_stream("group", graph)
-            .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let mut group_stream_and_grouped_fields = None;
 
         let path_streams = streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .update_path(
                 graph,
                 &valid_path_fields,
@@ -233,7 +232,7 @@ impl SubUngroup {
                             .ok_or_else(|| ChainError::FieldNotFound {
                                 field: valid_group_field.name().to_owned(),
                             })
-                            .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?
+                            .with_trace_element(trace_element!())?
                             .id();
 
                         let group_stream = sub_output_stream.sub_stream(group_datum_id).clone();
@@ -241,11 +240,11 @@ impl SubUngroup {
                         output_stream_def
                             .remove_datum(group_datum_id)
                             .map_err(|err| ChainError::Other { msg: err })
-                            .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?;
+                            .with_trace_element(trace_element!())?;
 
                         let sub_stream_def = graph
                             .get_stream(group_stream.record_type())
-                            .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?
+                            .with_trace_element(trace_element!())?
                             .borrow();
                         let grouped_fields = sub_stream_def
                             .get_current_data()
@@ -254,7 +253,7 @@ impl SubUngroup {
                                 output_stream_def
                                     .add_datum(datum.name(), datum.details().clone())
                                     .map_err(|err| ChainError::Other { msg: err })
-                                    .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?;
+                                    .with_trace_element(trace_element!())?;
                                 Ok(datum.name().to_owned())
                             })
                             .collect::<Result<Vec<_>, _>>()?;
@@ -265,24 +264,21 @@ impl SubUngroup {
                     // Reset facts
                     sub_output_stream
                         .set_order_fact::<_, &str>([])
-                        .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?;
+                        .with_trace_element(trace_element!())?;
                     sub_output_stream
                         .set_distinct_fact::<_, &str>([])
-                        .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?;
+                        .with_trace_element(trace_element!())?;
 
                     group_stream_and_grouped_fields = Some((group_stream, grouped_fields));
 
                     Ok(facts_proof.order_facts_updated().distinct_facts_updated())
                 },
-                SUB_UNGROUP_TRACE_NAME,
             )?;
 
         let (group_stream, grouped_fields) =
             group_stream_and_grouped_fields.expect("group_stream_and_grouped_fields");
 
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(SUB_UNGROUP_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(SubUngroup {
             name: name.clone(),
@@ -365,5 +361,6 @@ pub fn sub_ungroup(
     inputs: [NodeStream; 1],
     params: SubUngroupParams,
 ) -> ChainResultWithTrace<SubUngroup> {
+    let _trace_name = TraceName::push(SUB_UNGROUP_TRACE_NAME);
     SubUngroup::new(graph, name, inputs, params)
 }

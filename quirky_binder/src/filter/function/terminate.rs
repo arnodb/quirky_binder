@@ -35,7 +35,7 @@ impl<const N: usize> FunctionTerminate<N> {
                 name: "body".to_owned(),
                 msg: err.to_string(),
             })
-            .with_trace_element(trace_element!(FUNCTION_TERMINATE_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         Ok(Self {
             name,
@@ -126,5 +126,6 @@ pub fn function_terminate<const N: usize>(
     inputs: [NodeStream; N],
     params: FunctionTerminateParams,
 ) -> ChainResultWithTrace<FunctionTerminate<N>> {
+    let _trace_name = TraceName::push(FUNCTION_TERMINATE_TRACE_NAME);
     FunctionTerminate::new(graph, name, inputs, params)
 }

@@ -27,19 +27,16 @@ impl ExtractFields {
         inputs: [NodeStream; 1],
         params: ExtractFieldsParams,
     ) -> ChainResultWithTrace<Self> {
-        let valid_fields =
-            params
-                .fields
-                .validate_on_stream(inputs.single(), graph, EXTRACT_FIELDS_TRACE_NAME)?;
+        let valid_fields = params.fields.validate_on_stream(inputs.single(), graph)?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .new_named_stream("extracted", graph)
-            .with_trace_element(trace_element!(EXTRACT_FIELDS_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let output_stream_def = streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(EXTRACT_FIELDS_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .pass_through(|output_stream, facts_proof| {
                 let record_definition = output_stream.record_definition();
                 Ok(facts_proof
@@ -51,7 +48,7 @@ impl ExtractFields {
 
         streams
             .new_named_output("extracted", graph)
-            .with_trace_element(trace_element!(EXTRACT_FIELDS_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .update(|output_extracted_stream, facts_proof| {
                 let mut output_extracted_stream_def =
                     output_extracted_stream.record_definition().borrow_mut();
@@ -65,15 +62,13 @@ impl ExtractFields {
                     output_extracted_stream_def
                         .add_datum(datum.name(), datum.details().clone())
                         .map_err(|err| ChainError::Other { msg: err })
-                        .with_trace_element(trace_element!(EXTRACT_FIELDS_TRACE_NAME))?;
+                        .with_trace_element(trace_element!())?;
                 }
                 // XXX That is actually not true, let's see what we can do later.
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(EXTRACT_FIELDS_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(Self {
             name,
@@ -166,5 +161,6 @@ pub fn extract_fields(
     inputs: [NodeStream; 1],
     params: ExtractFieldsParams,
 ) -> ChainResultWithTrace<ExtractFields> {
+    let _trace_name = TraceName::push(EXTRACT_FIELDS_TRACE_NAME);
     ExtractFields::new(graph, name, inputs, params)
 }

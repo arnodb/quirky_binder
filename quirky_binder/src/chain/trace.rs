@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt::Display};
+use std::{borrow::Cow, cell::Cell, fmt::Display};
 
 use quirky_binder_lang::location::Location;
 
@@ -86,15 +86,53 @@ pub trait WithTraceElement {
         Element: Fn() -> TraceElement<'static>;
 }
 
+thread_local! {
+    pub static TRACE_NAME: Cell<(usize, &'static str)> = const { Cell::new((0, "unknown")) };
+}
+
+pub struct TraceName {
+    parent_level: usize,
+    parent_name: &'static str,
+    name: &'static str,
+}
+
+impl TraceName {
+    pub fn push(name: &'static str) -> Self {
+        let (parent_level, parent_name) = TRACE_NAME.get();
+        TRACE_NAME.set((parent_level + 1, name));
+        Self {
+            parent_level,
+            parent_name,
+            name,
+        }
+    }
+}
+
+impl Drop for TraceName {
+    fn drop(&mut self) {
+        let (level, name) = TRACE_NAME.get();
+        if level != self.parent_level + 1 || name != self.name {
+            panic!(
+                "Expected ({}, {}), found ({}, {})",
+                self.parent_level + 1,
+                self.name,
+                level,
+                name
+            );
+        }
+        TRACE_NAME.set((self.parent_level, self.parent_name));
+    }
+}
+
 /// Generates a callback responsible for creating a [`TraceElement`] with the current source file,
-/// the provided name, and the location in the current source file.
+/// the current trace name, and the location in the current source file.
 #[macro_export]
 macro_rules! trace_element {
-    ($name:expr) => {
+    () => {
         || {
             TraceElement::new(
                 std::file!().into(),
-                ($name).into(),
+                $crate::chain::trace::TRACE_NAME.get().1.into(),
                 $crate::chain::Location::new(std::line!() as usize, std::column!() as usize),
             )
             .to_owned()

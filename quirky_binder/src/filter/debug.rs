@@ -23,7 +23,7 @@ impl Debug {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(DEBUG_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .pass_through(|builder, facts_proof| {
                 let def = builder.record_definition().borrow();
                 eprintln!("=== Filter {name}:");
@@ -42,7 +42,7 @@ impl Debug {
                 ) -> ChainResultWithTrace<()> {
                     let def = graph
                         .get_stream(sub_stream.record_type())
-                        .with_trace_element(trace_element!(DEBUG_TRACE_NAME))?
+                        .with_trace_element(trace_element!())?
                         .borrow();
                     indent(depth);
                     eprintln!("--- Datum {}:", datum.name());
@@ -72,9 +72,7 @@ impl Debug {
                 }
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(DEBUG_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
         Ok(Self {
             name,
             inputs,
@@ -115,5 +113,6 @@ pub fn debug(
     inputs: [NodeStream; 1],
     params: (),
 ) -> ChainResultWithTrace<Debug> {
+    let _trace_name = TraceName::push(DEBUG_TRACE_NAME);
     Debug::new(graph, name, inputs, params)
 }

@@ -32,16 +32,14 @@ impl FunctionUpdate {
     ) -> ChainResultWithTrace<Self> {
         let valid_remove_fields = params
             .remove_fields
-            .map(|fields| {
-                fields.validate_on_stream(inputs.single(), graph, FUNCTION_UPDATE_TRACE_NAME)
-            })
+            .map(|fields| fields.validate_on_stream(inputs.single(), graph))
             .transpose()?;
 
         let valid_add_fields = params
             .add_fields
             .map(|fields| fields.validate_new())
             .transpose()
-            .with_trace_element(trace_element!(FUNCTION_UPDATE_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let valid_body = params
             .body
@@ -50,12 +48,12 @@ impl FunctionUpdate {
                 name: "body".to_owned(),
                 msg: err.to_string(),
             })
-            .with_trace_element(trace_element!(FUNCTION_UPDATE_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(FUNCTION_UPDATE_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .update(|output_stream, facts_proof| {
                 if let Some(remove_fields) = valid_remove_fields {
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
@@ -67,7 +65,7 @@ impl FunctionUpdate {
                         output_stream_def
                             .remove_datum(datum_id)
                             .map_err(|err| ChainError::Other { msg: err })
-                            .with_trace_element(trace_element!(FUNCTION_UPDATE_TRACE_NAME))?;
+                            .with_trace_element(trace_element!())?;
                     }
                 }
                 if let Some(add_fields) = valid_add_fields {
@@ -81,14 +79,12 @@ impl FunctionUpdate {
                                 },
                             )
                             .map_err(|err| ChainError::Other { msg: err })
-                            .with_trace_element(trace_element!(FUNCTION_UPDATE_TRACE_NAME))?;
+                            .with_trace_element(trace_element!())?;
                     }
                 }
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(FUNCTION_UPDATE_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
         Ok(Self {
             name,
             inputs,
@@ -124,5 +120,6 @@ pub fn function_update(
     inputs: [NodeStream; 1],
     params: FunctionUpdateParams,
 ) -> ChainResultWithTrace<FunctionUpdate> {
+    let _trace_name = TraceName::push(FUNCTION_UPDATE_TRACE_NAME);
     FunctionUpdate::new(graph, name, inputs, params)
 }

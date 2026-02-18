@@ -64,7 +64,6 @@ impl<Spec: TransformSpec> Transform<Spec> {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: TransformParams,
-        trace_name: &str,
     ) -> ChainResultWithTrace<Self> {
         let ValidTransformFieldParams {
             valid_update_fields,
@@ -77,7 +76,6 @@ impl<Spec: TransformSpec> Transform<Spec> {
                 update_fields: params.update_fields,
                 type_update_fields: params.type_update_fields,
             },
-            trace_name,
         )?;
 
         let mut new_variant = false;
@@ -85,7 +83,7 @@ impl<Spec: TransformSpec> Transform<Spec> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(trace_name))?
+            .with_trace_element(trace_element!())?
             .update(|output_stream, facts_proof| {
                 {
                     let mut record_definition = output_stream.record_definition().borrow_mut();
@@ -98,7 +96,7 @@ impl<Spec: TransformSpec> Transform<Spec> {
                         record_definition
                             .remove_datum(datum_id)
                             .map_err(|err| ChainError::Other { msg: err })
-                            .with_trace_element(trace_element!(trace_name))?;
+                            .with_trace_element(trace_element!())?;
                         record_definition
                             .add_datum(
                                 f.name(),
@@ -107,7 +105,7 @@ impl<Spec: TransformSpec> Transform<Spec> {
                                 },
                             )
                             .map_err(|err| ChainError::Other { msg: err })
-                            .with_trace_element(trace_element!(trace_name))?;
+                            .with_trace_element(trace_element!())?;
                         new_variant = true;
                     }
                 }
@@ -120,9 +118,7 @@ impl<Spec: TransformSpec> Transform<Spec> {
                 )
             })?;
 
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(trace_name))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(Self {
             spec,
@@ -140,18 +136,15 @@ impl<Spec: TransformSpec> Transform<Spec> {
         graph: &mut GraphBuilder,
         input: &NodeStream,
         params: TransformFieldParams,
-        trace_name: &str,
     ) -> ChainResultWithTrace<ValidTransformFieldParams> {
-        let valid_update_fields = params
-            .update_fields
-            .validate_on_stream(input, graph, trace_name)?;
+        let valid_update_fields = params.update_fields.validate_on_stream(input, graph)?;
 
-        let valid_type_update_fields = params.type_update_fields.validate_on_stream_ext(
-            input,
-            graph,
-            |name, datum| spec.validate_type_update_field(name, datum),
-            trace_name,
-        )?;
+        let valid_type_update_fields =
+            params
+                .type_update_fields
+                .validate_on_stream_ext(input, graph, |name, datum| {
+                    spec.validate_type_update_field(name, datum)
+                })?;
 
         Ok(ValidTransformFieldParams {
             valid_update_fields,
@@ -339,7 +332,6 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
         name: FullyQualifiedName,
         inputs: [NodeStream; 1],
         params: SubTransformParams,
-        trace_name: &str,
     ) -> ChainResultWithTrace<Self> {
         let ValidSubTransformFieldParams {
             valid_path_fields,
@@ -354,7 +346,6 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
                 update_fields: params.update_fields,
                 type_update_fields: params.type_update_fields,
             },
-            trace_name,
         )?;
 
         let mut new_variant = false;
@@ -362,7 +353,7 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         let path_streams = streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(trace_name))?
+            .with_trace_element(trace_element!())?
             .update_path(
                 graph,
                 &valid_path_fields,
@@ -379,7 +370,7 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
                             record_definition
                                 .remove_datum(datum_id)
                                 .map_err(|err| ChainError::Other { msg: err })
-                                .with_trace_element(trace_element!(trace_name))?;
+                                .with_trace_element(trace_element!())?;
                             record_definition
                                 .add_datum(
                                     f.name(),
@@ -388,7 +379,7 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
                                     },
                                 )
                                 .map_err(|err| ChainError::Other { msg: err })
-                                .with_trace_element(trace_element!(trace_name))?;
+                                .with_trace_element(trace_element!())?;
                             new_variant = true;
                         }
                     }
@@ -400,12 +391,9 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
                         facts_proof,
                     )
                 },
-                trace_name,
             )?;
 
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(trace_name))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(Self {
             spec,
@@ -424,24 +412,22 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
         graph: &mut GraphBuilder,
         input: &NodeStream,
         params: SubTransformFieldParams,
-        trace_name: &str,
     ) -> ChainResultWithTrace<ValidSubTransformFieldParams> {
         let (valid_path_fields, path_def) = params
             .path_fields
             .validate_path_on_stream(input, graph)
-            .with_trace_element(trace_element!(trace_name))?;
+            .with_trace_element(trace_element!())?;
 
         let valid_update_fields = params
             .update_fields
-            .validate_on_record_definition(&path_def, trace_name)?;
+            .validate_on_record_definition(&path_def)
+            .with_trace_element(trace_element!())?;
 
         let valid_type_update_fields = params
             .type_update_fields
-            .validate_on_record_definition_ext(
-                &path_def,
-                |name, datum| spec.validate_type_update_field(name, datum),
-                trace_name,
-            )?;
+            .validate_on_record_definition_ext(&path_def, |name, datum| {
+                spec.validate_type_update_field(name, datum)
+            })?;
 
         Ok(ValidSubTransformFieldParams {
             valid_path_fields,

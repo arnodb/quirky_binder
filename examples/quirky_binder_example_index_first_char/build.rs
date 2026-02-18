@@ -30,7 +30,7 @@ impl Tokenize {
 
         streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(TOKENIZE_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .update(|output_stream, facts_proof| {
                 let input_variant_id = output_stream.input_variant_id();
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
@@ -41,7 +41,7 @@ impl Tokenize {
                 output_stream_def
                     .remove_datum(datum_id)
                     .map_err(|err| ChainError::Other { msg: err })
-                    .with_trace_element(trace_element!(TOKENIZE_TRACE_NAME))?;
+                    .with_trace_element(trace_element!())?;
                 output_stream_def
                     .add_datum(
                         "word",
@@ -50,7 +50,7 @@ impl Tokenize {
                         },
                     )
                     .map_err(|err| ChainError::Other { msg: err })
-                    .with_trace_element(trace_element!(TOKENIZE_TRACE_NAME))?;
+                    .with_trace_element(trace_element!())?;
                 output_stream_def
                     .add_datum(
                         "first_char",
@@ -59,13 +59,11 @@ impl Tokenize {
                         },
                     )
                     .map_err(|err| ChainError::Other { msg: err })
-                    .with_trace_element(trace_element!(TOKENIZE_TRACE_NAME))?;
+                    .with_trace_element(trace_element!())?;
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(TOKENIZE_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(Self {
             name,
@@ -108,6 +106,7 @@ pub fn tokenize(
     inputs: [NodeStream; 1],
     params: (),
 ) -> ChainResultWithTrace<Tokenize> {
+    let _trace_name = TraceName::push(TOKENIZE_TRACE_NAME);
     Tokenize::new(graph, name, inputs, params)
 }
 

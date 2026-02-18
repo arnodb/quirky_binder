@@ -100,30 +100,23 @@ impl FieldsParam<'_> {
             .collect::<Result<Vec<_>, _>>()
     }
 
-    pub fn validate<L>(
-        self,
-        lookup: L,
-        trace_name: &str,
-    ) -> ChainResultWithTrace<Vec<ValidFieldName>>
+    pub fn validate<L>(self, lookup: L) -> ChainResultWithTrace<Vec<ValidFieldName>>
     where
         L: Fn(&ValidFieldName) -> bool,
     {
-        self.validate_ext(
-            |name| {
-                if lookup(&name) {
-                    Ok(name)
-                } else {
-                    Err(ChainError::FieldNotFound {
-                        field: name.name().to_owned(),
-                    })
-                    .with_trace_element(trace_element!(trace_name))
-                }
-            },
-            trace_name,
-        )
+        self.validate_ext(|name| {
+            if lookup(&name) {
+                Ok(name)
+            } else {
+                Err(ChainError::FieldNotFound {
+                    field: name.name().to_owned(),
+                })
+                .with_trace_element(trace_element!())
+            }
+        })
     }
 
-    pub fn validate_ext<L, O>(self, lookup: L, trace_name: &str) -> ChainResultWithTrace<Vec<O>>
+    pub fn validate_ext<L, O>(self, lookup: L) -> ChainResultWithTrace<Vec<O>>
     where
         L: Fn(ValidFieldName) -> ChainResultWithTrace<O>,
     {
@@ -134,7 +127,7 @@ impl FieldsParam<'_> {
                     .map_err(|_| ChainError::InvalidFieldName {
                         name: (*name).to_owned(),
                     })
-                    .with_trace_element(trace_element!(trace_name))?;
+                    .with_trace_element(trace_element!())?;
                 lookup(valid)
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -144,42 +137,36 @@ impl FieldsParam<'_> {
     pub fn validate_on_record_definition(
         self,
         def: &QuirkyRecordDefinitionBuilder,
-        trace_name: &str,
     ) -> ChainResultWithTrace<Vec<ValidFieldName>> {
-        self.validate_on_record_definition_ext(def, |name, _datum| Ok(name), trace_name)
+        self.validate_on_record_definition_ext(def, |name, _datum| Ok(name))
     }
 
     pub fn validate_on_record_definition_ext<M, O>(
         self,
         def: &QuirkyRecordDefinitionBuilder,
         try_map: M,
-        trace_name: &str,
     ) -> ChainResultWithTrace<Vec<O>>
     where
         M: Fn(ValidFieldName, &DatumDefinition<QuirkyDatumType>) -> ChainResultWithTrace<O>,
     {
-        self.validate_ext(
-            |name| {
-                if let Some(datum) = def.get_current_datum_definition_by_name(name.name()) {
-                    try_map(name, datum)
-                } else {
-                    Err(ChainError::FieldNotFound {
-                        field: name.name().to_owned(),
-                    })
-                    .with_trace_element(trace_element!(trace_name))
-                }
-            },
-            trace_name,
-        )
+        self.validate_ext(|name| {
+            if let Some(datum) = def.get_current_datum_definition_by_name(name.name()) {
+                try_map(name, datum)
+            } else {
+                Err(ChainError::FieldNotFound {
+                    field: name.name().to_owned(),
+                })
+                .with_trace_element(trace_element!())
+            }
+        })
     }
 
     pub fn validate_on_stream(
         self,
         stream: &NodeStream,
         graph: &GraphBuilder,
-        trace_name: &str,
     ) -> ChainResultWithTrace<Vec<ValidFieldName>> {
-        self.validate_on_stream_ext(stream, graph, |name, _datum| Ok(name), trace_name)
+        self.validate_on_stream_ext(stream, graph, |name, _datum| Ok(name))
     }
 
     pub fn validate_on_stream_ext<M, O>(
@@ -187,16 +174,15 @@ impl FieldsParam<'_> {
         stream: &NodeStream,
         graph: &GraphBuilder,
         try_map: M,
-        trace_name: &str,
     ) -> ChainResultWithTrace<Vec<O>>
     where
         M: Fn(ValidFieldName, &DatumDefinition<QuirkyDatumType>) -> ChainResultWithTrace<O>,
     {
         let def = graph
             .get_stream(stream.record_type())
-            .with_trace_element(trace_element!(trace_name))?
+            .with_trace_element(trace_element!())?
             .borrow();
-        self.validate_on_record_definition_ext(&def, try_map, trace_name)
+        self.validate_on_record_definition_ext(&def, try_map)
     }
 
     pub fn validate_path_on_stream<'g>(

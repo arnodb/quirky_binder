@@ -36,10 +36,11 @@ impl TransformSpec for ToLowercase {
     ) -> ChainResultWithTrace<FactsFullyUpdated<()>> {
         output_stream
             .break_order_fact_at(update_fields.iter().map(ValidFieldName::name))
-            .with_trace_element(trace_element!(TO_LOWERCASE_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
         output_stream
             .break_distinct_fact_for(update_fields.iter().map(ValidFieldName::name))
-            .with_trace_element(trace_element!(TO_LOWERCASE_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
+
         Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }
 
@@ -58,6 +59,7 @@ pub fn to_lowercase(
     inputs: [NodeStream; 1],
     params: TransformStringParams,
 ) -> ChainResultWithTrace<Transform<ToLowercase>> {
+    let _trace_name = TraceName::push(TO_LOWERCASE_TRACE_NAME);
     Transform::new(
         ToLowercase,
         graph,
@@ -67,7 +69,6 @@ pub fn to_lowercase(
             update_fields: params.fields,
             ..Default::default()
         },
-        TO_LOWERCASE_TRACE_NAME,
     )
 }
 
@@ -86,10 +87,11 @@ impl SubTransformSpec for SubToLowercase {
     ) -> ChainResultWithTrace<FactsFullyUpdated<()>> {
         output_stream
             .break_order_fact_at(update_fields.iter().map(ValidFieldName::name))
-            .with_trace_element(trace_element!(SUB_TO_LOWERCASE_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
         output_stream
             .break_distinct_fact_for(update_fields.iter().map(ValidFieldName::name))
-            .with_trace_element(trace_element!(SUB_TO_LOWERCASE_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
+
         Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }
 
@@ -108,6 +110,7 @@ pub fn sub_to_lowercase(
     inputs: [NodeStream; 1],
     params: SubTransformStringParams,
 ) -> ChainResultWithTrace<SubTransform<SubToLowercase>> {
+    let _trace_name = TraceName::push(SUB_TO_LOWERCASE_TRACE_NAME);
     SubTransform::new(
         SubToLowercase,
         graph,
@@ -118,7 +121,6 @@ pub fn sub_to_lowercase(
             update_fields: params.fields,
             ..Default::default()
         },
-        SUB_TO_LOWERCASE_TRACE_NAME,
     )
 }
 
@@ -138,7 +140,8 @@ impl TransformSpec for ReverseChars {
         // TODO nice to have: change order direction
         output_stream
             .break_order_fact_at(update_fields.iter().map(ValidFieldName::name))
-            .with_trace_element(trace_element!(REVERSE_CHARS_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
+
         Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }
 
@@ -157,6 +160,7 @@ pub fn reverse_chars(
     inputs: [NodeStream; 1],
     params: TransformStringParams,
 ) -> ChainResultWithTrace<Transform<ReverseChars>> {
+    let _trace_name = TraceName::push(REVERSE_CHARS_TRACE_NAME);
     Transform::new(
         ReverseChars,
         graph,
@@ -166,7 +170,6 @@ pub fn reverse_chars(
             update_fields: params.fields,
             ..Default::default()
         },
-        REVERSE_CHARS_TRACE_NAME,
     )
 }
 
@@ -186,7 +189,8 @@ impl SubTransformSpec for SubReverseChars {
         // TODO nice to have: change order direction
         output_stream
             .break_order_fact_at(update_fields.iter().map(ValidFieldName::name))
-            .with_trace_element(trace_element!(SUB_REVERSE_CHARS_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
+
         Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }
 
@@ -205,6 +209,7 @@ pub fn sub_reverse_chars(
     inputs: [NodeStream; 1],
     params: SubTransformStringParams,
 ) -> ChainResultWithTrace<SubTransform<SubReverseChars>> {
+    let _trace_name = TraceName::push(SUB_REVERSE_CHARS_TRACE_NAME);
     SubTransform::new(
         SubReverseChars,
         graph,
@@ -215,6 +220,5 @@ pub fn sub_reverse_chars(
             update_fields: params.fields,
             ..Default::default()
         },
-        SUB_REVERSE_CHARS_TRACE_NAME,
     )
 }

@@ -34,24 +34,22 @@ impl FunctionEmit {
         let valid_fields = params
             .fields
             .validate_new()
-            .with_trace_element(trace_element!(FUNCTION_EMIT_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let valid_order_fields = params
             .order_fields
             .map(|order_fields| {
                 order_fields
                     .validate(|name| valid_fields.iter().any(|vf| vf.0.name() == name))
-                    .with_trace_element(trace_element!(FUNCTION_EMIT_TRACE_NAME))
+                    .with_trace_element(trace_element!())
             })
             .transpose()?;
 
         let valid_distinct_fields = params
             .distinct_fields
             .map(|distinct_fields| {
-                distinct_fields.validate(
-                    |name| valid_fields.iter().any(|vf| vf.0.name() == name.name()),
-                    FUNCTION_EMIT_TRACE_NAME,
-                )
+                distinct_fields
+                    .validate(|name| valid_fields.iter().any(|vf| vf.0.name() == name.name()))
             })
             .transpose()?;
 
@@ -62,16 +60,16 @@ impl FunctionEmit {
                 name: "body".to_owned(),
                 msg: err.to_string(),
             })
-            .with_trace_element(trace_element!(FUNCTION_EMIT_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .new_main_stream(graph)
-            .with_trace_element(trace_element!(FUNCTION_EMIT_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         streams
             .new_main_output(graph)
-            .with_trace_element(trace_element!(FUNCTION_EMIT_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .update(|output_stream, facts_proof| {
                 {
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
@@ -84,7 +82,7 @@ impl FunctionEmit {
                                 },
                             )
                             .map_err(|err| ChainError::Other { msg: err })
-                            .with_trace_element(trace_element!(FUNCTION_EMIT_TRACE_NAME))?;
+                            .with_trace_element(trace_element!())?;
                     }
                 }
                 if let Some(order_fields) = valid_order_fields.as_ref() {
@@ -94,19 +92,17 @@ impl FunctionEmit {
                                 .iter()
                                 .map(|field| field.as_ref().map(ValidFieldName::name)),
                         )
-                        .with_trace_element(trace_element!(FUNCTION_EMIT_TRACE_NAME))?;
+                        .with_trace_element(trace_element!())?;
                 }
                 if let Some(distinct_fields) = valid_distinct_fields.as_ref() {
                     output_stream
                         .set_distinct_fact(distinct_fields.iter().map(ValidFieldName::name))
-                        .with_trace_element(trace_element!(FUNCTION_EMIT_TRACE_NAME))?;
+                        .with_trace_element(trace_element!())?;
                 }
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(FUNCTION_EMIT_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(Self {
             name,
@@ -143,5 +139,6 @@ pub fn function_emit(
     inputs: [NodeStream; 0],
     params: FunctionEmitParams,
 ) -> ChainResultWithTrace<FunctionEmit> {
+    let _trace_name = TraceName::push(FUNCTION_EMIT_TRACE_NAME);
     FunctionEmit::new(graph, name, inputs, params)
 }

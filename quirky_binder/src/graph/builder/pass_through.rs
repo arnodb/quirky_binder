@@ -35,14 +35,13 @@ impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
         sub_stream: NodeSubStream,
         graph: &'g GraphBuilder,
         build: B,
-        trace_name: &str,
     ) -> ChainResultWithTrace<NodeSubStream>
     where
         B: FnOnce(&mut SubStreamBuilderForPassThrough<'g>) -> ChainResultWithTrace<()>,
     {
         let record_definition = graph
             .get_stream(sub_stream.record_type())
-            .with_trace_element(trace_element!(trace_name))?;
+            .with_trace_element(trace_element!())?;
         let (record_type, variant_id, sub_streams, facts) = sub_stream.destructure();
         let mut builder = SubStreamBuilderForPassThrough {
             record_type,
@@ -60,7 +59,6 @@ impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
         path_fields: &[ValidFieldName],
         pass_through_leaf_sub_stream: PassThroughLeafSubStream,
         graph: &'g GraphBuilder,
-        trace_name: &str,
     ) -> ChainResultWithTrace<NodeSubStream>
     where
         PassThroughLeafSubStream: for<'c, 'd> FnOnce(
@@ -84,12 +82,12 @@ impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
                 .ok_or_else(|| ChainError::FieldNotFound {
                     field: field.name().to_owned(),
                 })
-                .with_trace_element(trace_element!(trace_name))?
+                .with_trace_element(trace_element!())?
                 .id();
             let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
             let sub_record_definition = graph
                 .get_stream(sub_stream.record_type())
-                .with_trace_element(trace_element!(trace_name))?;
+                .with_trace_element(trace_element!())?;
             (datum_id, sub_stream, sub_record_definition)
         };
 
@@ -107,7 +105,7 @@ impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
                     .ok_or_else(|| ChainError::FieldNotFound {
                         field: field.name().to_owned(),
                     })
-                    .with_trace_element(trace_element!(trace_name))?
+                    .with_trace_element(trace_element!())?
                     .id();
                 let sub_stream = stream
                     .sub_streams_mut()
@@ -115,7 +113,7 @@ impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
                     .expect("sub stream");
                 let sub_record_definition = graph
                     .get_stream(sub_stream.record_type())
-                    .with_trace_element(trace_element!(trace_name))?;
+                    .with_trace_element(trace_element!())?;
                 path_data.push(PathFieldDetails { stream, datum_id });
                 Ok((path_data, sub_stream, sub_record_definition))
             },

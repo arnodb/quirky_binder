@@ -111,7 +111,6 @@ fn quirky_binder_graph_definition<'a>(
         }
     };
     let (body, ordered_var_names, main_stream, mut named_streams) = quirky_binder_stream_lines(
-        graph_definition.signature.name,
         &graph_definition.stream_lines,
         quirky_binder_crate,
         error_emitter,
@@ -176,6 +175,7 @@ fn quirky_binder_graph_definition<'a>(
             inputs: [NodeStream; #input_count],
             #params_type_name { #(#params,)* _a }: #params_type_name,
         ) -> ChainResultWithTrace<NodeCluster<#input_count, #output_count>> {
+            let _trace_name = TraceName::push(stringify!(#name));
 
             #setup_handlebars
 
@@ -216,7 +216,7 @@ fn quirky_binder_graph<'a>(
     };
     let name = format_ident!("{}", name_str);
     let (body, ordered_var_names, main_stream, named_streams) =
-        quirky_binder_stream_lines(&name_str, stream_lines, quirky_binder_crate, error_emitter);
+        quirky_binder_stream_lines(stream_lines, quirky_binder_crate, error_emitter);
     named_streams.check_all_streams_connected(error_emitter);
     if let Some((_, anchor)) = main_stream {
         error_emitter.emit_error(anchor, "main stream cannot be connected".into());
@@ -230,6 +230,8 @@ fn quirky_binder_graph<'a>(
             graph: &mut GraphBuilder,
             name: FullyQualifiedName,
         ) -> ChainResultWithTrace<NodeCluster<0, 0>> {
+            let _trace_name = TraceName::push(stringify!(#name));
+
             let handlebars = Handlebars::new();
             let handlebars_data = BTreeMap::<&str, &str>::new();
 
@@ -328,7 +330,6 @@ impl NamedStreamState<'_> {
 }
 
 fn quirky_binder_stream_lines<'a>(
-    caller: &str,
     stream_lines: &'a [StreamLine<'a>],
     quirky_binder_crate: &Ident,
     error_emitter: &mut QuirkyBinderErrorEmitter<'a>,
@@ -494,11 +495,17 @@ fn quirky_binder_stream_lines<'a>(
                                             err.span.start.col,
                                         );
                                         ChainError::ParseParams{ msg: err.to_string() }
-                                            .with_trace_element(|| TraceElement::new(#source.into(), #caller.into(), location))
+                                            .with_trace_element(|| TraceElement::new(
+                                                #source.into(),
+                                                #quirky_binder_crate::chain::trace::TRACE_NAME.get().1.into(),
+                                                location))
                                     })?,
                             )
                         }
-                            .with_trace_element(|| TraceElement::new(#source.into(), #caller.into(), #filter_location))?;
+                            .with_trace_element(|| TraceElement::new(
+                                #source.into(),
+                                #quirky_binder_crate::chain::trace::TRACE_NAME.get().1.into(),
+                                #filter_location))?;
                     });
                     ordered_var_names.push(var_name.clone());
                     go_back_on_unstarted = true;

@@ -6,7 +6,7 @@ pub use crate::{
         customizer::{ChainCustomizer, ThreadsCustomizer},
         error::{ChainError, ChainErrorWithTrace},
         result::{ChainResult, ChainResultWithTrace},
-        trace::{Trace, TraceElement, WithTraceElement},
+        trace::{Trace, TraceElement, TraceName, WithTraceElement},
         Chain, ChainThreadType, ImportScope, NodeStatisticsOption, StreamCustomizer,
     },
     graph::{

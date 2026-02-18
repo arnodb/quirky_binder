@@ -38,28 +38,27 @@ impl Group {
         inputs: [NodeStream; 1],
         params: GroupParams,
     ) -> ChainResultWithTrace<Group> {
-        let valid_by_fields =
-            params
-                .by_fields
-                .validate_on_stream(inputs.single(), graph, GROUP_TRACE_NAME)?;
+        let valid_by_fields = params
+            .by_fields
+            .validate_on_stream(inputs.single(), graph)?;
         let valid_group_field = ValidFieldName::try_from(params.group_field)
             .map_err(|_| ChainError::InvalidFieldName {
                 name: params.group_field.to_owned(),
             })
-            .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .new_named_stream("group", graph)
-            .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let group_stream = streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(GROUP_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .update(|output_stream, facts_proof| {
                 let mut group_stream = output_stream
                     .new_named_sub_stream("group", graph)
-                    .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
+                    .with_trace_element(trace_element!())?;
                 let variant_id = output_stream.input_variant_id();
 
                 let (group_by_datum_ids, group_datum_ids) = {
@@ -91,21 +90,21 @@ impl Group {
                         &output_stream_def,
                         "main stream",
                     )
-                    .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
+                    .with_trace_element(trace_element!())?;
 
                     let mut map = BTreeMap::<DatumId, DatumId>::new();
                     for datum in &group_data {
                         let new_id = group_stream_def
                             .add_datum(datum.name(), datum.details().clone())
                             .map_err(|err| ChainError::Other { msg: err })
-                            .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
+                            .with_trace_element(trace_element!())?;
                         map.insert(datum.id(), new_id);
                     }
                     for &datum_id in &group_datum_ids {
                         output_stream_def
                             .remove_datum(datum_id)
                             .map_err(|err| ChainError::Other { msg: err })
-                            .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
+                            .with_trace_element(trace_element!())?;
                     }
 
                     let group_order = output_stream.facts().order()[group_by_datum_ids.len()..]
@@ -135,7 +134,7 @@ impl Group {
                         group_stream.variant_id(),
                         group_stream.clone(),
                     )
-                    .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
+                    .with_trace_element(trace_element!())?;
 
                 output_stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
                 output_stream.set_distinct_fact_ids(group_by_datum_ids);
@@ -146,9 +145,7 @@ impl Group {
                     .with_output(group_stream))
             })?;
 
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(GROUP_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(Group {
             name: name.clone(),
@@ -252,6 +249,7 @@ pub fn group(
     inputs: [NodeStream; 1],
     params: GroupParams,
 ) -> ChainResultWithTrace<Group> {
+    let _trace_name = TraceName::push(GROUP_TRACE_NAME);
     Group::new(graph, name, inputs, params)
 }
 
@@ -288,34 +286,35 @@ impl SubGroup {
         let (valid_path_fields, path_def) = params
             .path_fields
             .validate_path_on_stream(inputs.single(), graph)
-            .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
         let valid_group_field = ValidFieldName::try_from(params.group_field)
             .map_err(|_| ChainError::InvalidFieldName {
                 name: params.group_field.to_owned(),
             })
-            .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
         let valid_by_fields = params
             .by_fields
-            .validate_on_record_definition(&path_def, SUB_GROUP_TRACE_NAME)?;
+            .validate_on_record_definition(&path_def)
+            .with_trace_element(trace_element!())?;
         drop(path_def);
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .new_named_stream("group", graph)
-            .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         let mut created_group_stream = None;
 
         let path_streams = streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .update_path(
                 graph,
                 &valid_path_fields,
                 |output_stream, sub_output_stream, facts_proof| {
                     let mut group_stream = output_stream
                         .new_named_sub_stream("group", graph)
-                        .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
+                        .with_trace_element(trace_element!())?;
                     let variant_id = sub_output_stream.input_variant_id();
 
                     let (group_by_datum_ids, group_datum_ids) = {
@@ -348,21 +347,21 @@ impl SubGroup {
                             &output_stream_def,
                             "main sub stream",
                         )
-                        .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
+                        .with_trace_element(trace_element!())?;
 
                         let mut map = BTreeMap::<DatumId, DatumId>::new();
                         for datum in &group_data {
                             let new_id = group_stream_def
                                 .add_datum(datum.name(), datum.details().clone())
                                 .map_err(|err| ChainError::Other { msg: err })
-                                .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
+                                .with_trace_element(trace_element!())?;
                             map.insert(datum.id(), new_id);
                         }
                         for datum_id in &group_datum_ids {
                             output_stream_def
                                 .remove_datum(*datum_id)
                                 .map_err(|err| ChainError::Other { msg: err })
-                                .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
+                                .with_trace_element(trace_element!())?;
                         }
 
                         let group_order = sub_output_stream.facts().order()
@@ -393,7 +392,7 @@ impl SubGroup {
                             group_stream.variant_id(),
                             group_stream.clone(),
                         )
-                        .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
+                        .with_trace_element(trace_element!())?;
 
                     created_group_stream = Some(group_stream);
 
@@ -402,12 +401,9 @@ impl SubGroup {
 
                     Ok(facts_proof.order_facts_updated().distinct_facts_updated())
                 },
-                SUB_GROUP_TRACE_NAME,
             )?;
 
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(SUB_GROUP_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(SubGroup {
             name: name.clone(),
@@ -537,5 +533,6 @@ pub fn sub_group(
     inputs: [NodeStream; 1],
     params: SubGroupParams,
 ) -> ChainResultWithTrace<SubGroup> {
+    let _trace_name = TraceName::push(SUB_GROUP_TRACE_NAME);
     SubGroup::new(graph, name, inputs, params)
 }

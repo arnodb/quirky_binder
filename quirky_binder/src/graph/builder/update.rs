@@ -66,7 +66,6 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
         sub_stream: NodeSubStream,
         graph: &'g GraphBuilder,
         build: B,
-        trace_name: &str,
     ) -> ChainResultWithTrace<NodeSubStream>
     where
         B: FnOnce(
@@ -77,7 +76,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
     {
         let record_definition = graph
             .get_stream(sub_stream.record_type())
-            .with_trace_element(trace_element!(trace_name))?;
+            .with_trace_element(trace_element!())?;
         let (record_type, variant_id, sub_streams, facts) = sub_stream.destructure();
         let mut builder = SubStreamBuilderForUpdate {
             record_type,
@@ -99,7 +98,6 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
         update_path_stream: UpdatePathStream,
         update_root_stream: UpdateRootStream,
         graph: &'g GraphBuilder,
-        trace_name: &str,
     ) -> ChainResultWithTrace<Vec<PathUpdateElement>>
     where
         UpdateLeafSubStream: for<'c, 'd> FnOnce(
@@ -136,13 +134,13 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
                 let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
                 let sub_record_definition = graph
                     .get_stream(sub_stream.record_type())
-                    .with_trace_element(trace_element!(trace_name))?;
+                    .with_trace_element(trace_element!())?;
                 (field, datum_id, sub_stream, sub_record_definition)
             } else {
                 return Err(ChainError::FieldNotFound {
                     field: field.name().to_owned(),
                 })
-                .with_trace_element(trace_element!(trace_name));
+                .with_trace_element(trace_element!());
             }
         };
 
@@ -165,7 +163,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
                         .expect("sub stream");
                     let sub_record_definition = graph
                         .get_stream(sub_stream.record_type())
-                        .with_trace_element(trace_element!(trace_name))?;
+                        .with_trace_element(trace_element!())?;
                     path_data.push(PathFieldDetails {
                         stream,
                         field,
@@ -176,7 +174,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
                     Err(ChainError::FieldNotFound {
                         field: field.name().to_owned(),
                     })
-                    .with_trace_element(trace_element!(trace_name))
+                    .with_trace_element(trace_element!())
                 }
             },
         )?;
@@ -199,7 +197,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
                     return Err(ChainError::Other {
                         msg: "sub stream should have been removed".to_owned(),
                     })
-                    .with_trace_element(trace_element!(trace_name));
+                    .with_trace_element(trace_element!());
                 }
                 path_update_streams.push(PathUpdateElement {
                     field: field_details.field.clone(),
@@ -218,7 +216,6 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
                             facts_proof,
                         )
                     },
-                    trace_name,
                 )?;
 
                 sub_input_stream = Some(field_details.stream);
@@ -233,7 +230,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
                 return Err(ChainError::Other {
                     msg: "sub stream should have been removed".to_owned(),
                 })
-                .with_trace_element(trace_element!(trace_name));
+                .with_trace_element(trace_element!());
             }
             path_update_streams.push(PathUpdateElement {
                 field: root_field.clone(),

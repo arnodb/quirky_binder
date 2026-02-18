@@ -37,7 +37,7 @@ impl FunctionExecute {
                 name: "body".to_owned(),
                 msg: err.to_string(),
             })
-            .with_trace_element(trace_element!(FUNCTION_EXECUTE_TRACE_NAME))?;
+            .with_trace_element(trace_element!())?;
 
         Ok(Self {
             name,
@@ -86,5 +86,6 @@ pub fn function_execute(
     inputs: [NodeStream; 0],
     params: FunctionExecuteParams,
 ) -> ChainResultWithTrace<FunctionExecute> {
+    let _trace_name = TraceName::push(FUNCTION_EXECUTE_TRACE_NAME);
     FunctionExecute::new(graph, name, inputs, params)
 }

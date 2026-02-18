@@ -38,19 +38,17 @@ impl Join {
     ) -> ChainResultWithTrace<Self> {
         let mut streams = StreamsBuilder::new(&name, &inputs);
 
-        let valid_primary_fields =
-            params
-                .primary_fields
-                .validate_on_stream(&inputs[0], graph, JOIN_TRACE_NAME)?;
+        let valid_primary_fields = params
+            .primary_fields
+            .validate_on_stream(&inputs[0], graph)?;
 
-        let valid_secondary_fields =
-            params
-                .secondary_fields
-                .validate_on_stream(&inputs[1], graph, JOIN_TRACE_NAME)?;
+        let valid_secondary_fields = params
+            .secondary_fields
+            .validate_on_stream(&inputs[1], graph)?;
 
         let joined_fields = streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(JOIN_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .update(|output_stream, facts_proof| {
                 for (stream_info, input, fields) in [
                     ("primary stream", &inputs[0], &valid_primary_fields),
@@ -58,7 +56,7 @@ impl Join {
                 ] {
                     let input_stream_def = graph
                         .get_stream(input.record_type())
-                        .with_trace_element(trace_element!(JOIN_TRACE_NAME))?
+                        .with_trace_element(trace_element!())?
                         .borrow();
 
                     let variant = &input_stream_def[input.variant_id()];
@@ -76,20 +74,20 @@ impl Join {
                         &input_stream_def,
                         stream_info,
                     )
-                    .with_trace_element(trace_element!(JOIN_TRACE_NAME))?;
+                    .with_trace_element(trace_element!())?;
                     check_distinct_eq(
                         &expected_fact_fields,
                         input.facts().distinct(),
                         &input_stream_def,
                         stream_info,
                     )
-                    .with_trace_element(trace_element!(JOIN_TRACE_NAME))?;
+                    .with_trace_element(trace_element!())?;
                 }
 
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
                 let secondary_stream_def = graph
                     .get_stream(inputs[1].record_type())
-                    .with_trace_element(trace_element!(JOIN_TRACE_NAME))?
+                    .with_trace_element(trace_element!())?
                     .borrow();
                 let variant = &secondary_stream_def[inputs[1].variant_id()];
 
@@ -104,7 +102,7 @@ impl Join {
                             if let Err(err) = output_stream_def
                                 .add_datum(datum.name(), datum.details().clone())
                                 .map_err(|err| ChainError::Other { msg: err })
-                                .with_trace_element(trace_element!(JOIN_TRACE_NAME))
+                                .with_trace_element(trace_element!())
                             {
                                 return Some(Err(err));
                             };
@@ -122,9 +120,7 @@ impl Join {
                     .with_output(joined_fields))
             })?;
 
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(JOIN_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(Self {
             name,
@@ -278,5 +274,6 @@ pub fn join(
     inputs: [NodeStream; 2],
     params: JoinParams,
 ) -> ChainResultWithTrace<Join> {
+    let _trace_name = TraceName::push(JOIN_TRACE_NAME);
     Join::new(graph, name, inputs, params)
 }

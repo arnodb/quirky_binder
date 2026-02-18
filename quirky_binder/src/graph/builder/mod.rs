@@ -230,7 +230,6 @@ impl<'a, 'b, 'g, Extra> OutputBuilder<'a, 'b, 'g, Extra> {
         graph: &'g GraphBuilder,
         path_fields: &[ValidFieldName],
         build: B,
-        trace_name: &str,
     ) -> ChainResultWithTrace<Vec<PathUpdateElement>>
     where
         B: for<'c, 'd> FnOnce(
@@ -243,7 +242,7 @@ impl<'a, 'b, 'g, Extra> OutputBuilder<'a, 'b, 'g, Extra> {
             let path_streams = output_stream.update_path(
                 path_fields,
                 |sub_input_stream, output_stream| {
-                    output_stream.update_sub_stream(sub_input_stream, graph, build, trace_name)
+                    output_stream.update_sub_stream(sub_input_stream, graph, build)
                 },
                 |field: &str, path_stream, sub_output_stream, facts_proof| {
                     path_stream
@@ -253,7 +252,7 @@ impl<'a, 'b, 'g, Extra> OutputBuilder<'a, 'b, 'g, Extra> {
                             sub_output_stream.variant_id(),
                             sub_output_stream,
                         )
-                        .with_trace_element(trace_element!(trace_name))?;
+                        .with_trace_element(trace_element!())?;
                     Ok(facts_proof.order_facts_updated().distinct_facts_updated())
                 },
                 |field: &str, output_stream, sub_output_stream| {
@@ -264,11 +263,10 @@ impl<'a, 'b, 'g, Extra> OutputBuilder<'a, 'b, 'g, Extra> {
                             sub_output_stream.variant_id(),
                             sub_output_stream,
                         )
-                        .with_trace_element(trace_element!(trace_name))?;
+                        .with_trace_element(trace_element!())?;
                     Ok(())
                 },
                 graph,
-                trace_name,
             )?;
 
             Ok(facts_proof
@@ -307,7 +305,6 @@ impl<'a, 'b, 'g> OutputBuilder<'a, 'b, 'g, DerivedExtra> {
         graph: &'g GraphBuilder,
         path_fields: &[ValidFieldName],
         build: B,
-        trace_name: &str,
     ) -> ChainResultWithTrace<NodeSubStream>
     where
         B: FnOnce(&mut SubStreamBuilderForPassThrough<'g>) -> ChainResultWithTrace<()>,
@@ -317,11 +314,10 @@ impl<'a, 'b, 'g> OutputBuilder<'a, 'b, 'g, DerivedExtra> {
                 path_fields,
                 |sub_input_stream, output_stream| {
                     output_stream
-                        .pass_through_sub_stream(sub_input_stream, graph, build, trace_name)
-                        .with_trace_element(trace_element!(trace_name))
+                        .pass_through_sub_stream(sub_input_stream, graph, build)
+                        .with_trace_element(trace_element!())
                 },
                 graph,
-                trace_name,
             )?;
             Ok(facts_proof
                 .order_facts_updated()

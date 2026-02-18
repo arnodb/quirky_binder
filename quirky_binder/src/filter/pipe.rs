@@ -21,13 +21,11 @@ impl Pipe {
         let mut streams = StreamsBuilder::new(&name, &inputs);
         streams
             .output_from_input(0, true, graph)
-            .with_trace_element(trace_element!(PIPE_TRACE_NAME))?
+            .with_trace_element(trace_element!())?
             .pass_through(|_, facts_proof| {
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
-        let outputs = streams
-            .build()
-            .with_trace_element(trace_element!(PIPE_TRACE_NAME))?;
+        let outputs = streams.build().with_trace_element(trace_element!())?;
 
         Ok(Self {
             name,
@@ -72,5 +70,6 @@ pub fn pipe(
     inputs: [NodeStream; 1],
     params: (),
 ) -> ChainResultWithTrace<Pipe> {
+    let _trace_name = TraceName::push(PIPE_TRACE_NAME);
     Pipe::new(graph, name, inputs, params)
 }
