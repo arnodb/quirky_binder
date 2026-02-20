@@ -55,16 +55,6 @@ pub struct NodeStream {
     facts: StreamFacts,
 }
 
-impl NodeStream {
-    /// Creates a new stream with a different source.
-    pub fn with_source(&self, source: NodeStreamSource) -> Self {
-        Self {
-            source,
-            ..self.clone()
-        }
-    }
-}
-
 pub trait NoneNodeStream {
     fn none(&self) -> Option<&NodeStream>;
 }
