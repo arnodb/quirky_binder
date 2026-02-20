@@ -7,11 +7,7 @@ use super::{
     break_order_fact_at_ids, set_distinct_fact, set_distinct_fact_all_fields,
     set_distinct_fact_ids, set_order_fact,
 };
-use crate::{
-    prelude::*,
-    stream::{NodeSubStream, StreamFacts},
-    trace_element,
-};
+use crate::{prelude::*, trace_element};
 
 #[derive(Getters, CopyGetters)]
 pub struct OutputBuilderForPassThrough<'a, 'b, 'g> {

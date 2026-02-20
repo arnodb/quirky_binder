@@ -128,12 +128,7 @@ impl Group {
                 );
 
                 output_stream
-                    .add_vec_datum(
-                        params.group_field,
-                        group_stream.record_type().clone(),
-                        group_stream.variant_id(),
-                        group_stream.clone(),
-                    )
+                    .add_vec_datum(params.group_field, group_stream.clone())
                     .with_trace_element(trace_element!())?;
 
                 output_stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
@@ -386,12 +381,7 @@ impl SubGroup {
                     );
 
                     sub_output_stream
-                        .add_vec_datum(
-                            params.group_field,
-                            group_stream.record_type().clone(),
-                            group_stream.variant_id(),
-                            group_stream.clone(),
-                        )
+                        .add_vec_datum(params.group_field, group_stream.clone())
                         .with_trace_element(trace_element!())?;
 
                     created_group_stream = Some(group_stream);

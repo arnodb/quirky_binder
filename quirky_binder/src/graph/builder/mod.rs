@@ -246,23 +246,13 @@ impl<'a, 'b, 'g, Extra> OutputBuilder<'a, 'b, 'g, Extra> {
                 },
                 |field: &str, path_stream, sub_output_stream, facts_proof| {
                     path_stream
-                        .replace_vec_datum(
-                            field,
-                            sub_output_stream.record_type().clone(),
-                            sub_output_stream.variant_id(),
-                            sub_output_stream,
-                        )
+                        .replace_vec_datum(field, sub_output_stream)
                         .with_trace_element(trace_element!())?;
                     Ok(facts_proof.order_facts_updated().distinct_facts_updated())
                 },
                 |field: &str, output_stream, sub_output_stream| {
                     output_stream
-                        .replace_vec_datum(
-                            field,
-                            sub_output_stream.record_type().clone(),
-                            sub_output_stream.variant_id(),
-                            sub_output_stream,
-                        )
+                        .replace_vec_datum(field, sub_output_stream)
                         .with_trace_element(trace_element!())?;
                     Ok(())
                 },

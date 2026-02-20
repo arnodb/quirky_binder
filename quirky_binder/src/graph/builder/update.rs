@@ -10,11 +10,7 @@ use super::{
     set_distinct_fact, set_distinct_fact_all_fields, set_distinct_fact_ids, set_order_fact,
     FactsFullyUpdated, NoFactsUpdated,
 };
-use crate::{
-    prelude::*,
-    stream::{NodeSubStream, StreamFacts},
-    trace_element,
-};
+use crate::{prelude::*, trace_element};
 
 #[derive(Getters, CopyGetters)]
 pub struct OutputBuilderForUpdate<'a, 'b, 'g, Extra> {
@@ -246,53 +242,42 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
         Ok(path_update_streams)
     }
 
-    pub fn add_vec_datum(
-        &mut self,
-        field: &str,
-        record_type: StreamRecordType,
-        variant_id: RecordVariantId,
-        sub_stream: NodeSubStream,
-    ) -> ChainResult<()> {
+    pub fn add_vec_datum(&mut self, field: &str, new_sub_stream: NodeSubStream) -> ChainResult<()> {
         let datum_id = add_vec_datum_to_record_definition(
             &mut self.record_definition.borrow_mut(),
             field,
-            record_type,
-            variant_id,
+            new_sub_stream.record_type().clone(),
+            new_sub_stream.variant_id(),
         )?;
-        let old = self.sub_streams.insert(datum_id, sub_stream);
-        if old.is_some() {
+        let None = self.sub_streams.insert(datum_id, new_sub_stream) else {
             return Err(ChainError::Other {
                 msg: "the datum should not be registered yet".to_owned(),
             });
-        }
+        };
         Ok(())
     }
 
     pub fn replace_vec_datum(
         &mut self,
         field: &str,
-        record_type: StreamRecordType,
-        variant_id: RecordVariantId,
-        sub_stream: NodeSubStream,
+        new_sub_stream: NodeSubStream,
     ) -> ChainResult<()> {
         let (old_datum_id, new_datum_id) = replace_vec_datum_in_record_definition(
             &mut self.record_definition.borrow_mut(),
             field,
-            record_type,
-            variant_id,
+            new_sub_stream.record_type().clone(),
+            new_sub_stream.variant_id(),
         )?;
-        let old = self.sub_streams.remove(&old_datum_id);
-        if old.is_none() {
+        let Some(_) = self.sub_streams.remove(&old_datum_id) else {
             return Err(ChainError::Other {
                 msg: "the replaced datum should be registered".to_owned(),
             });
-        }
-        let old = self.sub_streams.insert(new_datum_id, sub_stream);
-        if old.is_some() {
+        };
+        let None = self.sub_streams.insert(new_datum_id, new_sub_stream) else {
             return Err(ChainError::Other {
                 msg: "the datum should not be registered yet".to_owned(),
             });
-        }
+        };
         Ok(())
     }
 
@@ -408,53 +393,42 @@ impl<Extra> SubStreamBuilderForUpdate<'_, Extra> {
         &self.sub_streams[&datum_id]
     }
 
-    pub fn add_vec_datum(
-        &mut self,
-        field: &str,
-        record_type: StreamRecordType,
-        variant_id: RecordVariantId,
-        sub_stream: NodeSubStream,
-    ) -> ChainResult<()> {
+    pub fn add_vec_datum(&mut self, field: &str, new_sub_stream: NodeSubStream) -> ChainResult<()> {
         let datum_id = add_vec_datum_to_record_definition(
             &mut self.record_definition.borrow_mut(),
             field,
-            record_type,
-            variant_id,
+            new_sub_stream.record_type().clone(),
+            new_sub_stream.variant_id(),
         )?;
-        let old = self.sub_streams.insert(datum_id, sub_stream);
-        if old.is_some() {
+        let None = self.sub_streams.insert(datum_id, new_sub_stream) else {
             return Err(ChainError::Other {
                 msg: "the datum should not be registered yet".to_owned(),
             });
-        }
+        };
         Ok(())
     }
 
     pub fn replace_vec_datum(
         &mut self,
         field: &str,
-        record_type: StreamRecordType,
-        variant_id: RecordVariantId,
-        sub_stream: NodeSubStream,
+        new_sub_stream: NodeSubStream,
     ) -> ChainResult<()> {
         let (old_datum_id, new_datum_id) = replace_vec_datum_in_record_definition(
             &mut self.record_definition.borrow_mut(),
             field,
-            record_type,
-            variant_id,
+            new_sub_stream.record_type().clone(),
+            new_sub_stream.variant_id(),
         )?;
-        let old = self.sub_streams.remove(&old_datum_id);
-        if old.is_none() {
+        let Some(_) = self.sub_streams.remove(&old_datum_id) else {
             return Err(ChainError::Other {
                 msg: "the replaced datum should be registered".to_owned(),
             });
-        }
-        let old = self.sub_streams.insert(new_datum_id, sub_stream);
-        if old.is_some() {
+        };
+        let None = self.sub_streams.insert(new_datum_id, new_sub_stream) else {
             return Err(ChainError::Other {
                 msg: "the datum should not be registered yet".to_owned(),
             });
-        }
+        };
         Ok(())
     }
 
