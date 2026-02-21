@@ -245,16 +245,27 @@ impl<'a, 'b, 'g, Extra> OutputBuilder<'a, 'b, 'g, Extra> {
                     output_stream.update_sub_stream(sub_input_stream, graph, build)
                 },
                 |field: &str, path_stream, sub_output_stream, facts_proof| {
-                    path_stream
-                        .replace_vec_datum(field, sub_output_stream)
-                        .with_trace_element(trace_element!())?;
-                    Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+                    let new_datum_id = replace_vec_datum_in_record_definition(
+                        &mut path_stream.record_definition().borrow_mut(),
+                        field,
+                        sub_output_stream.record_type().clone(),
+                        sub_output_stream.variant_id(),
+                    )
+                    .with_trace_element(trace_element!())?;
+                    Ok((
+                        new_datum_id,
+                        facts_proof.order_facts_updated().distinct_facts_updated(),
+                    ))
                 },
                 |field: &str, output_stream, sub_output_stream| {
-                    output_stream
-                        .replace_vec_datum(field, sub_output_stream)
-                        .with_trace_element(trace_element!())?;
-                    Ok(())
+                    let new_datum_id = replace_vec_datum_in_record_definition(
+                        &mut output_stream.record_definition().borrow_mut(),
+                        field,
+                        sub_output_stream.record_type().clone(),
+                        sub_output_stream.variant_id(),
+                    )
+                    .with_trace_element(trace_element!())?;
+                    Ok(new_datum_id)
                 },
                 graph,
             )?;
@@ -358,7 +369,7 @@ impl FactsFullyUpdated<()> {
     }
 }
 
-fn add_vec_datum_to_record_definition(
+pub fn add_vec_datum_to_record_definition(
     record_definition: &mut QuirkyRecordDefinitionBuilder,
     field: &str,
     record_type: StreamRecordType,
@@ -375,33 +386,29 @@ fn add_vec_datum_to_record_definition(
         .map_err(|err| ChainError::Other { msg: err })
 }
 
-fn replace_vec_datum_in_record_definition(
+pub fn replace_vec_datum_in_record_definition(
     record_definition: &mut QuirkyRecordDefinitionBuilder,
     field: &str,
     record_type: StreamRecordType,
     variant_id: RecordVariantId,
-) -> ChainResult<(DatumId, DatumId)> {
+) -> ChainResult<DatumId> {
     let old_datum = record_definition
         .get_current_datum_definition_by_name(field)
         .ok_or_else(|| ChainError::FieldNotFound {
             field: field.to_owned(),
         })?;
-    let old_datum_id = old_datum.id();
     record_definition
-        .remove_datum(old_datum_id)
+        .remove_datum(old_datum.id())
         .map_err(|err| ChainError::Other { msg: err })?;
-    Ok((
-        old_datum_id,
-        record_definition
-            .add_datum(
-                field,
-                QuirkyDatumType::Vec {
-                    record_type,
-                    variant_id,
-                },
-            )
-            .map_err(|err| ChainError::Other { msg: err })?,
-    ))
+    record_definition
+        .add_datum(
+            field,
+            QuirkyDatumType::Vec {
+                record_type,
+                variant_id,
+            },
+        )
+        .map_err(|err| ChainError::Other { msg: err })
 }
 
 pub fn set_order_fact<I, F>(

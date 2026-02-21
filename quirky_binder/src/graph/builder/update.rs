@@ -5,20 +5,20 @@ use truc::record::definition::{
 };
 
 use super::{
-    add_vec_datum_to_record_definition, break_distinct_fact_for, break_distinct_fact_for_ids,
-    break_order_fact_at, break_order_fact_at_ids, replace_vec_datum_in_record_definition,
-    set_distinct_fact, set_distinct_fact_all_fields, set_distinct_fact_ids, set_order_fact,
-    FactsFullyUpdated, NoFactsUpdated,
+    break_distinct_fact_for, break_distinct_fact_for_ids, break_order_fact_at,
+    break_order_fact_at_ids, set_distinct_fact, set_distinct_fact_all_fields,
+    set_distinct_fact_ids, set_order_fact, FactsFullyUpdated, NoFactsUpdated,
 };
 use crate::{prelude::*, trace_element};
 
-#[derive(Getters, CopyGetters)]
+#[derive(Getters, CopyGetters, MutGetters)]
 pub struct OutputBuilderForUpdate<'a, 'b, 'g, Extra> {
     pub(super) streams: &'b mut StreamsBuilder<'a>,
     #[getset(get = "pub")]
     pub(super) record_type: StreamRecordType,
     #[getset(get_copy = "pub")]
     pub(super) record_definition: &'g RefCell<QuirkyRecordDefinitionBuilder>,
+    #[getset(get = "pub", get_mut = "pub")]
     pub(super) sub_streams: BTreeMap<DatumId, NodeSubStream>,
     pub(super) source: NodeStreamSource,
     pub(super) is_output_main_stream: bool,
@@ -103,23 +103,22 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
         UpdatePathStream: Fn(
             &str,
             &mut SubStreamBuilderForUpdate<'g, DerivedExtra>,
-            NodeSubStream,
+            &NodeSubStream,
             NoFactsUpdated<()>,
-        ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
+        ) -> ChainResultWithTrace<(DatumId, FactsFullyUpdated<()>)>,
         UpdateRootStream: for<'c, 'd> FnOnce(
             &str,
             &mut OutputBuilderForUpdate<'c, 'd, 'g, Extra>,
-            NodeSubStream,
-        ) -> ChainResultWithTrace<()>,
+            &NodeSubStream,
+        ) -> ChainResultWithTrace<DatumId>,
     {
         struct PathFieldDetails<'a> {
             stream: NodeSubStream,
             field: &'a ValidFieldName,
-            datum_id: DatumId,
         }
 
         // Find the sub stream of the first path field
-        let (root_field, root_datum_id, root_sub_stream, root_sub_stream_record_definition) = {
+        let (root_field, root_sub_stream, root_sub_stream_record_definition) = {
             let field = path_fields.first().expect("first path field");
             let datum_id = self
                 .record_definition
@@ -131,7 +130,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
                 let sub_record_definition = graph
                     .get_stream(sub_stream.record_type())
                     .with_trace_element(trace_element!())?;
-                (field, datum_id, sub_stream, sub_record_definition)
+                (field, sub_stream, sub_record_definition)
             } else {
                 return Err(ChainError::FieldNotFound {
                     field: field.name().to_owned(),
@@ -160,11 +159,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
                     let sub_record_definition = graph
                         .get_stream(sub_stream.record_type())
                         .with_trace_element(trace_element!())?;
-                    path_data.push(PathFieldDetails {
-                        stream,
-                        field,
-                        datum_id,
-                    });
+                    path_data.push(PathFieldDetails { stream, field });
                     Ok((path_data, sub_stream, sub_record_definition))
                 } else {
                     Err(ChainError::FieldNotFound {
@@ -184,35 +179,38 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
 
         while !path_details.is_empty() {
             let sub_stream = sub_output_stream.take().expect("sub_output_stream");
-            if let Some(mut field_details) = path_details.pop() {
-                let old = field_details
-                    .stream
-                    .sub_streams_mut()
-                    .insert(field_details.datum_id, sub_stream.clone());
-                if old.is_some() {
-                    return Err(ChainError::Other {
-                        msg: "sub stream should have been removed".to_owned(),
-                    })
-                    .with_trace_element(trace_element!());
-                }
+            if let Some(field_details) = path_details.pop() {
                 path_update_streams.push(PathUpdateElement {
                     field: field_details.field.clone(),
                     sub_input_stream: sub_input_stream.take().expect("sub_input_stream"),
                     sub_output_stream: sub_stream.clone(),
                 });
 
-                let updated_stream = self.update_sub_stream(
+                let mut new_datum_id = None;
+                let mut updated_stream = self.update_sub_stream(
                     field_details.stream.clone(),
                     graph,
                     |_, path_stream, facts_proof| {
-                        update_path_stream(
+                        let (id, facts_proof) = update_path_stream(
                             field_details.field.name(),
                             path_stream,
-                            sub_stream,
+                            &sub_stream,
                             facts_proof,
-                        )
+                        )?;
+                        new_datum_id = Some(id);
+                        Ok(facts_proof)
                     },
                 )?;
+
+                let None = updated_stream
+                    .sub_streams_mut()
+                    .insert(new_datum_id.expect("new_datum_id"), sub_stream)
+                else {
+                    return Err(ChainError::Other {
+                        msg: "sub stream should have been removed".to_owned(),
+                    })
+                    .with_trace_element(trace_element!());
+                };
 
                 sub_input_stream = Some(field_details.stream);
                 sub_output_stream = Some(updated_stream);
@@ -221,64 +219,24 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
 
         {
             let sub_stream = sub_output_stream.take().expect("sub_output_stream");
-            let old = self.sub_streams.insert(root_datum_id, sub_stream.clone());
-            if old.is_some() {
-                return Err(ChainError::Other {
-                    msg: "sub stream should have been removed".to_owned(),
-                })
-                .with_trace_element(trace_element!());
-            }
             path_update_streams.push(PathUpdateElement {
                 field: root_field.clone(),
                 sub_input_stream: sub_input_stream.take().expect("sub_input_stream"),
                 sub_output_stream: sub_stream.clone(),
             });
-            update_root_stream(root_field.name(), self, sub_stream)?;
+            let new_datum_id = update_root_stream(root_field.name(), self, &sub_stream)?;
+            let None = self.sub_streams.insert(new_datum_id, sub_stream) else {
+                return Err(ChainError::Other {
+                    msg: "sub stream should have been removed".to_owned(),
+                })
+                .with_trace_element(trace_element!());
+            };
         }
 
         // They were pushed in reverse order
         path_update_streams.reverse();
 
         Ok(path_update_streams)
-    }
-
-    pub fn add_vec_datum(&mut self, field: &str, new_sub_stream: NodeSubStream) -> ChainResult<()> {
-        let datum_id = add_vec_datum_to_record_definition(
-            &mut self.record_definition.borrow_mut(),
-            field,
-            new_sub_stream.record_type().clone(),
-            new_sub_stream.variant_id(),
-        )?;
-        let None = self.sub_streams.insert(datum_id, new_sub_stream) else {
-            return Err(ChainError::Other {
-                msg: "the datum should not be registered yet".to_owned(),
-            });
-        };
-        Ok(())
-    }
-
-    pub fn replace_vec_datum(
-        &mut self,
-        field: &str,
-        new_sub_stream: NodeSubStream,
-    ) -> ChainResult<()> {
-        let (old_datum_id, new_datum_id) = replace_vec_datum_in_record_definition(
-            &mut self.record_definition.borrow_mut(),
-            field,
-            new_sub_stream.record_type().clone(),
-            new_sub_stream.variant_id(),
-        )?;
-        let Some(_) = self.sub_streams.remove(&old_datum_id) else {
-            return Err(ChainError::Other {
-                msg: "the replaced datum should be registered".to_owned(),
-            });
-        };
-        let None = self.sub_streams.insert(new_datum_id, new_sub_stream) else {
-            return Err(ChainError::Other {
-                msg: "the datum should not be registered yet".to_owned(),
-            });
-        };
-        Ok(())
     }
 
     pub fn set_order_fact<I, F>(&mut self, order_fields: I) -> ChainResult<()>
@@ -382,6 +340,7 @@ pub struct SubStreamBuilderForUpdate<'g, Extra> {
     record_type: StreamRecordType,
     #[getset(get_copy = "pub")]
     record_definition: &'g RefCell<QuirkyRecordDefinitionBuilder>,
+    #[getset(get = "pub", get_mut = "pub")]
     sub_streams: BTreeMap<DatumId, NodeSubStream>,
     #[getset(get = "pub", get_mut = "pub")]
     facts: StreamFacts,
@@ -391,45 +350,6 @@ pub struct SubStreamBuilderForUpdate<'g, Extra> {
 impl<Extra> SubStreamBuilderForUpdate<'_, Extra> {
     pub fn sub_stream(&self, datum_id: DatumId) -> &NodeSubStream {
         &self.sub_streams[&datum_id]
-    }
-
-    pub fn add_vec_datum(&mut self, field: &str, new_sub_stream: NodeSubStream) -> ChainResult<()> {
-        let datum_id = add_vec_datum_to_record_definition(
-            &mut self.record_definition.borrow_mut(),
-            field,
-            new_sub_stream.record_type().clone(),
-            new_sub_stream.variant_id(),
-        )?;
-        let None = self.sub_streams.insert(datum_id, new_sub_stream) else {
-            return Err(ChainError::Other {
-                msg: "the datum should not be registered yet".to_owned(),
-            });
-        };
-        Ok(())
-    }
-
-    pub fn replace_vec_datum(
-        &mut self,
-        field: &str,
-        new_sub_stream: NodeSubStream,
-    ) -> ChainResult<()> {
-        let (old_datum_id, new_datum_id) = replace_vec_datum_in_record_definition(
-            &mut self.record_definition.borrow_mut(),
-            field,
-            new_sub_stream.record_type().clone(),
-            new_sub_stream.variant_id(),
-        )?;
-        let Some(_) = self.sub_streams.remove(&old_datum_id) else {
-            return Err(ChainError::Other {
-                msg: "the replaced datum should be registered".to_owned(),
-            });
-        };
-        let None = self.sub_streams.insert(new_datum_id, new_sub_stream) else {
-            return Err(ChainError::Other {
-                msg: "the datum should not be registered yet".to_owned(),
-            });
-        };
-        Ok(())
     }
 
     pub fn set_order_fact<I, F>(&mut self, order_fields: I) -> ChainResult<()>

@@ -4,7 +4,7 @@ use serde::Deserialize;
 use truc::record::definition::DatumId;
 
 use crate::{
-    graph::builder::check_undirected_order_starts_with,
+    graph::builder::{add_vec_datum_to_record_definition, check_undirected_order_starts_with},
     prelude::*,
     support::eq::{fields_eq, fields_eq_ab},
     trace_element,
@@ -127,9 +127,23 @@ impl Group {
                     facts_proof.order_facts_updated().distinct_facts_updated(),
                 );
 
-                output_stream
-                    .add_vec_datum(params.group_field, group_stream.clone())
-                    .with_trace_element(trace_element!())?;
+                let datum_id = add_vec_datum_to_record_definition(
+                    &mut output_stream.record_definition().borrow_mut(),
+                    params.group_field,
+                    group_stream.record_type().clone(),
+                    group_stream.variant_id(),
+                )
+                .with_trace_element(trace_element!())?;
+                let None = output_stream
+                    .sub_streams_mut()
+                    // FIXME clone
+                    .insert(datum_id, group_stream.clone())
+                else {
+                    return Err(ChainError::Other {
+                        msg: "the datum should not be registered yet".to_owned(),
+                    })
+                    .with_trace_element(trace_element!());
+                };
 
                 output_stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
                 output_stream.set_distinct_fact_ids(group_by_datum_ids);
@@ -380,9 +394,23 @@ impl SubGroup {
                         facts_proof.order_facts_updated().distinct_facts_updated(),
                     );
 
-                    sub_output_stream
-                        .add_vec_datum(params.group_field, group_stream.clone())
-                        .with_trace_element(trace_element!())?;
+                    let datum_id = add_vec_datum_to_record_definition(
+                        &mut sub_output_stream.record_definition().borrow_mut(),
+                        params.group_field,
+                        group_stream.record_type().clone(),
+                        group_stream.variant_id(),
+                    )
+                    .with_trace_element(trace_element!())?;
+                    let None = sub_output_stream
+                        .sub_streams_mut()
+                        // FIXME clone
+                        .insert(datum_id, group_stream.clone())
+                    else {
+                        return Err(ChainError::Other {
+                            msg: "the datum should not be registered yet".to_owned(),
+                        })
+                        .with_trace_element(trace_element!());
+                    };
 
                     created_group_stream = Some(group_stream);
 
