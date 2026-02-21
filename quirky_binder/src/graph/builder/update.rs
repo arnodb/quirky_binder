@@ -112,6 +112,7 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
             &NodeSubStream,
         ) -> ChainResultWithTrace<DatumId>,
     {
+        #[derive(Debug)]
         struct PathFieldDetails<'a> {
             stream: NodeSubStream,
             field: &'a ValidFieldName,
@@ -171,61 +172,69 @@ impl<'g, Extra> OutputBuilderForUpdate<'_, '_, 'g, Extra> {
         )?;
 
         // Then update the leaf sub stream
-        let mut sub_input_stream = Some(leaf_sub_input_stream.clone());
-        let mut sub_output_stream = Some(update_leaf_sub_stream(leaf_sub_input_stream, self)?);
+        let mut sub_input_stream = StreamInfo::from(&leaf_sub_input_stream);
+        let mut sub_output_stream = update_leaf_sub_stream(leaf_sub_input_stream, self)?;
 
         // Then all streams up to the root
         let mut path_update_streams = Vec::<PathUpdateElement>::with_capacity(path_fields.len());
 
-        while !path_details.is_empty() {
-            let sub_stream = sub_output_stream.take().expect("sub_output_stream");
-            if let Some(field_details) = path_details.pop() {
-                path_update_streams.push(PathUpdateElement {
-                    field: field_details.field.clone(),
-                    sub_input_stream: sub_input_stream.take().expect("sub_input_stream"),
-                    sub_output_stream: sub_stream.clone(),
-                });
+        while let Some(field_details) = path_details.pop() {
+            let updated_sub_stream = sub_output_stream;
 
-                let mut new_datum_id = None;
-                let mut updated_stream = self.update_sub_stream(
-                    field_details.stream.clone(),
-                    graph,
-                    |_, path_stream, facts_proof| {
-                        let (id, facts_proof) = update_path_stream(
-                            field_details.field.name(),
-                            path_stream,
-                            &sub_stream,
-                            facts_proof,
-                        )?;
-                        new_datum_id = Some(id);
-                        Ok(facts_proof)
-                    },
-                )?;
+            path_update_streams.push(PathUpdateElement {
+                field: field_details.field.clone(),
+                sub_input_stream,
+                sub_output_stream: StreamInfo::from(&updated_sub_stream),
+            });
 
-                let None = updated_stream
-                    .sub_streams_mut()
-                    .insert(new_datum_id.expect("new_datum_id"), sub_stream)
-                else {
-                    return Err(ChainError::Other {
-                        msg: "sub stream should have been removed".to_owned(),
-                    })
-                    .with_trace_element(trace_element!());
-                };
+            sub_input_stream = StreamInfo::from(&field_details.stream);
 
-                sub_input_stream = Some(field_details.stream);
-                sub_output_stream = Some(updated_stream);
-            }
+            let mut new_datum_id = None;
+
+            let mut updated_stream = self.update_sub_stream(
+                field_details.stream,
+                graph,
+                |_, path_stream, facts_proof| {
+                    let (id, facts_proof) = update_path_stream(
+                        field_details.field.name(),
+                        path_stream,
+                        &updated_sub_stream,
+                        facts_proof,
+                    )?;
+                    new_datum_id = Some(id);
+                    Ok(facts_proof)
+                },
+            )?;
+
+            let None = updated_stream
+                .sub_streams_mut()
+                .insert(new_datum_id.expect("new datum id"), updated_sub_stream)
+            else {
+                return Err(ChainError::Other {
+                    msg: "sub stream should have been removed".to_owned(),
+                })
+                .with_trace_element(trace_element!());
+            };
+
+            sub_output_stream = updated_stream;
         }
 
         {
-            let sub_stream = sub_output_stream.take().expect("sub_output_stream");
+            let updated_sub_stream = sub_output_stream;
+
             path_update_streams.push(PathUpdateElement {
                 field: root_field.clone(),
-                sub_input_stream: sub_input_stream.take().expect("sub_input_stream"),
-                sub_output_stream: sub_stream.clone(),
+                sub_input_stream,
+                sub_output_stream: StreamInfo::from(&updated_sub_stream),
             });
-            let new_datum_id = update_root_stream(root_field.name(), self, &sub_stream)?;
-            let None = self.sub_streams.insert(new_datum_id, sub_stream) else {
+
+            let new_root_datum_id =
+                update_root_stream(root_field.name(), self, &updated_sub_stream)?;
+
+            let None = self
+                .sub_streams
+                .insert(new_root_datum_id, updated_sub_stream)
+            else {
                 return Err(ChainError::Other {
                     msg: "sub stream should have been removed".to_owned(),
                 })
@@ -330,8 +339,8 @@ impl OutputBuilderForUpdate<'_, '_, '_, DerivedExtra> {
 #[derive(Debug)]
 pub struct PathUpdateElement {
     pub field: ValidFieldName,
-    pub sub_input_stream: NodeSubStream,
-    pub sub_output_stream: NodeSubStream,
+    pub sub_input_stream: StreamInfo,
+    pub sub_output_stream: StreamInfo,
 }
 
 #[derive(Getters, CopyGetters, MutGetters)]

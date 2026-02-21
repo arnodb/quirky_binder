@@ -55,7 +55,7 @@ impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
         path_fields: &[ValidFieldName],
         pass_through_leaf_sub_stream: PassThroughLeafSubStream,
         graph: &'g GraphBuilder,
-    ) -> ChainResultWithTrace<NodeSubStream>
+    ) -> ChainResultWithTrace<StreamInfo>
     where
         PassThroughLeafSubStream: for<'c, 'd> FnOnce(
             NodeSubStream,
@@ -116,31 +116,29 @@ impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
         )?;
 
         // Then update the leaf sub stream
-        let leaf_sub_output_stream = pass_through_leaf_sub_stream(leaf_sub_input_stream, self)?;
-        let mut sub_output_stream = Some(leaf_sub_output_stream.clone());
+        let leaf_sub_output_stream = StreamInfo::from(&leaf_sub_input_stream);
+        let mut sub_output_stream = pass_through_leaf_sub_stream(leaf_sub_input_stream, self)?;
 
         // Then all streams up to the root
-        while !path_details.is_empty() {
-            let sub_stream = sub_output_stream.take().expect("sub_output_stream");
-            if let Some(mut field_details) = path_details.pop() {
-                let old = field_details
-                    .stream
-                    .sub_streams_mut()
-                    .insert(field_details.datum_id, sub_stream.clone());
-                if old.is_some() {
-                    panic!("sub stream should have been removed");
-                }
+        while let Some(mut field_details) = path_details.pop() {
+            let updated_sub_stream = sub_output_stream;
 
-                sub_output_stream = Some(field_details.stream);
-            }
+            let None = field_details
+                .stream
+                .sub_streams_mut()
+                .insert(field_details.datum_id, updated_sub_stream)
+            else {
+                panic!("sub stream should have been removed");
+            };
+
+            sub_output_stream = field_details.stream;
         }
 
         {
-            let sub_stream = sub_output_stream.take().expect("sub_output_stream");
-            let old = self.sub_streams.insert(root_datum_id, sub_stream);
-            if old.is_some() {
+            let updated_sub_stream = sub_output_stream;
+            let None = self.sub_streams.insert(root_datum_id, updated_sub_stream) else {
                 panic!("sub stream should have been removed");
-            }
+            };
         }
 
         Ok(leaf_sub_output_stream)

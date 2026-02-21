@@ -485,7 +485,9 @@ impl<Spec: SubTransformSpec> DynNode for SubTransform<Spec> {
         let new_variant_body = if self.new_variant {
             let path_stream = self.path_streams.last().expect("last path field");
 
-            let def = chain.sub_stream_definition_fragments(&path_stream.sub_output_stream);
+            let def = chain
+                .customizer()
+                .definition_fragments(&path_stream.sub_output_stream);
             let record = def.record();
             let unpacked_record = def.unpacked_record();
 

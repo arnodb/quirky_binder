@@ -116,6 +116,47 @@ impl NodeSubStream {
     }
 }
 
+#[derive(Debug)]
+pub struct StreamInfo {
+    pub record_type: StreamRecordType,
+    pub variant_id: RecordVariantId,
+}
+
+impl From<&NodeSubStream> for StreamInfo {
+    fn from(value: &NodeSubStream) -> Self {
+        Self {
+            record_type: value.record_type().clone(),
+            variant_id: value.variant_id(),
+        }
+    }
+}
+
+pub trait RecordDefinitionFragmentsInfo {
+    fn record_type(&self) -> &StreamRecordType;
+
+    fn variant_id(&self) -> RecordVariantId;
+}
+
+impl RecordDefinitionFragmentsInfo for NodeStream {
+    fn record_type(&self) -> &StreamRecordType {
+        &self.record_type
+    }
+
+    fn variant_id(&self) -> RecordVariantId {
+        self.variant_id
+    }
+}
+
+impl RecordDefinitionFragmentsInfo for StreamInfo {
+    fn record_type(&self) -> &StreamRecordType {
+        &self.record_type
+    }
+
+    fn variant_id(&self) -> RecordVariantId {
+        self.variant_id
+    }
+}
+
 #[derive(new)]
 pub struct RecordDefinitionFragments<'a> {
     record_type: &'a StreamRecordType,

@@ -150,7 +150,9 @@ impl DynNode for WalkCommits {
         let pushes = &self.pushes;
         let hides = &self.hides;
 
-        let def = chain.stream_definition_fragments(self.outputs.single());
+        let def = chain
+            .customizer()
+            .definition_fragments(self.outputs.single());
         let record = def.record();
         let unpacked_record = def.unpacked_record();
 

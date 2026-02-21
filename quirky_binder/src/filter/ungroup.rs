@@ -19,7 +19,7 @@ pub struct Ungroup {
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     group_field: ValidFieldName,
-    group_stream: NodeSubStream,
+    group_stream: StreamInfo,
     grouped_fields: Vec<String>,
 }
 
@@ -55,7 +55,7 @@ impl Ungroup {
                         .with_trace_element(trace_element!())?
                         .id();
 
-                    let group_stream = output_stream.sub_stream(group_datum_id).clone();
+                    let group_stream = output_stream.sub_stream(group_datum_id);
 
                     output_stream_def
                         .remove_datum(group_datum_id)
@@ -78,7 +78,7 @@ impl Ungroup {
                         })
                         .collect::<Result<Vec<_>, _>>()?;
 
-                    (group_stream, grouped_fields)
+                    (StreamInfo::from(group_stream), grouped_fields)
                 };
 
                 // Reset facts
@@ -122,7 +122,7 @@ impl DynNode for Ungroup {
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
-        let def_group = chain.sub_stream_definition_fragments(&self.group_stream);
+        let def_group = chain.customizer().definition_fragments(&self.group_stream);
         let group_unpacked_record = def_group.unpacked_record();
 
         let group_field_mut = format_ident!("{}_mut", self.group_field.name());
@@ -188,7 +188,7 @@ pub struct SubUngroup {
     outputs: [NodeStream; 1],
     path_streams: Vec<PathUpdateElement>,
     group_field: ValidFieldName,
-    group_stream: NodeSubStream,
+    group_stream: StreamInfo,
     grouped_fields: Vec<String>,
 }
 
@@ -235,7 +235,7 @@ impl SubUngroup {
                             .with_trace_element(trace_element!())?
                             .id();
 
-                        let group_stream = sub_output_stream.sub_stream(group_datum_id).clone();
+                        let group_stream = sub_output_stream.sub_stream(group_datum_id);
 
                         output_stream_def
                             .remove_datum(group_datum_id)
@@ -258,7 +258,7 @@ impl SubUngroup {
                             })
                             .collect::<Result<Vec<_>, _>>()?;
 
-                        (group_stream, grouped_fields)
+                        (StreamInfo::from(group_stream), grouped_fields)
                     };
 
                     // Reset facts
@@ -306,12 +306,13 @@ impl DynNode for SubUngroup {
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
-        let def_group = chain.sub_stream_definition_fragments(&self.group_stream);
+        let def_group = chain.customizer().definition_fragments(&self.group_stream);
 
         let path_stream = self.path_streams.last().expect("last path field");
 
-        let out_record_definition =
-            chain.sub_stream_definition_fragments(&path_stream.sub_output_stream);
+        let out_record_definition = chain
+            .customizer()
+            .definition_fragments(&path_stream.sub_output_stream);
 
         let group_unpacked_record = def_group.unpacked_record();
         let unpacked_record_in = out_record_definition.unpacked_record_in();

@@ -77,6 +77,7 @@ impl GraphBuilder {
     }
 }
 
+#[derive(Debug)]
 pub struct StreamsBuilder<'a> {
     name: &'a FullyQualifiedName,
     inputs: &'a [NodeStream],
@@ -306,7 +307,7 @@ impl<'a, 'b, 'g> OutputBuilder<'a, 'b, 'g, DerivedExtra> {
         graph: &'g GraphBuilder,
         path_fields: &[ValidFieldName],
         build: B,
-    ) -> ChainResultWithTrace<NodeSubStream>
+    ) -> ChainResultWithTrace<StreamInfo>
     where
         B: FnOnce(&mut SubStreamBuilderForPassThrough<'g>) -> ChainResultWithTrace<()>,
     {

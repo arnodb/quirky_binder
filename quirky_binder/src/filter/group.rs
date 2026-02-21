@@ -28,7 +28,7 @@ pub struct Group {
     outputs: [NodeStream; 1],
     by_fields: Vec<ValidFieldName>,
     group_field: ValidFieldName,
-    group_stream: NodeSubStream,
+    group_stream: StreamInfo,
 }
 
 impl Group {
@@ -127,6 +127,8 @@ impl Group {
                     facts_proof.order_facts_updated().distinct_facts_updated(),
                 );
 
+                let group_stream_info = StreamInfo::from(&group_stream);
+
                 let datum_id = add_vec_datum_to_record_definition(
                     &mut output_stream.record_definition().borrow_mut(),
                     params.group_field,
@@ -136,8 +138,7 @@ impl Group {
                 .with_trace_element(trace_element!())?;
                 let None = output_stream
                     .sub_streams_mut()
-                    // FIXME clone
-                    .insert(datum_id, group_stream.clone())
+                    .insert(datum_id, group_stream)
                 else {
                     return Err(ChainError::Other {
                         msg: "the datum should not be registered yet".to_owned(),
@@ -151,7 +152,7 @@ impl Group {
                 Ok(facts_proof
                     .order_facts_updated()
                     .distinct_facts_updated()
-                    .with_output(group_stream))
+                    .with_output(group_stream_info))
             })?;
 
         let outputs = streams.build().with_trace_element(trace_element!())?;
@@ -181,7 +182,7 @@ impl DynNode for Group {
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
-        let def_group = chain.sub_stream_definition_fragments(&self.group_stream);
+        let def_group = chain.customizer().definition_fragments(&self.group_stream);
 
         let group_record = def_group.record();
         let group_unpacked_record = def_group.unpacked_record();
@@ -282,7 +283,7 @@ pub struct SubGroup {
     path_streams: Vec<PathUpdateElement>,
     by_fields: Vec<ValidFieldName>,
     group_field: ValidFieldName,
-    group_stream: NodeSubStream,
+    group_stream: StreamInfo,
 }
 
 impl SubGroup {
@@ -394,6 +395,8 @@ impl SubGroup {
                         facts_proof.order_facts_updated().distinct_facts_updated(),
                     );
 
+                    let group_stream_info = StreamInfo::from(&group_stream);
+
                     let datum_id = add_vec_datum_to_record_definition(
                         &mut sub_output_stream.record_definition().borrow_mut(),
                         params.group_field,
@@ -403,8 +406,7 @@ impl SubGroup {
                     .with_trace_element(trace_element!())?;
                     let None = sub_output_stream
                         .sub_streams_mut()
-                        // FIXME clone
-                        .insert(datum_id, group_stream.clone())
+                        .insert(datum_id, group_stream)
                     else {
                         return Err(ChainError::Other {
                             msg: "the datum should not be registered yet".to_owned(),
@@ -412,7 +414,7 @@ impl SubGroup {
                         .with_trace_element(trace_element!());
                     };
 
-                    created_group_stream = Some(group_stream);
+                    created_group_stream = Some(group_stream_info);
 
                     sub_output_stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
                     sub_output_stream.set_distinct_fact_ids(group_by_datum_ids);
@@ -451,7 +453,7 @@ impl DynNode for SubGroup {
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let error_type = graph.chain_customizer().error_type.to_full_name();
 
-        let def_group = chain.sub_stream_definition_fragments(&self.group_stream);
+        let def_group = chain.customizer().definition_fragments(&self.group_stream);
 
         let group_record = def_group.record();
         let group_unpacked_record = def_group.unpacked_record();
@@ -463,8 +465,8 @@ impl DynNode for SubGroup {
             let path_stream = self.path_streams.last().expect("last path field");
 
             let leaf_record_definition =
-                &graph.record_definitions()[path_stream.sub_input_stream.record_type()];
-            let variant = &leaf_record_definition[path_stream.sub_input_stream.variant_id()];
+                &graph.record_definitions()[&path_stream.sub_input_stream.record_type];
+            let variant = &leaf_record_definition[path_stream.sub_input_stream.variant_id];
 
             let fields = {
                 let idents = variant.data().filter_map(|d| {
@@ -478,8 +480,9 @@ impl DynNode for SubGroup {
                 quote!(#(#idents,)*)
             };
 
-            let out_record_definition =
-                chain.sub_stream_definition_fragments(&path_stream.sub_output_stream);
+            let out_record_definition = chain
+                .customizer()
+                .definition_fragments(&path_stream.sub_output_stream);
 
             let eq = fields_eq(
                 &out_record_definition.record(),

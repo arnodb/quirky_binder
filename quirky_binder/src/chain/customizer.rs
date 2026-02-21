@@ -1,6 +1,5 @@
 use crate::{
-    chain::StreamCustomizer,
-    stream::{NodeStream, NodeSubStream, RecordDefinitionFragments},
+    stream::{RecordDefinitionFragments, RecordDefinitionFragmentsInfo},
     support::name::FullyQualifiedName,
 };
 
@@ -41,25 +40,14 @@ impl Default for ChainCustomizer {
     }
 }
 
-impl StreamCustomizer for ChainCustomizer {
-    fn stream_definition_fragments<'c>(
-        &'c self,
-        stream: &'c NodeStream,
-    ) -> RecordDefinitionFragments<'c> {
+impl ChainCustomizer {
+    pub fn definition_fragments<'c, I>(&'c self, info: &'c I) -> RecordDefinitionFragments<'c>
+    where
+        I: RecordDefinitionFragmentsInfo,
+    {
         RecordDefinitionFragments::new(
-            stream.record_type(),
-            stream.variant_id(),
-            &self.streams_module_name,
-        )
-    }
-
-    fn sub_stream_definition_fragments<'c>(
-        &'c self,
-        stream: &'c NodeSubStream,
-    ) -> RecordDefinitionFragments<'c> {
-        RecordDefinitionFragments::new(
-            stream.record_type(),
-            stream.variant_id(),
+            info.record_type(),
+            info.variant_id(),
             &self.streams_module_name,
         )
     }

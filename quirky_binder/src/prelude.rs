@@ -7,7 +7,7 @@ pub use crate::{
         error::{ChainError, ChainErrorWithTrace},
         result::{ChainResult, ChainResultWithTrace},
         trace::{Trace, TraceElement, TraceName, WithTraceElement},
-        Chain, ChainThreadType, ImportScope, NodeStatisticsOption, StreamCustomizer,
+        Chain, ChainThreadType, ImportScope, NodeStatisticsOption,
     },
     graph::{
         builder::{
@@ -24,7 +24,7 @@ pub use crate::{
     record_definition::{QuirkyDatumType, QuirkyRecordDefinitionBuilder},
     stream::{
         NodeStream, NodeStreamSource, NodeSubStream, NoneNodeStream, RecordDefinitionFragments,
-        SingleNodeStream, StreamFacts, StreamRecordType,
+        RecordDefinitionFragmentsInfo, SingleNodeStream, StreamFacts, StreamInfo, StreamRecordType,
     },
     support::{
         cmp::Directed,

@@ -70,6 +70,7 @@ pub struct ChainSourceThread {
 #[derive(Debug, Getters, CopyGetters, new)]
 pub struct Chain<'a> {
     /// The chain customizer.
+    #[getset(get_copy = "pub")]
     customizer: &'a ChainCustomizer,
     /// The Rust module being generated.
     module: &'a mut Module,
@@ -397,7 +398,7 @@ impl<'a> Chain<'a> {
         for thread in &self.threads {
             let inputs = (0..thread.input_streams.len()).map(|i| format_ident!("input_{}", i));
             let input_types = thread.input_streams.iter().map(|input_stream| {
-                let def = self.stream_definition_fragments(input_stream);
+                let def = self.customizer.definition_fragments(input_stream);
                 def.record()
             });
             let outputs = if thread.output_pipes.is_some() {
@@ -409,7 +410,7 @@ impl<'a> Chain<'a> {
             .flatten();
             let output_types = if thread.output_pipes.is_some() {
                 Some(thread.output_streams.iter().map(|output_stream| {
-                    let def = self.stream_definition_fragments(output_stream);
+                    let def = self.customizer.definition_fragments(output_stream);
                     def.record()
                 }))
             } else {
@@ -894,7 +895,7 @@ impl<'a> Chain<'a> {
 
     fn rewrite_body(&self, body: &TokenStream, node: &dyn DynNode) -> syn::Block {
         let mut block = syn::parse2::<syn::Block>(quote! {{ #body }}).expect("Block");
-        StreamsRewriter::new(node, self).visit_block_mut(&mut block);
+        StreamsRewriter::new(node, self.customizer).visit_block_mut(&mut block);
         block
     }
 
@@ -929,7 +930,7 @@ impl<'a> Chain<'a> {
             (thread_id, None)
         };
 
-        let record = self.stream_definition_fragments(output).record();
+        let record = self.customizer.definition_fragments(output).record();
 
         let fn_name = format_ident!("{}", **name.last().expect("local name"));
         let thread_module = format_ident!("thread_{}", thread_id);
@@ -1070,10 +1071,12 @@ impl<'a> Chain<'a> {
         let leaf_body = {
             let path_stream = iter.next().expect("leaf path stream");
 
-            let out_record_definition =
-                self.sub_stream_definition_fragments(&path_stream.sub_output_stream);
-            let in_record_definition =
-                self.sub_stream_definition_fragments(&path_stream.sub_input_stream);
+            let out_record_definition = self
+                .customizer
+                .definition_fragments(&path_stream.sub_output_stream);
+            let in_record_definition = self
+                .customizer
+                .definition_fragments(&path_stream.sub_input_stream);
             let input_record = in_record_definition.record();
             let record = out_record_definition.record();
 
@@ -1085,10 +1088,12 @@ impl<'a> Chain<'a> {
         };
 
         let (body, first_access) = iter.fold(leaf_body, |(tail, sub_access), path_stream| {
-            let out_record_definition =
-                self.sub_stream_definition_fragments(&path_stream.sub_output_stream);
-            let in_record_definition =
-                self.sub_stream_definition_fragments(&path_stream.sub_input_stream);
+            let out_record_definition = self
+                .customizer
+                .definition_fragments(&path_stream.sub_output_stream);
+            let in_record_definition = self
+                .customizer
+                .definition_fragments(&path_stream.sub_input_stream);
             let input_record = in_record_definition.record();
             let record = out_record_definition.record();
             let unpacked_record_in = out_record_definition.unpacked_record_in();
@@ -1289,34 +1294,6 @@ impl<'a> Chain<'a> {
                     .unwrap_or_else(|| panic!("output {}", #stream_index)),
             )
         }
-    }
-}
-
-pub trait StreamCustomizer {
-    fn stream_definition_fragments<'c>(
-        &'c self,
-        stream: &'c NodeStream,
-    ) -> RecordDefinitionFragments<'c>;
-
-    fn sub_stream_definition_fragments<'c>(
-        &'c self,
-        stream: &'c NodeSubStream,
-    ) -> RecordDefinitionFragments<'c>;
-}
-
-impl<'a> StreamCustomizer for Chain<'a> {
-    fn stream_definition_fragments<'c>(
-        &'c self,
-        stream: &'c NodeStream,
-    ) -> RecordDefinitionFragments<'c> {
-        self.customizer.stream_definition_fragments(stream)
-    }
-
-    fn sub_stream_definition_fragments<'c>(
-        &'c self,
-        stream: &'c NodeSubStream,
-    ) -> RecordDefinitionFragments<'c> {
-        self.customizer.sub_stream_definition_fragments(stream)
     }
 }
 

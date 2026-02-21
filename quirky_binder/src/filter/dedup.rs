@@ -99,7 +99,7 @@ pub struct SubDedup {
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
     path_fields: Vec<ValidFieldName>,
-    path_sub_stream: NodeSubStream,
+    leaf_stream: StreamInfo,
 }
 
 impl SubDedup {
@@ -115,7 +115,7 @@ impl SubDedup {
             .with_trace_element(trace_element!())?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        let path_sub_stream = streams
+        let leaf_stream = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
             .pass_through_path(graph, &valid_path_fields, |sub_output_stream| {
@@ -130,7 +130,7 @@ impl SubDedup {
             inputs,
             outputs,
             path_fields: valid_path_fields,
-            path_sub_stream,
+            leaf_stream,
         })
     }
 }
@@ -150,10 +150,11 @@ impl DynNode for SubDedup {
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
         let sub_record = chain
-            .sub_stream_definition_fragments(&self.path_sub_stream)
+            .customizer()
+            .definition_fragments(&self.leaf_stream)
             .record();
-        let sub_record_definition = &graph.record_definitions()[self.path_sub_stream.record_type()];
-        let sub_variant = &sub_record_definition[self.path_sub_stream.variant_id()];
+        let sub_record_definition = &graph.record_definitions()[self.leaf_stream.record_type()];
+        let sub_variant = &sub_record_definition[self.leaf_stream.variant_id()];
 
         let flat_map = self.path_fields.iter().rev().fold(None, |tail, field| {
             let mut_access = field.mut_ident();

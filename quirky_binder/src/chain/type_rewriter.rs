@@ -1,20 +1,14 @@
 use syn::{visit_mut::VisitMut, Path, PathArguments, PathSegment, Type, TypePath};
 
-use crate::{chain::StreamCustomizer, graph::node::DynNode};
+use crate::{chain::ChainCustomizer, graph::node::DynNode};
 
 #[derive(new)]
-pub(crate) struct StreamsRewriter<'a, SC>
-where
-    SC: StreamCustomizer,
-{
+pub(crate) struct StreamsRewriter<'a> {
     node: &'a dyn DynNode,
-    customizer: &'a SC,
+    customizer: &'a ChainCustomizer,
 }
 
-impl<'a, SC> StreamsRewriter<'a, SC>
-where
-    SC: StreamCustomizer,
-{
+impl<'a> StreamsRewriter<'a> {
     fn maybe_prefix<'b>(input: &'b str, prefix: &'b str) -> (bool, &'b str) {
         input
             .strip_prefix(prefix)
@@ -22,7 +16,11 @@ where
             .unwrap_or((false, input))
     }
 
-    fn rewrite_ident(ident: &syn::Ident, node: &dyn DynNode, customizer: &SC) -> Option<syn::Type> {
+    fn rewrite_ident(
+        ident: &syn::Ident,
+        node: &dyn DynNode,
+        customizer: &ChainCustomizer,
+    ) -> Option<syn::Type> {
         let name = ident.to_string();
 
         let (unpacked, tail) = Self::maybe_prefix(&name, "Unpacked");
@@ -56,7 +54,7 @@ where
 
         let stream = streams.get(index);
         stream.and_then(|stream| {
-            let fragments = customizer.stream_definition_fragments(stream);
+            let fragments = customizer.definition_fragments(stream);
             match (unpacked, is_output, is_in, and_unpacked_out) {
                 // <Input|Output><X>
                 (false, _, false, false) => Some(fragments.record()),
@@ -72,10 +70,7 @@ where
     }
 }
 
-impl<'a, SC> VisitMut for StreamsRewriter<'a, SC>
-where
-    SC: StreamCustomizer,
-{
+impl<'a> VisitMut for StreamsRewriter<'a> {
     fn visit_path_mut(&mut self, i: &mut Path) {
         let Path {
             leading_colon,
