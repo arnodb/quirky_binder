@@ -99,14 +99,14 @@ impl<'a> StreamsBuilder<'a> {
         }
     }
 
-    pub fn new_main_stream(&mut self, graph: &mut GraphBuilder) -> ChainResult<()> {
+    pub fn new_main_stream(&self, graph: &mut GraphBuilder) -> ChainResult<()> {
         let full_name = self.name.clone();
         let record_type = StreamRecordType::from(full_name);
         graph.new_stream(record_type)
     }
 
     pub fn new_named_stream(
-        &mut self,
+        &self,
         name: &str,
         graph: &mut GraphBuilder,
     ) -> ChainResult<StreamRecordType> {
@@ -117,24 +117,23 @@ impl<'a> StreamsBuilder<'a> {
     }
 
     pub fn new_main_output<'g>(
-        &mut self,
+        &self,
         graph: &'g GraphBuilder,
     ) -> ChainResult<OutputBuilder<'g, ()>> {
         let full_name = self.name.clone();
-        self.new_output_internal(graph, full_name, true)
+        Self::new_output_internal(graph, full_name, true)
     }
 
     pub fn new_named_output<'g>(
-        &mut self,
+        &self,
         name: &str,
         graph: &'g GraphBuilder,
     ) -> ChainResult<OutputBuilder<'g, ()>> {
         let full_name = self.name.sub(name);
-        self.new_output_internal(graph, full_name, false)
+        Self::new_output_internal(graph, full_name, false)
     }
 
     fn new_output_internal<'g>(
-        &mut self,
         graph: &'g GraphBuilder,
         full_name: FullyQualifiedName,
         is_output_main_stream: bool,
