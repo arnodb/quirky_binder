@@ -49,7 +49,7 @@ impl Join {
         let joined_fields = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(|output_stream, facts_proof| {
+            .update(&mut streams, |output_stream, facts_proof| {
                 for (stream_info, input, fields) in [
                     ("primary stream", &inputs[0], &valid_primary_fields),
                     ("secondary stream", &inputs[1], &valid_secondary_fields),

@@ -10,8 +10,7 @@ use super::{
 use crate::{prelude::*, trace_element};
 
 #[derive(Getters, CopyGetters)]
-pub struct OutputBuilderForPassThrough<'a, 'b, 'g> {
-    pub(super) streams: &'b mut StreamsBuilder<'a>,
+pub struct OutputBuilderForPassThrough<'g> {
     #[getset(get = "pub")]
     pub(super) record_type: StreamRecordType,
     #[getset(get_copy = "pub")]
@@ -25,7 +24,7 @@ pub struct OutputBuilderForPassThrough<'a, 'b, 'g> {
     pub(super) facts: StreamFacts,
 }
 
-impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
+impl<'g> OutputBuilderForPassThrough<'g> {
     pub fn pass_through_sub_stream<B>(
         &mut self,
         sub_stream: NodeSubStream,
@@ -57,11 +56,10 @@ impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
         graph: &'g GraphBuilder,
     ) -> ChainResultWithTrace<StreamInfo>
     where
-        PassThroughLeafSubStream: for<'c, 'd> FnOnce(
+        PassThroughLeafSubStream: FnOnce(
             NodeSubStream,
-            &mut OutputBuilderForPassThrough<'c, 'd, 'g>,
-        )
-            -> ChainResultWithTrace<NodeSubStream>,
+            &mut OutputBuilderForPassThrough<'g>,
+        ) -> ChainResultWithTrace<NodeSubStream>,
     {
         struct PathFieldDetails {
             stream: NodeSubStream,
@@ -205,8 +203,8 @@ impl<'g> OutputBuilderForPassThrough<'_, '_, 'g> {
         break_distinct_fact_for_ids(&mut self.facts, datum_ids);
     }
 
-    pub fn build(self) -> &'g RefCell<QuirkyRecordDefinitionBuilder> {
-        self.streams.outputs.push(NodeStream::new(
+    pub fn build(self, streams: &mut StreamsBuilder) -> &'g RefCell<QuirkyRecordDefinitionBuilder> {
+        streams.outputs.push(NodeStream::new(
             self.record_type,
             self.input_variant_id,
             self.sub_streams,

@@ -54,7 +54,7 @@ impl FunctionUpdate {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(|output_stream, facts_proof| {
+            .update(&mut streams, |output_stream, facts_proof| {
                 if let Some(remove_fields) = valid_remove_fields {
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
                     for name in remove_fields.iter() {

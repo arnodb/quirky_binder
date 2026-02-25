@@ -24,7 +24,7 @@ impl Dedup {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .pass_through(|output_stream, facts_proof| {
+            .pass_through(&mut streams, |output_stream, facts_proof| {
                 output_stream.set_distinct_fact_all_fields();
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
@@ -118,10 +118,15 @@ impl SubDedup {
         let leaf_stream = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .pass_through_path(graph, &valid_path_fields, |sub_output_stream| {
-                sub_output_stream.set_distinct_fact_all_fields();
-                Ok(())
-            })?;
+            .pass_through_path(
+                graph,
+                &mut streams,
+                &valid_path_fields,
+                |sub_output_stream| {
+                    sub_output_stream.set_distinct_fact_all_fields();
+                    Ok(())
+                },
+            )?;
 
         let outputs = streams.build().with_trace_element(trace_element!())?;
 

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
-use truc::record::definition::DatumId;
+use truc::record::definition::{builder::generic::variant, DatumId};
 
 use crate::{
     graph::builder::{add_vec_datum_to_record_definition, check_undirected_order_starts_with},
@@ -48,31 +48,32 @@ impl Group {
             .with_trace_element(trace_element!())?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams
+        let group_record_type = streams
             .new_named_stream("group", graph)
             .with_trace_element(trace_element!())?;
 
         let group_stream = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(|output_stream, facts_proof| {
-                let mut group_stream = output_stream
-                    .new_named_sub_stream("group", graph)
-                    .with_trace_element(trace_element!())?;
-                let variant_id = output_stream.input_variant_id();
+            .update(&mut streams, |stream, facts_proof| {
+                let mut record_definition = graph
+                    .get_stream(stream.record_type())
+                    .with_trace_element(trace_element!())?
+                    .borrow_mut();
+                let mut group_record_definition = graph
+                    .get_stream(&group_record_type)
+                    .with_trace_element(trace_element!())?
+                    .borrow_mut();
 
-                let (group_by_datum_ids, group_datum_ids) = {
-                    let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                    let mut group_stream_def = group_stream.record_definition().borrow_mut();
-
-                    let variant = &output_stream_def[variant_id];
+                let (group_facts, group_by_datum_ids, group_datum_ids) = {
+                    let variant = &record_definition[stream.input_variant_id()];
                     let mut group_by_datum_ids = Vec::with_capacity(valid_by_fields.len());
                     let mut group_data =
                         Vec::with_capacity(variant.data_len() - valid_by_fields.len());
                     let mut group_datum_ids =
                         Vec::with_capacity(variant.data_len() - valid_by_fields.len());
                     for datum_id in variant.data() {
-                        let datum = &output_stream_def[datum_id];
+                        let datum = &record_definition[datum_id];
                         if !valid_by_fields
                             .iter()
                             .any(|field| field.name() == datum.name())
@@ -86,68 +87,71 @@ impl Group {
 
                     check_undirected_order_starts_with(
                         &group_by_datum_ids,
-                        output_stream.facts().order(),
-                        &output_stream_def,
+                        stream.facts().order(),
+                        &record_definition,
                         "main stream",
                     )
                     .with_trace_element(trace_element!())?;
 
                     let mut map = BTreeMap::<DatumId, DatumId>::new();
                     for datum in &group_data {
-                        let new_id = group_stream_def
+                        let new_id = group_record_definition
                             .add_datum(datum.name(), datum.details().clone())
                             .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!())?;
                         map.insert(datum.id(), new_id);
                     }
                     for &datum_id in &group_datum_ids {
-                        output_stream_def
+                        record_definition
                             .remove_datum(datum_id)
                             .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!())?;
                     }
 
-                    let group_order = output_stream.facts().order()[group_by_datum_ids.len()..]
+                    let mut group_facts = StreamFacts::default();
+                    let group_order = stream.facts().order()[group_by_datum_ids.len()..]
                         .iter()
                         .map(|d| d.map(|d| map[&d]))
                         .collect::<Vec<_>>();
-                    group_stream.facts_mut().set_order(group_order);
-                    let group_distinct = output_stream
+                    group_facts.set_order(group_order);
+                    let group_distinct = stream
                         .facts()
                         .distinct()
                         .iter()
                         .filter_map(|d| map.get(d).copied())
                         .collect::<Vec<_>>();
-                    group_stream.facts_mut().set_distinct(group_distinct);
+                    group_facts.set_distinct(group_distinct);
 
-                    (group_by_datum_ids, group_datum_ids)
+                    (group_facts, group_by_datum_ids, group_datum_ids)
                 };
 
-                let group_stream = group_stream.close_record_variant(
-                    facts_proof.order_facts_updated().distinct_facts_updated(),
+                let group_variant_id =
+                    group_record_definition.close_record_variant_with(variant::append_data);
+                let group_stream = NodeSubStream::new(
+                    group_record_type,
+                    group_variant_id,
+                    BTreeMap::new(),
+                    group_facts,
                 );
 
                 let group_stream_info = StreamInfo::from(&group_stream);
 
                 let datum_id = add_vec_datum_to_record_definition(
-                    &mut output_stream.record_definition().borrow_mut(),
+                    &mut record_definition,
                     params.group_field,
                     group_stream.record_type().clone(),
                     group_stream.variant_id(),
                 )
                 .with_trace_element(trace_element!())?;
-                let None = output_stream
-                    .sub_streams_mut()
-                    .insert(datum_id, group_stream)
-                else {
+                let None = stream.sub_streams_mut().insert(datum_id, group_stream) else {
                     return Err(ChainError::Other {
                         msg: "the datum should not be registered yet".to_owned(),
                     })
                     .with_trace_element(trace_element!());
                 };
 
-                output_stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
-                output_stream.set_distinct_fact_ids(group_by_datum_ids);
+                stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
+                stream.set_distinct_fact_ids(group_by_datum_ids);
 
                 Ok(facts_proof
                     .order_facts_updated()
@@ -309,7 +313,7 @@ impl SubGroup {
         drop(path_def);
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams
+        let group_record_type = streams
             .new_named_stream("group", graph)
             .with_trace_element(trace_element!())?;
 
@@ -320,26 +324,27 @@ impl SubGroup {
             .with_trace_element(trace_element!())?
             .update_path(
                 graph,
+                &mut streams,
                 &valid_path_fields,
-                |output_stream, sub_output_stream, facts_proof| {
-                    let mut group_stream = output_stream
-                        .new_named_sub_stream("group", graph)
-                        .with_trace_element(trace_element!())?;
-                    let variant_id = sub_output_stream.input_variant_id();
+                |stream, facts_proof| {
+                    let mut record_definition = graph
+                        .get_stream(stream.record_type())
+                        .with_trace_element(trace_element!())?
+                        .borrow_mut();
+                    let mut group_record_definition = graph
+                        .get_stream(&group_record_type)
+                        .with_trace_element(trace_element!())?
+                        .borrow_mut();
 
-                    let (group_by_datum_ids, group_datum_ids) = {
-                        let mut output_stream_def =
-                            sub_output_stream.record_definition().borrow_mut();
-                        let mut group_stream_def = group_stream.record_definition().borrow_mut();
-
-                        let variant = &output_stream_def[variant_id];
+                    let (group_facts, group_by_datum_ids, group_datum_ids) = {
+                        let variant = &record_definition[stream.input_variant_id()];
                         let mut group_by_datum_ids = Vec::with_capacity(valid_by_fields.len());
                         let mut group_data =
                             Vec::with_capacity(variant.data_len() - valid_by_fields.len());
                         let mut group_datum_ids =
                             Vec::with_capacity(variant.data_len() - valid_by_fields.len());
                         for datum_id in variant.data() {
-                            let datum = &output_stream_def[datum_id];
+                            let datum = &record_definition[datum_id];
                             if !valid_by_fields
                                 .iter()
                                 .any(|field| field.name() == datum.name())
@@ -353,61 +358,63 @@ impl SubGroup {
 
                         check_undirected_order_starts_with(
                             &group_by_datum_ids,
-                            sub_output_stream.facts().order(),
-                            &output_stream_def,
+                            stream.facts().order(),
+                            &record_definition,
                             "main sub stream",
                         )
                         .with_trace_element(trace_element!())?;
 
                         let mut map = BTreeMap::<DatumId, DatumId>::new();
                         for datum in &group_data {
-                            let new_id = group_stream_def
+                            let new_id = group_record_definition
                                 .add_datum(datum.name(), datum.details().clone())
                                 .map_err(|err| ChainError::Other { msg: err })
                                 .with_trace_element(trace_element!())?;
                             map.insert(datum.id(), new_id);
                         }
                         for datum_id in &group_datum_ids {
-                            output_stream_def
+                            record_definition
                                 .remove_datum(*datum_id)
                                 .map_err(|err| ChainError::Other { msg: err })
                                 .with_trace_element(trace_element!())?;
                         }
 
-                        let group_order = sub_output_stream.facts().order()
-                            [group_by_datum_ids.len()..]
+                        let mut group_facts = StreamFacts::default();
+                        let group_order = stream.facts().order()[group_by_datum_ids.len()..]
                             .iter()
                             .map(|d| d.map(|d| map[&d]))
                             .collect::<Vec<_>>();
-                        group_stream.facts_mut().set_order(group_order);
-                        let group_distinct = sub_output_stream
+                        group_facts.set_order(group_order);
+                        let group_distinct = stream
                             .facts()
                             .distinct()
                             .iter()
                             .filter_map(|d| map.get(d).copied())
                             .collect::<Vec<_>>();
-                        group_stream.facts_mut().set_distinct(group_distinct);
+                        group_facts.set_distinct(group_distinct);
 
-                        (group_by_datum_ids, group_datum_ids)
+                        (group_facts, group_by_datum_ids, group_datum_ids)
                     };
 
-                    let group_stream = group_stream.close_record_variant(
-                        facts_proof.order_facts_updated().distinct_facts_updated(),
+                    let group_variant_id =
+                        group_record_definition.close_record_variant_with(variant::append_data);
+                    let group_stream = NodeSubStream::new(
+                        group_record_type,
+                        group_variant_id,
+                        BTreeMap::new(),
+                        group_facts,
                     );
 
                     let group_stream_info = StreamInfo::from(&group_stream);
 
                     let datum_id = add_vec_datum_to_record_definition(
-                        &mut sub_output_stream.record_definition().borrow_mut(),
+                        &mut record_definition,
                         params.group_field,
                         group_stream.record_type().clone(),
                         group_stream.variant_id(),
                     )
                     .with_trace_element(trace_element!())?;
-                    let None = sub_output_stream
-                        .sub_streams_mut()
-                        .insert(datum_id, group_stream)
-                    else {
+                    let None = stream.sub_streams_mut().insert(datum_id, group_stream) else {
                         return Err(ChainError::Other {
                             msg: "the datum should not be registered yet".to_owned(),
                         })
@@ -416,8 +423,8 @@ impl SubGroup {
 
                     created_group_stream = Some(group_stream_info);
 
-                    sub_output_stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
-                    sub_output_stream.set_distinct_fact_ids(group_by_datum_ids);
+                    stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
+                    stream.set_distinct_fact_ids(group_by_datum_ids);
 
                     Ok(facts_proof.order_facts_updated().distinct_facts_updated())
                 },

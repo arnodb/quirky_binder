@@ -70,7 +70,7 @@ impl FunctionProduce {
         streams
             .new_main_output(graph)
             .with_trace_element(trace_element!())?
-            .update(|output_stream, facts_proof| {
+            .update(&mut streams, |output_stream, facts_proof| {
                 {
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
                     for (name, r#type) in valid_fields.iter() {

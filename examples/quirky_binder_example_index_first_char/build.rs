@@ -31,7 +31,7 @@ impl Tokenize {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(|output_stream, facts_proof| {
+            .update(&mut streams, |output_stream, facts_proof| {
                 let input_variant_id = output_stream.input_variant_id();
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
                 let datum = output_stream_def

@@ -40,7 +40,7 @@ impl Anchor {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(|output_stream, facts_proof| {
+            .update(&mut streams, |output_stream, facts_proof| {
                 let mut output_stream_def = output_stream.record_definition().borrow_mut();
                 output_stream_def
                     .add_datum(

@@ -22,7 +22,7 @@ impl Pipe {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .pass_through(|_, facts_proof| {
+            .pass_through(&mut streams, |_, facts_proof| {
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
         let outputs = streams.build().with_trace_element(trace_element!())?;

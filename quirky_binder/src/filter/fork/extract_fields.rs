@@ -37,7 +37,7 @@ impl ExtractFields {
         let output_stream_def = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .pass_through(|output_stream, facts_proof| {
+            .pass_through(&mut streams, |output_stream, facts_proof| {
                 let record_definition = output_stream.record_definition();
                 Ok(facts_proof
                     .order_facts_updated()
@@ -49,7 +49,7 @@ impl ExtractFields {
         streams
             .new_named_output("extracted", graph)
             .with_trace_element(trace_element!())?
-            .update(|output_extracted_stream, facts_proof| {
+            .update(&mut streams, |output_extracted_stream, facts_proof| {
                 let mut output_extracted_stream_def =
                     output_extracted_stream.record_definition().borrow_mut();
                 for field in valid_fields.iter() {

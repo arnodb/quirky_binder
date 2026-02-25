@@ -24,7 +24,7 @@ impl Debug {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .pass_through(|builder, facts_proof| {
+            .pass_through(&mut streams, |builder, facts_proof| {
                 let def = builder.record_definition().borrow();
                 eprintln!("=== Filter {name}:");
                 for d in def.get_current_data() {

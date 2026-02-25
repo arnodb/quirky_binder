@@ -84,7 +84,7 @@ impl<Spec: TransformSpec> Transform<Spec> {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(|output_stream, facts_proof| {
+            .update(&mut streams, |output_stream, facts_proof| {
                 {
                     let mut record_definition = output_stream.record_definition().borrow_mut();
 
@@ -356,8 +356,9 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
             .with_trace_element(trace_element!())?
             .update_path(
                 graph,
+                &mut streams,
                 &valid_path_fields,
-                |_output_stream, sub_output_stream, facts_proof| {
+                |sub_output_stream, facts_proof| {
                     {
                         let mut record_definition =
                             sub_output_stream.record_definition().borrow_mut();

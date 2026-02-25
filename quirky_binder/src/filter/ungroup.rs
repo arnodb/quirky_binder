@@ -43,7 +43,7 @@ impl Ungroup {
         let (group_stream, grouped_fields) = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(|output_stream, facts_proof| {
+            .update(&mut streams, |output_stream, facts_proof| {
                 let (group_stream, grouped_fields) = {
                     let mut output_stream_def = output_stream.record_definition().borrow_mut();
 
@@ -221,8 +221,9 @@ impl SubUngroup {
             .with_trace_element(trace_element!())?
             .update_path(
                 graph,
+                &mut streams,
                 &valid_path_fields,
-                |_output_stream, sub_output_stream, facts_proof| {
+                |sub_output_stream, facts_proof| {
                     let (group_stream, grouped_fields) = {
                         let mut output_stream_def =
                             sub_output_stream.record_definition().borrow_mut();
