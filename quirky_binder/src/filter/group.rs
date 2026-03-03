@@ -284,7 +284,7 @@ pub struct SubGroup {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    path_streams: Vec<PathUpdateElement>,
+    path_streams: Vec<UpdatePathElement>,
     by_fields: Vec<ValidFieldName>,
     group_field: ValidFieldName,
     group_stream: StreamInfo,
@@ -325,7 +325,7 @@ impl SubGroup {
             .update_path(
                 graph,
                 &mut streams,
-                &valid_path_fields,
+                valid_path_fields,
                 |stream, facts_proof| {
                     let mut record_definition = graph
                         .get_stream(stream.record_type())

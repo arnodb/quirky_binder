@@ -1053,7 +1053,7 @@ impl<'a> Chain<'a> {
         node: &dyn DynNode,
         input: &NodeStream,
         output: &NodeStream,
-        path_streams: &[PathUpdateElement],
+        path_streams: &[UpdatePathElement],
         preamble: Option<&TokenStream>,
         build_leaf_body: impl FnOnce(Type, Type, Ident, Ident) -> TokenStream,
     ) {

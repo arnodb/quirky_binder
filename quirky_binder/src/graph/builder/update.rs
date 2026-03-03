@@ -1,4 +1,7 @@
-use std::{cell::RefCell, collections::BTreeMap};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, VecDeque},
+};
 
 use truc::record::definition::{
     builder::generic::variant, DatumDefinition, DatumId, RecordVariantId,
@@ -62,12 +65,12 @@ impl<'g, Extra> OutputBuilderForUpdate<'g, Extra> {
 
     pub fn update_path<UpdateLeafSubStream, UpdatePathStream, UpdateRootStream>(
         &mut self,
-        path_fields: &[ValidFieldName],
+        path_fields: Vec<ValidFieldName>,
         update_leaf_sub_stream: UpdateLeafSubStream,
         update_path_stream: UpdatePathStream,
         update_root_stream: UpdateRootStream,
         graph: &'g GraphBuilder,
-    ) -> ChainResultWithTrace<Vec<PathUpdateElement>>
+    ) -> ChainResultWithTrace<Vec<UpdatePathElement>>
     where
         UpdateLeafSubStream: FnOnce(
             NodeSubStream,
@@ -86,35 +89,36 @@ impl<'g, Extra> OutputBuilderForUpdate<'g, Extra> {
         ) -> ChainResultWithTrace<DatumId>,
     {
         #[derive(Debug)]
-        struct PathFieldDetails<'a> {
+        struct PathFieldDetails {
             stream: NodeSubStream,
-            field: &'a ValidFieldName,
+            field: ValidFieldName,
         }
+
+        let mut path_fields = VecDeque::from(path_fields);
 
         // Find the sub stream of the first path field
         let (root_field, root_sub_stream, root_sub_stream_record_definition) = {
-            let field = path_fields.first().expect("first path field");
-            let datum_id = self
+            let field = path_fields.pop_front().expect("first path field");
+            let Some(datum_id) = self
                 .record_definition
                 .borrow()
                 .get_current_datum_definition_by_name(field.name())
-                .map(DatumDefinition::id);
-            if let Some(datum_id) = datum_id {
-                let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
-                let sub_record_definition = graph
-                    .get_stream(sub_stream.record_type())
-                    .with_trace_element(trace_element!())?;
-                (field, sub_stream, sub_record_definition)
-            } else {
+                .map(DatumDefinition::id)
+            else {
                 return Err(ChainError::FieldNotFound {
                     field: field.name().to_owned(),
                 })
                 .with_trace_element(trace_element!());
-            }
+            };
+            let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
+            let sub_record_definition = graph
+                .get_stream(sub_stream.record_type())
+                .with_trace_element(trace_element!())?;
+            (field, sub_stream, sub_record_definition)
         };
 
         // Then find path input streams
-        let (mut path_details, leaf_sub_input_stream, _) = path_fields[1..].iter().try_fold(
+        let (mut path_details, leaf_sub_input_stream, _) = path_fields.into_iter().try_fold(
             (
                 Vec::new(),
                 root_sub_stream,
@@ -148,19 +152,13 @@ impl<'g, Extra> OutputBuilderForUpdate<'g, Extra> {
         let mut sub_input_stream = StreamInfo::from(&leaf_sub_input_stream);
         let mut sub_output_stream = update_leaf_sub_stream(leaf_sub_input_stream, self)?;
 
-        // Then all streams up to the root
-        let mut path_update_streams = Vec::<PathUpdateElement>::with_capacity(path_fields.len());
+        let mut path_streams = Vec::<UpdatePathElement>::with_capacity(path_details.len() + 1);
 
+        // Then all streams up to the root
         while let Some(field_details) = path_details.pop() {
             let updated_sub_stream = sub_output_stream;
 
-            path_update_streams.push(PathUpdateElement {
-                field: field_details.field.clone(),
-                sub_input_stream,
-                sub_output_stream: StreamInfo::from(&updated_sub_stream),
-            });
-
-            sub_input_stream = StreamInfo::from(&field_details.stream);
+            let next_sub_input_stream = StreamInfo::from(&field_details.stream);
 
             let mut new_datum_id = None;
 
@@ -176,6 +174,12 @@ impl<'g, Extra> OutputBuilderForUpdate<'g, Extra> {
                     Ok(facts_proof)
                 })?;
 
+            path_streams.push(UpdatePathElement {
+                field: field_details.field,
+                sub_input_stream,
+                sub_output_stream: StreamInfo::from(&updated_sub_stream),
+            });
+
             let None = updated_stream
                 .sub_streams_mut()
                 .insert(new_datum_id.expect("new datum id"), updated_sub_stream)
@@ -186,20 +190,21 @@ impl<'g, Extra> OutputBuilderForUpdate<'g, Extra> {
                 .with_trace_element(trace_element!());
             };
 
+            sub_input_stream = next_sub_input_stream;
             sub_output_stream = updated_stream;
         }
 
         {
             let updated_sub_stream = sub_output_stream;
 
-            path_update_streams.push(PathUpdateElement {
-                field: root_field.clone(),
+            let new_root_datum_id =
+                update_root_stream(root_field.name(), self, &updated_sub_stream)?;
+
+            path_streams.push(UpdatePathElement {
+                field: root_field,
                 sub_input_stream,
                 sub_output_stream: StreamInfo::from(&updated_sub_stream),
             });
-
-            let new_root_datum_id =
-                update_root_stream(root_field.name(), self, &updated_sub_stream)?;
 
             let None = self
                 .sub_streams
@@ -213,9 +218,9 @@ impl<'g, Extra> OutputBuilderForUpdate<'g, Extra> {
         }
 
         // They were pushed in reverse order
-        path_update_streams.reverse();
+        path_streams.reverse();
 
-        Ok(path_update_streams)
+        Ok(path_streams)
     }
 
     pub fn set_order_fact<I, F>(&mut self, order_fields: I) -> ChainResult<()>
@@ -307,7 +312,7 @@ impl OutputBuilderForUpdate<'_, DerivedExtra> {
 }
 
 #[derive(Debug)]
-pub struct PathUpdateElement {
+pub struct UpdatePathElement {
     pub field: ValidFieldName,
     pub sub_input_stream: StreamInfo,
     pub sub_output_stream: StreamInfo,

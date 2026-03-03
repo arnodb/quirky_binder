@@ -11,8 +11,10 @@ pub use crate::{
     },
     graph::{
         builder::{
-            pass_through::{OutputBuilderForPassThrough, SubStreamBuilderForPassThrough},
-            update::{OutputBuilderForUpdate, PathUpdateElement, SubStreamBuilderForUpdate},
+            pass_through::{
+                OutputBuilderForPassThrough, PassThroughPathElement, SubStreamBuilderForPassThrough,
+            },
+            update::{OutputBuilderForUpdate, SubStreamBuilderForUpdate, UpdatePathElement},
             DerivedExtra, DistinctFactsUpdated, FactsFullyUpdated, GraphBuilder, NoFactsUpdated,
             OrderFactsUpdated, StreamsBuilder,
         },

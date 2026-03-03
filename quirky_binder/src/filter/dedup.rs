@@ -98,8 +98,7 @@ pub struct SubDedup {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    path_fields: Vec<ValidFieldName>,
-    leaf_stream: StreamInfo,
+    path_streams: Vec<PassThroughPathElement>,
 }
 
 impl SubDedup {
@@ -115,13 +114,13 @@ impl SubDedup {
             .with_trace_element(trace_element!())?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        let leaf_stream = streams
+        let path_streams = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
             .pass_through_path(
                 graph,
                 &mut streams,
-                &valid_path_fields,
+                valid_path_fields,
                 |sub_output_stream| {
                     sub_output_stream.set_distinct_fact_all_fields();
                     Ok(())
@@ -134,8 +133,7 @@ impl SubDedup {
             name,
             inputs,
             outputs,
-            path_fields: valid_path_fields,
-            leaf_stream,
+            path_streams,
         })
     }
 }
@@ -154,21 +152,30 @@ impl DynNode for SubDedup {
     }
 
     fn gen_chain(&self, graph: &Graph, chain: &mut Chain) {
+        let path_stream = self.path_streams.last().expect("last path field");
+
         let sub_record = chain
             .customizer()
-            .definition_fragments(&self.leaf_stream)
+            .definition_fragments(&path_stream.sub_stream)
             .record();
-        let sub_record_definition = &graph.record_definitions()[self.leaf_stream.record_type()];
-        let sub_variant = &sub_record_definition[self.leaf_stream.variant_id()];
 
-        let flat_map = self.path_fields.iter().rev().fold(None, |tail, field| {
-            let mut_access = field.mut_ident();
-            Some(if let Some(tail) = tail {
-                quote! {record.#mut_access().iter_mut().flat_map(|record| #tail)}
-            } else {
-                quote! {Some(record.#mut_access()).into_iter()}
-            })
-        });
+        let sub_record_definition =
+            &graph.record_definitions()[path_stream.sub_stream.record_type()];
+
+        let sub_variant = &sub_record_definition[path_stream.sub_stream.variant_id()];
+
+        let flat_map = self
+            .path_streams
+            .iter()
+            .rev()
+            .fold(None, |tail, path_stream| {
+                let mut_access = path_stream.field.mut_ident();
+                Some(if let Some(tail) = tail {
+                    quote! {record.#mut_access().iter_mut().flat_map(|record| #tail)}
+                } else {
+                    quote! {Some(record.#mut_access()).into_iter()}
+                })
+            });
 
         let eq = fields_eq(
             &sub_record,

@@ -186,7 +186,7 @@ pub struct SubUngroup {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    path_streams: Vec<PathUpdateElement>,
+    path_streams: Vec<UpdatePathElement>,
     group_field: ValidFieldName,
     group_stream: StreamInfo,
     grouped_fields: Vec<String>,
@@ -222,7 +222,7 @@ impl SubUngroup {
             .update_path(
                 graph,
                 &mut streams,
-                &valid_path_fields,
+                valid_path_fields,
                 |sub_output_stream, facts_proof| {
                     let (group_stream, grouped_fields) = {
                         let mut output_stream_def =

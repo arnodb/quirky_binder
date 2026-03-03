@@ -230,9 +230,9 @@ impl<'g, Extra> OutputBuilder<'g, Extra> {
         self,
         graph: &'g GraphBuilder,
         streams: &mut StreamsBuilder,
-        path_fields: &[ValidFieldName],
+        path_fields: Vec<ValidFieldName>,
         build: B,
-    ) -> ChainResultWithTrace<Vec<PathUpdateElement>>
+    ) -> ChainResultWithTrace<Vec<UpdatePathElement>>
     where
         B: FnOnce(
             &mut SubStreamBuilderForUpdate<'g, DerivedExtra>,
@@ -309,14 +309,14 @@ impl<'g> OutputBuilder<'g, DerivedExtra> {
         self,
         graph: &'g GraphBuilder,
         streams: &mut StreamsBuilder,
-        path_fields: &[ValidFieldName],
+        path_fields: Vec<ValidFieldName>,
         build: B,
-    ) -> ChainResultWithTrace<StreamInfo>
+    ) -> ChainResultWithTrace<Vec<PassThroughPathElement>>
     where
         B: FnOnce(&mut SubStreamBuilderForPassThrough<'g>) -> ChainResultWithTrace<()>,
     {
         self.pass_through(streams, |output_stream, facts_proof| {
-            let path_sub_stream = output_stream.pass_through_path(
+            let path_streams = output_stream.pass_through_path(
                 path_fields,
                 |sub_input_stream, output_stream| {
                     output_stream
@@ -328,7 +328,7 @@ impl<'g> OutputBuilder<'g, DerivedExtra> {
             Ok(facts_proof
                 .order_facts_updated()
                 .distinct_facts_updated()
-                .with_output(path_sub_stream))
+                .with_output(path_streams))
         })
     }
 }

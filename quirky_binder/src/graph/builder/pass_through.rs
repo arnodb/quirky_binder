@@ -1,6 +1,9 @@
-use std::{cell::RefCell, collections::BTreeMap};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, VecDeque},
+};
 
-use truc::record::definition::{DatumId, RecordVariantId};
+use truc::record::definition::{DatumDefinition, DatumId, RecordVariantId};
 
 use super::{
     break_distinct_fact_for, break_distinct_fact_for_ids, break_order_fact_at,
@@ -51,10 +54,10 @@ impl<'g> OutputBuilderForPassThrough<'g> {
 
     pub fn pass_through_path<PassThroughLeafSubStream>(
         &mut self,
-        path_fields: &[ValidFieldName],
+        path_fields: Vec<ValidFieldName>,
         pass_through_leaf_sub_stream: PassThroughLeafSubStream,
         graph: &'g GraphBuilder,
-    ) -> ChainResultWithTrace<StreamInfo>
+    ) -> ChainResultWithTrace<Vec<PassThroughPathElement>>
     where
         PassThroughLeafSubStream: FnOnce(
             NodeSubStream,
@@ -63,30 +66,35 @@ impl<'g> OutputBuilderForPassThrough<'g> {
     {
         struct PathFieldDetails {
             stream: NodeSubStream,
+            field: ValidFieldName,
             datum_id: DatumId,
         }
 
+        let mut path_fields = VecDeque::from(path_fields);
+
         // Find the sub stream of the first path field
-        let (root_datum_id, root_sub_stream, root_sub_stream_record_definition) = {
-            let field = path_fields.first().expect("first path field");
-            let datum_id = self
+        let (root_field, root_datum_id, root_sub_stream, root_sub_stream_record_definition) = {
+            let field = path_fields.pop_front().expect("first path field");
+            let Some(datum_id) = self
                 .record_definition
                 .borrow()
                 .get_current_datum_definition_by_name(field.name())
-                .ok_or_else(|| ChainError::FieldNotFound {
+                .map(DatumDefinition::id)
+            else {
+                return Err(ChainError::FieldNotFound {
                     field: field.name().to_owned(),
                 })
-                .with_trace_element(trace_element!())?
-                .id();
+                .with_trace_element(trace_element!());
+            };
             let sub_stream = self.sub_streams.remove(&datum_id).expect("root sub stream");
             let sub_record_definition = graph
                 .get_stream(sub_stream.record_type())
                 .with_trace_element(trace_element!())?;
-            (datum_id, sub_stream, sub_record_definition)
+            (field, datum_id, sub_stream, sub_record_definition)
         };
 
         // Then find path input streams
-        let (mut path_details, leaf_sub_input_stream, _) = path_fields[1..].iter().try_fold(
+        let (mut path_details, leaf_sub_input_stream, _) = path_fields.into_iter().try_fold(
             (
                 Vec::new(),
                 root_sub_stream,
@@ -108,25 +116,38 @@ impl<'g> OutputBuilderForPassThrough<'g> {
                 let sub_record_definition = graph
                     .get_stream(sub_stream.record_type())
                     .with_trace_element(trace_element!())?;
-                path_data.push(PathFieldDetails { stream, datum_id });
+                path_data.push(PathFieldDetails {
+                    field,
+                    stream,
+                    datum_id,
+                });
                 Ok((path_data, sub_stream, sub_record_definition))
             },
         )?;
 
         // Then update the leaf sub stream
-        let leaf_sub_output_stream = StreamInfo::from(&leaf_sub_input_stream);
         let mut sub_output_stream = pass_through_leaf_sub_stream(leaf_sub_input_stream, self)?;
+
+        let mut path_streams = Vec::<PassThroughPathElement>::with_capacity(path_details.len() + 1);
 
         // Then all streams up to the root
         while let Some(mut field_details) = path_details.pop() {
             let updated_sub_stream = sub_output_stream;
+
+            path_streams.push(PassThroughPathElement {
+                field: field_details.field,
+                sub_stream: StreamInfo::from(&updated_sub_stream),
+            });
 
             let None = field_details
                 .stream
                 .sub_streams_mut()
                 .insert(field_details.datum_id, updated_sub_stream)
             else {
-                panic!("sub stream should have been removed");
+                return Err(ChainError::Other {
+                    msg: "sub stream should have been removed".to_owned(),
+                })
+                .with_trace_element(trace_element!());
             };
 
             sub_output_stream = field_details.stream;
@@ -134,12 +155,24 @@ impl<'g> OutputBuilderForPassThrough<'g> {
 
         {
             let updated_sub_stream = sub_output_stream;
+
+            path_streams.push(PassThroughPathElement {
+                field: root_field,
+                sub_stream: StreamInfo::from(&updated_sub_stream),
+            });
+
             let None = self.sub_streams.insert(root_datum_id, updated_sub_stream) else {
-                panic!("sub stream should have been removed");
+                return Err(ChainError::Other {
+                    msg: "sub stream should have been removed".to_owned(),
+                })
+                .with_trace_element(trace_element!());
             };
         }
 
-        Ok(leaf_sub_output_stream)
+        // They were pushed in reverse order
+        path_streams.reverse();
+
+        Ok(path_streams)
     }
 
     pub fn set_order_fact<I, F>(&mut self, order_fields: I) -> ChainResult<()>
@@ -214,6 +247,12 @@ impl<'g> OutputBuilderForPassThrough<'g> {
         ));
         self.record_definition
     }
+}
+
+#[derive(Debug)]
+pub struct PassThroughPathElement {
+    pub field: ValidFieldName,
+    pub sub_stream: StreamInfo,
 }
 
 #[derive(Getters, CopyGetters)]

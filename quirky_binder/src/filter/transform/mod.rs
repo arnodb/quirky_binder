@@ -319,7 +319,7 @@ pub struct SubTransform<Spec: SubTransformSpec> {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    path_streams: Vec<PathUpdateElement>,
+    path_streams: Vec<UpdatePathElement>,
     update_fields: Vec<ValidFieldName>,
     type_update_fields: Vec<(ValidFieldName, ValidFieldType)>,
     new_variant: bool,
@@ -357,7 +357,7 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
             .update_path(
                 graph,
                 &mut streams,
-                &valid_path_fields,
+                valid_path_fields,
                 |sub_output_stream, facts_proof| {
                     {
                         let mut record_definition =

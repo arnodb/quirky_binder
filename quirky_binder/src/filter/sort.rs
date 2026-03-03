@@ -118,8 +118,7 @@ pub struct SubSort {
     inputs: [NodeStream; 1],
     #[getset(get = "pub")]
     outputs: [NodeStream; 1],
-    path_fields: Vec<ValidFieldName>,
-    leaf_stream: StreamInfo,
+    path_streams: Vec<PassThroughPathElement>,
     fields: Vec<Directed<ValidFieldName>>,
 }
 
@@ -140,13 +139,13 @@ impl SubSort {
             .with_trace_element(trace_element!())?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        let leaf_stream = streams
+        let path_streams = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
             .pass_through_path(
                 graph,
                 &mut streams,
-                &valid_path_fields,
+                valid_path_fields,
                 |sub_output_stream| {
                     sub_output_stream
                         .set_order_fact(
@@ -165,8 +164,7 @@ impl SubSort {
             name,
             inputs,
             outputs,
-            path_fields: valid_path_fields,
-            leaf_stream,
+            path_streams,
             fields: valid_fields,
         })
     }
@@ -186,19 +184,25 @@ impl DynNode for SubSort {
     }
 
     fn gen_chain(&self, _graph: &Graph, chain: &mut Chain) {
+        let path_stream = self.path_streams.last().expect("last path field");
+
         let sub_record = chain
             .customizer()
-            .definition_fragments(&self.leaf_stream)
+            .definition_fragments(&path_stream.sub_stream)
             .record();
 
-        let flat_map = self.path_fields.iter().rev().fold(None, |tail, field| {
-            let mut_access = field.mut_ident();
-            Some(if let Some(tail) = tail {
-                quote! {record.#mut_access().iter_mut().flat_map(|record| #tail)}
-            } else {
-                quote! {Some(record.#mut_access()).into_iter()}
-            })
-        });
+        let flat_map = self
+            .path_streams
+            .iter()
+            .rev()
+            .fold(None, |tail, path_stream| {
+                let mut_access = path_stream.field.mut_ident();
+                Some(if let Some(tail) = tail {
+                    quote! {record.#mut_access().iter_mut().flat_map(|record| #tail)}
+                } else {
+                    quote! {Some(record.#mut_access()).into_iter()}
+                })
+            });
 
         let cmp = fields_cmp(
             &sub_record,
