@@ -37,14 +37,22 @@ impl Sort {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .pass_through(&mut streams, |builder, facts_proof| {
-                builder
-                    .set_order_fact(
-                        valid_fields
-                            .iter()
-                            .map(|field| field.as_ref().map(ValidFieldName::name)),
-                    )
-                    .with_trace_element(trace_element!())?;
+            .pass_through()
+            .root(&mut streams, |stream, facts_proof| {
+                let record_definition = graph
+                    .get_stream(stream.record_type())
+                    .with_trace_element(trace_element!())?
+                    .borrow();
+
+                set_order_fact(
+                    stream.facts_mut(),
+                    valid_fields
+                        .iter()
+                        .map(|field| field.as_ref().map(ValidFieldName::name)),
+                    &record_definition,
+                )
+                .with_trace_element(trace_element!())?;
+
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
         let outputs = streams.build().with_trace_element(trace_element!())?;
@@ -142,19 +150,27 @@ impl SubSort {
         let path_streams = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .pass_through_path(
+            .pass_through()
+            .path(
                 graph,
                 &mut streams,
                 valid_path_fields,
-                |sub_output_stream| {
-                    sub_output_stream
-                        .set_order_fact(
-                            valid_fields
-                                .iter()
-                                .map(|field| field.as_ref().map(ValidFieldName::name)),
-                        )
-                        .with_trace_element(trace_element!())?;
-                    Ok(())
+                |stream, facts_proof| {
+                    let record_definition = graph
+                        .get_stream(stream.record_type())
+                        .with_trace_element(trace_element!())?
+                        .borrow();
+
+                    set_order_fact(
+                        stream.facts_mut(),
+                        valid_fields
+                            .iter()
+                            .map(|field| field.as_ref().map(ValidFieldName::name)),
+                        &record_definition,
+                    )
+                    .with_trace_element(trace_element!())?;
+
+                    Ok(facts_proof.order_facts_updated().distinct_facts_updated())
                 },
             )?;
 

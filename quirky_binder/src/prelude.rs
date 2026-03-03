@@ -11,11 +11,16 @@ pub use crate::{
     },
     graph::{
         builder::{
+            add_vec_datum_to_record_definition, break_distinct_fact_for, break_order_fact_at,
+            break_order_fact_at_ids, check_directed_order_starts_with, check_distinct_eq,
+            check_undirected_order_starts_with,
             pass_through::{
                 OutputBuilderForPassThrough, PassThroughPathElement, SubStreamBuilderForPassThrough,
             },
+            replace_vec_datum_in_record_definition, set_distinct_fact,
+            set_distinct_fact_all_fields, set_distinct_fact_ids, set_order_fact,
             update::{OutputBuilderForUpdate, SubStreamBuilderForUpdate, UpdatePathElement},
-            DerivedExtra, DistinctFactsUpdated, FactsFullyUpdated, GraphBuilder, NoFactsUpdated,
+            DistinctFactsUpdated, FactsFullyUpdated, GraphBuilder, NoFactsUpdated,
             OrderFactsUpdated, StreamsBuilder,
         },
         error::GraphGenerationError,

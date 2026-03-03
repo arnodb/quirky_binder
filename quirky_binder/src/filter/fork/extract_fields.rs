@@ -34,36 +34,42 @@ impl ExtractFields {
             .new_named_stream("extracted", graph)
             .with_trace_element(trace_element!())?;
 
-        let output_stream_def = streams
+        let stream_info = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .pass_through(&mut streams, |output_stream, facts_proof| {
-                let record_definition = output_stream.record_definition();
-                Ok(facts_proof
-                    .order_facts_updated()
-                    .distinct_facts_updated()
-                    .with_output(record_definition))
-            })?
+            .pass_through()
+            .root(&mut streams, |_, facts_proof| {
+                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+            })?;
+
+        let record_definition = graph
+            .get_stream(stream_info.record_type())
+            .with_trace_element(trace_element!())?
             .borrow();
 
         streams
             .new_named_output("extracted", graph)
             .with_trace_element(trace_element!())?
-            .update(&mut streams, |output_extracted_stream, facts_proof| {
-                let mut output_extracted_stream_def =
-                    output_extracted_stream.record_definition().borrow_mut();
+            .update()
+            .root(&mut streams, |extracted_stream, facts_proof| {
+                let mut extracted_record_definition = graph
+                    .get_stream(extracted_stream.record_type())
+                    .with_trace_element(trace_element!())?
+                    .borrow_mut();
+
                 for field in valid_fields.iter() {
-                    let datum = output_stream_def
+                    let datum = record_definition
                         .get_variant_datum_definition_by_name(
                             inputs.single().variant_id(),
                             field.name(),
                         )
                         .unwrap_or_else(|| panic!(r#"datum "{}""#, field.name()));
-                    output_extracted_stream_def
+                    extracted_record_definition
                         .add_datum(datum.name(), datum.details().clone())
                         .map_err(|err| ChainError::Other { msg: err })
                         .with_trace_element(trace_element!())?;
                 }
+
                 // XXX That is actually not true, let's see what we can do later.
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;

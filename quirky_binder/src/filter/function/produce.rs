@@ -70,35 +70,45 @@ impl FunctionProduce {
         streams
             .new_main_output(graph)
             .with_trace_element(trace_element!())?
-            .update(&mut streams, |output_stream, facts_proof| {
-                {
-                    let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                    for (name, r#type) in valid_fields.iter() {
-                        output_stream_def
-                            .add_datum(
-                                name.name(),
-                                QuirkyDatumType::Simple {
-                                    type_name: r#type.type_name().to_owned(),
-                                },
-                            )
-                            .map_err(|err| ChainError::Other { msg: err })
-                            .with_trace_element(trace_element!())?;
-                    }
-                }
-                if let Some(order_fields) = valid_order_fields.as_ref() {
-                    output_stream
-                        .set_order_fact(
-                            order_fields
-                                .iter()
-                                .map(|field| field.as_ref().map(ValidFieldName::name)),
+            .update()
+            .root(&mut streams, |stream, facts_proof| {
+                let mut record_definition = graph
+                    .get_stream(stream.record_type())
+                    .with_trace_element(trace_element!())?
+                    .borrow_mut();
+
+                for (name, r#type) in valid_fields.iter() {
+                    record_definition
+                        .add_datum(
+                            name.name(),
+                            QuirkyDatumType::Simple {
+                                type_name: r#type.type_name().to_owned(),
+                            },
                         )
+                        .map_err(|err| ChainError::Other { msg: err })
                         .with_trace_element(trace_element!())?;
                 }
+
+                if let Some(order_fields) = valid_order_fields.as_ref() {
+                    set_order_fact(
+                        stream.facts_mut(),
+                        order_fields
+                            .iter()
+                            .map(|field| field.as_ref().map(ValidFieldName::name)),
+                        &record_definition,
+                    )
+                    .with_trace_element(trace_element!())?;
+                }
+
                 if let Some(distinct_fields) = valid_distinct_fields.as_ref() {
-                    output_stream
-                        .set_distinct_fact(distinct_fields.iter().map(ValidFieldName::name))
-                        .with_trace_element(trace_element!())?;
+                    set_distinct_fact(
+                        stream.facts_mut(),
+                        distinct_fields.iter().map(ValidFieldName::name),
+                        &record_definition,
+                    )
+                    .with_trace_element(trace_element!())?;
                 }
+
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 

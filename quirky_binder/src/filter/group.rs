@@ -4,7 +4,6 @@ use serde::Deserialize;
 use truc::record::definition::{builder::generic::variant, DatumId};
 
 use crate::{
-    graph::builder::{add_vec_datum_to_record_definition, check_undirected_order_starts_with},
     prelude::*,
     support::eq::{fields_eq, fields_eq_ab},
     trace_element,
@@ -52,10 +51,13 @@ impl Group {
             .new_named_stream("group", graph)
             .with_trace_element(trace_element!())?;
 
-        let group_stream = streams
+        let mut created_group_stream = None;
+
+        streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(&mut streams, |stream, facts_proof| {
+            .update()
+            .root(&mut streams, |stream, facts_proof| {
                 let mut record_definition = graph
                     .get_stream(stream.record_type())
                     .with_trace_element(trace_element!())?
@@ -66,7 +68,7 @@ impl Group {
                     .borrow_mut();
 
                 let (group_facts, group_by_datum_ids, group_datum_ids) = {
-                    let variant = &record_definition[stream.input_variant_id()];
+                    let variant = &record_definition[stream.variant_id()];
                     let mut group_by_datum_ids = Vec::with_capacity(valid_by_fields.len());
                     let mut group_data =
                         Vec::with_capacity(variant.data_len() - valid_by_fields.len());
@@ -134,7 +136,7 @@ impl Group {
                     group_facts,
                 );
 
-                let group_stream_info = StreamInfo::from(&group_stream);
+                created_group_stream = Some(StreamInfo::from(&group_stream));
 
                 let datum_id = add_vec_datum_to_record_definition(
                     &mut record_definition,
@@ -150,13 +152,10 @@ impl Group {
                     .with_trace_element(trace_element!());
                 };
 
-                stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
-                stream.set_distinct_fact_ids(group_by_datum_ids);
+                break_order_fact_at_ids(stream.facts_mut(), group_datum_ids.iter().cloned());
+                set_distinct_fact_ids(stream.facts_mut(), group_by_datum_ids);
 
-                Ok(facts_proof
-                    .order_facts_updated()
-                    .distinct_facts_updated()
-                    .with_output(group_stream_info))
+                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 
         let outputs = streams.build().with_trace_element(trace_element!())?;
@@ -167,7 +166,7 @@ impl Group {
             outputs,
             by_fields: valid_by_fields,
             group_field: valid_group_field,
-            group_stream,
+            group_stream: created_group_stream.expect("group stream"),
         })
     }
 }
@@ -322,7 +321,8 @@ impl SubGroup {
         let path_streams = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update_path(
+            .update()
+            .path(
                 graph,
                 &mut streams,
                 valid_path_fields,
@@ -337,7 +337,7 @@ impl SubGroup {
                         .borrow_mut();
 
                     let (group_facts, group_by_datum_ids, group_datum_ids) = {
-                        let variant = &record_definition[stream.input_variant_id()];
+                        let variant = &record_definition[stream.variant_id()];
                         let mut group_by_datum_ids = Vec::with_capacity(valid_by_fields.len());
                         let mut group_data =
                             Vec::with_capacity(variant.data_len() - valid_by_fields.len());
@@ -405,7 +405,7 @@ impl SubGroup {
                         group_facts,
                     );
 
-                    let group_stream_info = StreamInfo::from(&group_stream);
+                    created_group_stream = Some(StreamInfo::from(&group_stream));
 
                     let datum_id = add_vec_datum_to_record_definition(
                         &mut record_definition,
@@ -421,14 +421,13 @@ impl SubGroup {
                         .with_trace_element(trace_element!());
                     };
 
-                    created_group_stream = Some(group_stream_info);
-
-                    stream.break_order_fact_at_ids(group_datum_ids.iter().cloned());
-                    stream.set_distinct_fact_ids(group_by_datum_ids);
+                    break_order_fact_at_ids(stream.facts_mut(), group_datum_ids.iter().cloned());
+                    set_distinct_fact_ids(stream.facts_mut(), group_by_datum_ids);
 
                     Ok(facts_proof.order_facts_updated().distinct_facts_updated())
                 },
-            )?;
+            )
+            .with_trace_element(trace_element!())?;
 
         let outputs = streams.build().with_trace_element(trace_element!())?;
 

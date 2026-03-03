@@ -33,7 +33,8 @@ pub trait TransformSpec: Debug {
 
     fn update_facts(
         &self,
-        output_stream: &mut OutputBuilderForUpdate<DerivedExtra>,
+        stream: &mut NodeStream,
+        record_definition: &QuirkyRecordDefinitionBuilder,
         update_fields: &[ValidFieldName],
         type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
@@ -84,34 +85,37 @@ impl<Spec: TransformSpec> Transform<Spec> {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(&mut streams, |output_stream, facts_proof| {
-                {
-                    let mut record_definition = output_stream.record_definition().borrow_mut();
+            .update()
+            .root(&mut streams, |stream, facts_proof| {
+                let mut record_definition = graph
+                    .get_stream(stream.record_type())
+                    .with_trace_element(trace_element!())?
+                    .borrow_mut();
 
-                    for (f, t) in &valid_type_update_fields {
-                        let datum_id = record_definition
-                            .get_current_datum_definition_by_name(f.name())
-                            .expect("datum")
-                            .id();
-                        record_definition
-                            .remove_datum(datum_id)
-                            .map_err(|err| ChainError::Other { msg: err })
-                            .with_trace_element(trace_element!())?;
-                        record_definition
-                            .add_datum(
-                                f.name(),
-                                QuirkyDatumType::Simple {
-                                    type_name: t.type_name().to_owned(),
-                                },
-                            )
-                            .map_err(|err| ChainError::Other { msg: err })
-                            .with_trace_element(trace_element!())?;
-                        new_variant = true;
-                    }
+                for (f, t) in &valid_type_update_fields {
+                    let datum_id = record_definition
+                        .get_current_datum_definition_by_name(f.name())
+                        .expect("datum")
+                        .id();
+                    record_definition
+                        .remove_datum(datum_id)
+                        .map_err(|err| ChainError::Other { msg: err })
+                        .with_trace_element(trace_element!())?;
+                    record_definition
+                        .add_datum(
+                            f.name(),
+                            QuirkyDatumType::Simple {
+                                type_name: t.type_name().to_owned(),
+                            },
+                        )
+                        .map_err(|err| ChainError::Other { msg: err })
+                        .with_trace_element(trace_element!())?;
+                    new_variant = true;
                 }
 
                 spec.update_facts(
-                    output_stream,
+                    stream,
+                    &record_definition,
                     &valid_update_fields,
                     &valid_type_update_fields,
                     facts_proof,
@@ -300,7 +304,8 @@ pub trait SubTransformSpec: Debug {
 
     fn update_facts(
         &self,
-        output_stream: &mut SubStreamBuilderForUpdate<DerivedExtra>,
+        stream: &mut NodeSubStream,
+        record_definition: &QuirkyRecordDefinitionBuilder,
         update_fields: &[ValidFieldName],
         type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
@@ -354,39 +359,41 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
         let path_streams = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update_path(
+            .update()
+            .path(
                 graph,
                 &mut streams,
                 valid_path_fields,
-                |sub_output_stream, facts_proof| {
-                    {
-                        let mut record_definition =
-                            sub_output_stream.record_definition().borrow_mut();
+                |stream, facts_proof| {
+                    let mut record_definition = graph
+                        .get_stream(stream.record_type())
+                        .with_trace_element(trace_element!())?
+                        .borrow_mut();
 
-                        for (f, t) in &valid_type_update_fields {
-                            let datum_id = record_definition
-                                .get_current_datum_definition_by_name(f.name())
-                                .expect("datum")
-                                .id();
-                            record_definition
-                                .remove_datum(datum_id)
-                                .map_err(|err| ChainError::Other { msg: err })
-                                .with_trace_element(trace_element!())?;
-                            record_definition
-                                .add_datum(
-                                    f.name(),
-                                    QuirkyDatumType::Simple {
-                                        type_name: t.type_name().to_owned(),
-                                    },
-                                )
-                                .map_err(|err| ChainError::Other { msg: err })
-                                .with_trace_element(trace_element!())?;
-                            new_variant = true;
-                        }
+                    for (f, t) in &valid_type_update_fields {
+                        let datum_id = record_definition
+                            .get_current_datum_definition_by_name(f.name())
+                            .expect("datum")
+                            .id();
+                        record_definition
+                            .remove_datum(datum_id)
+                            .map_err(|err| ChainError::Other { msg: err })
+                            .with_trace_element(trace_element!())?;
+                        record_definition
+                            .add_datum(
+                                f.name(),
+                                QuirkyDatumType::Simple {
+                                    type_name: t.type_name().to_owned(),
+                                },
+                            )
+                            .map_err(|err| ChainError::Other { msg: err })
+                            .with_trace_element(trace_element!())?;
+                        new_variant = true;
                     }
 
                     spec.update_facts(
-                        sub_output_stream,
+                        stream,
+                        &record_definition,
                         &valid_update_fields,
                         &valid_type_update_fields,
                         facts_proof,

@@ -33,16 +33,16 @@ impl Deref for NodeStreamSource {
 }
 
 /// Node stream information
-#[derive(Clone, Debug, new, Getters, CopyGetters)]
+#[derive(Clone, Debug, new, Getters, CopyGetters, MutGetters)]
 pub struct NodeStream {
     /// The type of the records going through the entire stream.
     #[getset(get = "pub")]
     record_type: StreamRecordType,
     /// The record variant for a specific node.
-    #[getset(get_copy = "pub")]
+    #[getset(get_copy = "pub", get_mut = "pub")]
     variant_id: RecordVariantId,
     /// The sub-streams indexed by datum ID.
-    #[getset(get = "pub")]
+    #[getset(get = "pub", get_mut = "pub")]
     sub_streams: BTreeMap<DatumId, NodeSubStream>,
     /// The source to connect to in order to read records from it.
     #[getset(get = "pub")]
@@ -51,7 +51,7 @@ pub struct NodeStream {
     #[getset(get_copy = "pub")]
     is_source_main_stream: bool,
     /// The facts (order and distinct) of the stream.
-    #[getset(get = "pub")]
+    #[getset(get = "pub", get_mut = "pub")]
     facts: StreamFacts,
 }
 
@@ -88,38 +88,29 @@ pub struct NodeSubStream {
     #[getset(get = "pub")]
     record_type: StreamRecordType,
     /// The record variant for a specific node.
-    #[getset(get_copy = "pub")]
+    #[getset(get_copy = "pub", get_mut = "pub")]
     variant_id: RecordVariantId,
     /// The sub-streams indexed by datum ID.
     #[getset(get = "pub", get_mut = "pub")]
     sub_streams: BTreeMap<DatumId, NodeSubStream>,
     /// The facts (order and distinct) of the sub-stream.
-    #[getset(get = "pub")]
+    #[getset(get = "pub", get_mut = "pub")]
     facts: StreamFacts,
-}
-
-impl NodeSubStream {
-    pub fn destructure(
-        self,
-    ) -> (
-        StreamRecordType,
-        RecordVariantId,
-        BTreeMap<DatumId, NodeSubStream>,
-        StreamFacts,
-    ) {
-        (
-            self.record_type,
-            self.variant_id,
-            self.sub_streams,
-            self.facts,
-        )
-    }
 }
 
 #[derive(Debug)]
 pub struct StreamInfo {
     pub record_type: StreamRecordType,
     pub variant_id: RecordVariantId,
+}
+
+impl From<&NodeStream> for StreamInfo {
+    fn from(value: &NodeStream) -> Self {
+        Self {
+            record_type: value.record_type().clone(),
+            variant_id: value.variant_id(),
+        }
+    }
 }
 
 impl From<&NodeSubStream> for StreamInfo {

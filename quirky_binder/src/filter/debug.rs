@@ -24,13 +24,18 @@ impl Debug {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .pass_through(&mut streams, |builder, facts_proof| {
-                let def = builder.record_definition().borrow();
+            .pass_through()
+            .root(&mut streams, |stream, facts_proof| {
+                let def = graph
+                    .get_stream(stream.record_type())
+                    .with_trace_element(trace_element!())?
+                    .borrow();
+
                 eprintln!("=== Filter {name}:");
                 for d in def.get_current_data() {
                     eprintln!("    {:?}", def.get_datum_definition(d).expect("datum"));
                 }
-                eprintln!("    {:?}", builder.facts());
+                eprintln!("    {:?}", stream.facts());
                 fn indent(depth: usize) {
                     eprint!("{: <1$}", "", depth * 4);
                 }
@@ -62,7 +67,7 @@ impl Debug {
                     }
                     Ok(())
                 }
-                for (&datum_id, sub_stream) in builder.sub_streams().iter() {
+                for (&datum_id, sub_stream) in stream.sub_streams().iter() {
                     debug_sub_stream(
                         1,
                         def.get_datum_definition(datum_id).expect("datum"),

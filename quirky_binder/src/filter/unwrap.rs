@@ -85,7 +85,8 @@ impl TransformSpec for Unwrap {
 
     fn update_facts(
         &self,
-        _output_stream: &mut OutputBuilderForUpdate<DerivedExtra>,
+        _stream: &mut NodeStream,
+        _record_definition: &QuirkyRecordDefinitionBuilder,
         _update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
@@ -182,7 +183,8 @@ impl SubTransformSpec for SubUnwrap {
 
     fn update_facts(
         &self,
-        _output_stream: &mut SubStreamBuilderForUpdate<DerivedExtra>,
+        _stream: &mut NodeSubStream,
+        _record_definition: &QuirkyRecordDefinitionBuilder,
         _update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,

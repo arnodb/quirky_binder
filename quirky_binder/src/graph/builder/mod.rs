@@ -11,7 +11,7 @@ use self::{
     params::ParamsBuilder, pass_through::OutputBuilderForPassThrough,
     update::OutputBuilderForUpdate,
 };
-use crate::{prelude::*, trace_element};
+use crate::prelude::*;
 
 pub mod params;
 pub mod pass_through;
@@ -116,10 +116,7 @@ impl<'a> StreamsBuilder<'a> {
         Ok(record_type)
     }
 
-    pub fn new_main_output<'g>(
-        &self,
-        graph: &'g GraphBuilder,
-    ) -> ChainResult<OutputBuilder<'g, ()>> {
+    pub fn new_main_output<'g>(&self, graph: &'g GraphBuilder) -> ChainResult<OutputBuilder<'g>> {
         let full_name = self.name.clone();
         Self::new_output_internal(graph, full_name, true)
     }
@@ -128,7 +125,7 @@ impl<'a> StreamsBuilder<'a> {
         &self,
         name: &str,
         graph: &'g GraphBuilder,
-    ) -> ChainResult<OutputBuilder<'g, ()>> {
+    ) -> ChainResult<OutputBuilder<'g>> {
         let full_name = self.name.sub(name);
         Self::new_output_internal(graph, full_name, false)
     }
@@ -137,17 +134,20 @@ impl<'a> StreamsBuilder<'a> {
         graph: &'g GraphBuilder,
         full_name: FullyQualifiedName,
         is_output_main_stream: bool,
-    ) -> ChainResult<OutputBuilder<'g, ()>> {
+    ) -> ChainResult<OutputBuilder<'g>> {
         let record_type = StreamRecordType::from(full_name.clone());
         let record_definition = graph.get_stream(&record_type)?;
-        Ok(OutputBuilder {
+        let stream = NodeStream::new(
             record_type,
-            record_definition,
-            input_sub_streams: BTreeMap::new(),
-            source: full_name.into(),
+            RecordVariantId::from(0),
+            BTreeMap::new(),
+            full_name.into(),
             is_output_main_stream,
-            facts: StreamFacts::default(),
-            extra: (),
+            StreamFacts::default(),
+        );
+        Ok(OutputBuilder {
+            record_definition,
+            stream,
         })
     }
 
@@ -156,7 +156,7 @@ impl<'a> StreamsBuilder<'a> {
         input_index: usize,
         is_output_main_stream: bool,
         graph: &'g GraphBuilder,
-    ) -> ChainResult<OutputBuilder<'g, DerivedExtra>> {
+    ) -> ChainResult<OutputBuilder<'g>> {
         let input = &self.inputs[input_index];
         if let Some(output_index) = self.in_out_links[input_index] {
             return Err(ChainError::InputAlreadyDerived {
@@ -167,17 +167,17 @@ impl<'a> StreamsBuilder<'a> {
         let record_definition = graph.get_stream(input.record_type())?;
         let output_index = self.outputs.len();
         self.in_out_links[input_index] = Some(output_index);
-        let source = self.name.clone().into();
-        Ok(OutputBuilder {
-            record_type: input.record_type().clone(),
-            record_definition,
-            input_sub_streams: input.sub_streams().clone(),
-            source,
+        let stream = NodeStream::new(
+            input.record_type().clone(),
+            input.variant_id(),
+            input.sub_streams().clone(),
+            self.name.clone().into(),
             is_output_main_stream,
-            facts: input.facts().clone(),
-            extra: DerivedExtra {
-                input_variant_id: input.variant_id(),
-            },
+            input.facts().clone(),
+        );
+        Ok(OutputBuilder {
+            record_definition,
+            stream,
         })
     }
 
@@ -192,149 +192,25 @@ impl<'a> StreamsBuilder<'a> {
 }
 
 #[must_use]
-#[derive(Getters)]
-pub struct OutputBuilder<'g, Extra> {
-    #[getset(get = "pub")]
-    record_type: StreamRecordType,
+pub struct OutputBuilder<'g> {
     record_definition: &'g RefCell<QuirkyRecordDefinitionBuilder>,
-    input_sub_streams: BTreeMap<DatumId, NodeSubStream>,
-    source: NodeStreamSource,
-    is_output_main_stream: bool,
-    facts: StreamFacts,
-    extra: Extra,
+    stream: NodeStream,
 }
 
-impl<'g, Extra> OutputBuilder<'g, Extra> {
-    pub fn update<B, O>(self, streams: &mut StreamsBuilder, build: B) -> ChainResultWithTrace<O>
-    where
-        B: FnOnce(
-            &mut OutputBuilderForUpdate<'g, Extra>,
-            NoFactsUpdated<()>,
-        ) -> ChainResultWithTrace<FactsFullyUpdated<O>>,
-    {
-        let mut builder = OutputBuilderForUpdate {
-            record_type: self.record_type,
+impl<'g> OutputBuilder<'g> {
+    pub fn update(self) -> OutputBuilderForUpdate<'g> {
+        OutputBuilderForUpdate {
             record_definition: self.record_definition,
-            sub_streams: self.input_sub_streams,
-            source: self.source,
-            is_output_main_stream: self.is_output_main_stream,
-            facts: self.facts,
-            extra: self.extra,
-        };
-        let output = build(&mut builder, NoFactsUpdated(()))?;
-        builder.build(streams);
-        Ok(output.unwrap())
+            stream: self.stream,
+        }
     }
 
-    pub fn update_path<B>(
-        self,
-        graph: &'g GraphBuilder,
-        streams: &mut StreamsBuilder,
-        path_fields: Vec<ValidFieldName>,
-        build: B,
-    ) -> ChainResultWithTrace<Vec<UpdatePathElement>>
-    where
-        B: FnOnce(
-            &mut SubStreamBuilderForUpdate<'g, DerivedExtra>,
-            NoFactsUpdated<()>,
-        ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
-    {
-        self.update(streams, |output_stream, facts_proof| {
-            let path_streams = output_stream.update_path(
-                path_fields,
-                |sub_input_stream, output_stream| {
-                    output_stream.update_sub_stream(sub_input_stream, graph, build)
-                },
-                |field: &str, path_stream, sub_output_stream, facts_proof| {
-                    let new_datum_id = replace_vec_datum_in_record_definition(
-                        &mut path_stream.record_definition().borrow_mut(),
-                        field,
-                        sub_output_stream.record_type().clone(),
-                        sub_output_stream.variant_id(),
-                    )
-                    .with_trace_element(trace_element!())?;
-                    Ok((
-                        new_datum_id,
-                        facts_proof.order_facts_updated().distinct_facts_updated(),
-                    ))
-                },
-                |field: &str, output_stream, sub_output_stream| {
-                    let new_datum_id = replace_vec_datum_in_record_definition(
-                        &mut output_stream.record_definition().borrow_mut(),
-                        field,
-                        sub_output_stream.record_type().clone(),
-                        sub_output_stream.variant_id(),
-                    )
-                    .with_trace_element(trace_element!())?;
-                    Ok(new_datum_id)
-                },
-                graph,
-            )?;
-
-            Ok(facts_proof
-                .order_facts_updated()
-                .distinct_facts_updated()
-                .with_output(path_streams))
-        })
-    }
-}
-
-impl<'g> OutputBuilder<'g, DerivedExtra> {
-    pub fn pass_through<B, O>(
-        self,
-        streams: &mut StreamsBuilder,
-        build: B,
-    ) -> ChainResultWithTrace<O>
-    where
-        B: FnOnce(
-            &mut OutputBuilderForPassThrough<'g>,
-            NoFactsUpdated<()>,
-        ) -> ChainResultWithTrace<FactsFullyUpdated<O>>,
-    {
-        let mut builder = OutputBuilderForPassThrough {
-            record_type: self.record_type,
+    pub fn pass_through(self) -> OutputBuilderForPassThrough<'g> {
+        OutputBuilderForPassThrough {
             record_definition: self.record_definition,
-            input_variant_id: self.extra.input_variant_id,
-            sub_streams: self.input_sub_streams,
-            source: self.source,
-            is_output_main_stream: self.is_output_main_stream,
-            facts: self.facts,
-        };
-        let output = build(&mut builder, NoFactsUpdated(()))?;
-        builder.build(streams);
-        Ok(output.unwrap())
+            stream: self.stream,
+        }
     }
-
-    pub fn pass_through_path<B>(
-        self,
-        graph: &'g GraphBuilder,
-        streams: &mut StreamsBuilder,
-        path_fields: Vec<ValidFieldName>,
-        build: B,
-    ) -> ChainResultWithTrace<Vec<PassThroughPathElement>>
-    where
-        B: FnOnce(&mut SubStreamBuilderForPassThrough<'g>) -> ChainResultWithTrace<()>,
-    {
-        self.pass_through(streams, |output_stream, facts_proof| {
-            let path_streams = output_stream.pass_through_path(
-                path_fields,
-                |sub_input_stream, output_stream| {
-                    output_stream
-                        .pass_through_sub_stream(sub_input_stream, graph, build)
-                        .with_trace_element(trace_element!())
-                },
-                graph,
-            )?;
-            Ok(facts_proof
-                .order_facts_updated()
-                .distinct_facts_updated()
-                .with_output(path_streams))
-        })
-    }
-}
-
-pub struct DerivedExtra {
-    input_variant_id: RecordVariantId,
 }
 
 #[derive(Clone, Copy)]
@@ -361,7 +237,7 @@ pub struct DistinctFactsUpdated<O>(OrderFactsUpdated<O>);
 pub type FactsFullyUpdated<O> = DistinctFactsUpdated<O>;
 
 impl<O> FactsFullyUpdated<O> {
-    fn unwrap(self) -> O {
+    pub fn unwrap(self) -> O {
         self.0 .0 .0
     }
 }

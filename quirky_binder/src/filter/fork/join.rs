@@ -1,11 +1,6 @@
 use serde::Deserialize;
 
-use crate::{
-    graph::builder::{check_directed_order_starts_with, check_distinct_eq},
-    prelude::*,
-    support::cmp::fields_cmp_ab,
-    trace_element,
-};
+use crate::{prelude::*, support::cmp::fields_cmp_ab, trace_element};
 
 const JOIN_TRACE_NAME: &str = "join";
 
@@ -46,10 +41,13 @@ impl Join {
             .secondary_fields
             .validate_on_stream(&inputs[1], graph)?;
 
-        let joined_fields = streams
+        let mut joined_fields = None;
+
+        streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(&mut streams, |output_stream, facts_proof| {
+            .update()
+            .root(&mut streams, |stream, facts_proof| {
                 for (stream_info, input, fields) in [
                     ("primary stream", &inputs[0], &valid_primary_fields),
                     ("secondary stream", &inputs[1], &valid_secondary_fields),
@@ -84,41 +82,46 @@ impl Join {
                     .with_trace_element(trace_element!())?;
                 }
 
-                let mut output_stream_def = output_stream.record_definition().borrow_mut();
+                let mut output_record_definition = graph
+                    .get_stream(stream.record_type())
+                    .with_trace_element(trace_element!())?
+                    .borrow_mut();
+
                 let secondary_stream_def = graph
                     .get_stream(inputs[1].record_type())
                     .with_trace_element(trace_element!())?
                     .borrow();
                 let variant = &secondary_stream_def[inputs[1].variant_id()];
 
-                let joined_fields = variant
-                    .data()
-                    .filter_map(|d| {
-                        let datum = &secondary_stream_def[d];
-                        if !valid_secondary_fields
-                            .iter()
-                            .any(|field| field.name() == datum.name())
-                        {
-                            if let Err(err) = output_stream_def
-                                .add_datum(datum.name(), datum.details().clone())
-                                .map_err(|err| ChainError::Other { msg: err })
-                                .with_trace_element(trace_element!())
+                joined_fields = Some(
+                    variant
+                        .data()
+                        .filter_map(|d| {
+                            let datum = &secondary_stream_def[d];
+                            if !valid_secondary_fields
+                                .iter()
+                                .any(|field| field.name() == datum.name())
                             {
-                                return Some(Err(err));
-                            };
-                            Some(Ok(datum.name().to_owned()))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Result<Vec<String>, _>>()?;
+                                if let Err(err) = output_record_definition
+                                    .add_datum(datum.name(), datum.details().clone())
+                                    .map_err(|err| ChainError::Other { msg: err })
+                                    .with_trace_element(trace_element!())
+                                {
+                                    return Some(Err(err));
+                                };
+                                Some(Ok(datum.name().to_owned()))
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Result<Vec<String>, _>>()?,
+                );
 
                 // XXX That is actually not true, let's see what we can do later.
-                Ok(facts_proof
-                    .order_facts_updated()
-                    .distinct_facts_updated()
-                    .with_output(joined_fields))
+                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
+
+        let joined_fields = joined_fields.expect("joined_fields");
 
         let outputs = streams.build().with_trace_element(trace_element!())?;
 

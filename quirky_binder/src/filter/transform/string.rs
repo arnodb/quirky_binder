@@ -29,17 +29,24 @@ pub struct ToLowercase;
 impl TransformSpec for ToLowercase {
     fn update_facts(
         &self,
-        output_stream: &mut OutputBuilderForUpdate<DerivedExtra>,
+        stream: &mut NodeStream,
+        record_definition: &QuirkyRecordDefinitionBuilder,
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
     ) -> ChainResultWithTrace<FactsFullyUpdated<()>> {
-        output_stream
-            .break_order_fact_at(update_fields.iter().map(ValidFieldName::name))
-            .with_trace_element(trace_element!())?;
-        output_stream
-            .break_distinct_fact_for(update_fields.iter().map(ValidFieldName::name))
-            .with_trace_element(trace_element!())?;
+        break_order_fact_at(
+            stream.facts_mut(),
+            update_fields.iter().map(ValidFieldName::name),
+            record_definition,
+        )
+        .with_trace_element(trace_element!())?;
+        break_distinct_fact_for(
+            stream.facts_mut(),
+            update_fields.iter().map(ValidFieldName::name),
+            record_definition,
+        )
+        .with_trace_element(trace_element!())?;
 
         Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }
@@ -80,17 +87,24 @@ pub struct SubToLowercase;
 impl SubTransformSpec for SubToLowercase {
     fn update_facts(
         &self,
-        output_stream: &mut SubStreamBuilderForUpdate<DerivedExtra>,
+        stream: &mut NodeSubStream,
+        record_definition: &QuirkyRecordDefinitionBuilder,
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
     ) -> ChainResultWithTrace<FactsFullyUpdated<()>> {
-        output_stream
-            .break_order_fact_at(update_fields.iter().map(ValidFieldName::name))
-            .with_trace_element(trace_element!())?;
-        output_stream
-            .break_distinct_fact_for(update_fields.iter().map(ValidFieldName::name))
-            .with_trace_element(trace_element!())?;
+        break_order_fact_at(
+            stream.facts_mut(),
+            update_fields.iter().map(ValidFieldName::name),
+            record_definition,
+        )
+        .with_trace_element(trace_element!())?;
+        break_distinct_fact_for(
+            stream.facts_mut(),
+            update_fields.iter().map(ValidFieldName::name),
+            record_definition,
+        )
+        .with_trace_element(trace_element!())?;
 
         Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }
@@ -132,15 +146,19 @@ pub struct ReverseChars;
 impl TransformSpec for ReverseChars {
     fn update_facts(
         &self,
-        output_stream: &mut OutputBuilderForUpdate<DerivedExtra>,
+        stream: &mut NodeStream,
+        record_definition: &QuirkyRecordDefinitionBuilder,
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
     ) -> ChainResultWithTrace<FactsFullyUpdated<()>> {
         // TODO nice to have: change order direction
-        output_stream
-            .break_order_fact_at(update_fields.iter().map(ValidFieldName::name))
-            .with_trace_element(trace_element!())?;
+        break_order_fact_at(
+            stream.facts_mut(),
+            update_fields.iter().map(ValidFieldName::name),
+            record_definition,
+        )
+        .with_trace_element(trace_element!())?;
 
         Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }
@@ -181,15 +199,19 @@ pub struct SubReverseChars;
 impl SubTransformSpec for SubReverseChars {
     fn update_facts(
         &self,
-        output_stream: &mut SubStreamBuilderForUpdate<DerivedExtra>,
+        stream: &mut NodeSubStream,
+        record_definition: &QuirkyRecordDefinitionBuilder,
         update_fields: &[ValidFieldName],
         _type_update_fields: &[(ValidFieldName, ValidFieldType)],
         facts_proof: NoFactsUpdated<()>,
     ) -> ChainResultWithTrace<FactsFullyUpdated<()>> {
         // TODO nice to have: change order direction
-        output_stream
-            .break_order_fact_at(update_fields.iter().map(ValidFieldName::name))
-            .with_trace_element(trace_element!())?;
+        break_order_fact_at(
+            stream.facts_mut(),
+            update_fields.iter().map(ValidFieldName::name),
+            record_definition,
+        )
+        .with_trace_element(trace_element!())?;
 
         Ok(facts_proof.order_facts_updated().distinct_facts_updated())
     }

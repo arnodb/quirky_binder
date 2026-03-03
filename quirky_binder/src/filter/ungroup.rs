@@ -40,14 +40,20 @@ impl Ungroup {
             .new_named_stream("group", graph)
             .with_trace_element(trace_element!())?;
 
-        let (group_stream, grouped_fields) = streams
+        let mut group_stream_and_grouped_fields = None;
+
+        streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(&mut streams, |output_stream, facts_proof| {
-                let (group_stream, grouped_fields) = {
-                    let mut output_stream_def = output_stream.record_definition().borrow_mut();
+            .update()
+            .root(&mut streams, |stream, facts_proof| {
+                let mut record_definition = graph
+                    .get_stream(stream.record_type())
+                    .with_trace_element(trace_element!())?
+                    .borrow_mut();
 
-                    let group_datum_id = output_stream_def
+                let (group_stream, grouped_fields) = {
+                    let group_datum_id = record_definition
                         .get_current_datum_definition_by_name(valid_group_field.name())
                         .ok_or_else(|| ChainError::FieldNotFound {
                             field: valid_group_field.name().to_owned(),
@@ -55,9 +61,9 @@ impl Ungroup {
                         .with_trace_element(trace_element!())?
                         .id();
 
-                    let group_stream = output_stream.sub_stream(group_datum_id);
+                    let group_stream = stream.sub_streams_mut().remove(&group_datum_id).unwrap();
 
-                    output_stream_def
+                    record_definition
                         .remove_datum(group_datum_id)
                         .map_err(|err| ChainError::Other { msg: err })
                         .with_trace_element(trace_element!())?;
@@ -70,7 +76,7 @@ impl Ungroup {
                         .get_current_data()
                         .map(|d| {
                             let datum = &sub_stream_def[d];
-                            output_stream_def
+                            record_definition
                                 .add_datum(datum.name(), datum.details().clone())
                                 .map_err(|err| ChainError::Other { msg: err })
                                 .with_trace_element(trace_element!())?;
@@ -78,22 +84,22 @@ impl Ungroup {
                         })
                         .collect::<Result<Vec<_>, _>>()?;
 
-                    (StreamInfo::from(group_stream), grouped_fields)
+                    (StreamInfo::from(&group_stream), grouped_fields)
                 };
 
                 // Reset facts
-                output_stream
-                    .set_order_fact::<_, &str>([])
+                set_order_fact::<_, &str>(stream.facts_mut(), [], &record_definition)
                     .with_trace_element(trace_element!())?;
-                output_stream
-                    .set_distinct_fact::<_, &str>([])
+                set_distinct_fact::<_, &str>(stream.facts_mut(), [], &record_definition)
                     .with_trace_element(trace_element!())?;
 
-                Ok(facts_proof
-                    .order_facts_updated()
-                    .distinct_facts_updated()
-                    .with_output((group_stream, grouped_fields)))
+                group_stream_and_grouped_fields = Some((group_stream, grouped_fields));
+
+                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
+
+        let (group_stream, grouped_fields) =
+            group_stream_and_grouped_fields.expect("group_stream_and_grouped_fields");
 
         let outputs = streams.build().with_trace_element(trace_element!())?;
 
@@ -219,16 +225,19 @@ impl SubUngroup {
         let path_streams = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update_path(
+            .update()
+            .path(
                 graph,
                 &mut streams,
                 valid_path_fields,
-                |sub_output_stream, facts_proof| {
-                    let (group_stream, grouped_fields) = {
-                        let mut output_stream_def =
-                            sub_output_stream.record_definition().borrow_mut();
+                |stream, facts_proof| {
+                    let mut record_definition = graph
+                        .get_stream(stream.record_type())
+                        .with_trace_element(trace_element!())?
+                        .borrow_mut();
 
-                        let group_datum_id = output_stream_def
+                    let (group_stream, grouped_fields) = {
+                        let group_datum_id = record_definition
                             .get_current_datum_definition_by_name(valid_group_field.name())
                             .ok_or_else(|| ChainError::FieldNotFound {
                                 field: valid_group_field.name().to_owned(),
@@ -236,9 +245,10 @@ impl SubUngroup {
                             .with_trace_element(trace_element!())?
                             .id();
 
-                        let group_stream = sub_output_stream.sub_stream(group_datum_id);
+                        let group_stream =
+                            stream.sub_streams_mut().remove(&group_datum_id).unwrap();
 
-                        output_stream_def
+                        record_definition
                             .remove_datum(group_datum_id)
                             .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!())?;
@@ -251,7 +261,7 @@ impl SubUngroup {
                             .get_current_data()
                             .map(|d| {
                                 let datum = &sub_stream_def[d];
-                                output_stream_def
+                                record_definition
                                     .add_datum(datum.name(), datum.details().clone())
                                     .map_err(|err| ChainError::Other { msg: err })
                                     .with_trace_element(trace_element!())?;
@@ -259,15 +269,13 @@ impl SubUngroup {
                             })
                             .collect::<Result<Vec<_>, _>>()?;
 
-                        (StreamInfo::from(group_stream), grouped_fields)
+                        (StreamInfo::from(&group_stream), grouped_fields)
                     };
 
                     // Reset facts
-                    sub_output_stream
-                        .set_order_fact::<_, &str>([])
+                    set_order_fact::<_, &str>(stream.facts_mut(), [], &record_definition)
                         .with_trace_element(trace_element!())?;
-                    sub_output_stream
-                        .set_distinct_fact::<_, &str>([])
+                    set_distinct_fact::<_, &str>(stream.facts_mut(), [], &record_definition)
                         .with_trace_element(trace_element!())?;
 
                     group_stream_and_grouped_fields = Some((group_stream, grouped_fields));

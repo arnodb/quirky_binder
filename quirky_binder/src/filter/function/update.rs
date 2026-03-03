@@ -54,24 +54,28 @@ impl FunctionUpdate {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(&mut streams, |output_stream, facts_proof| {
+            .update()
+            .root(&mut streams, |stream, facts_proof| {
+                let mut record_definition = graph
+                    .get_stream(stream.record_type())
+                    .with_trace_element(trace_element!())?
+                    .borrow_mut();
+
                 if let Some(remove_fields) = valid_remove_fields {
-                    let mut output_stream_def = output_stream.record_definition().borrow_mut();
                     for name in remove_fields.iter() {
-                        let datum_id = output_stream_def
+                        let datum_id = record_definition
                             .get_current_datum_definition_by_name(name.name())
                             .expect("datum")
                             .id();
-                        output_stream_def
+                        record_definition
                             .remove_datum(datum_id)
                             .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!())?;
                     }
                 }
                 if let Some(add_fields) = valid_add_fields {
-                    let mut output_stream_def = output_stream.record_definition().borrow_mut();
                     for (name, r#type) in add_fields.iter() {
-                        output_stream_def
+                        record_definition
                             .add_datum(
                                 name.name(),
                                 QuirkyDatumType::Simple {

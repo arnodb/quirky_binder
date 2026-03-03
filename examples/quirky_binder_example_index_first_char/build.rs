@@ -31,18 +31,24 @@ impl Tokenize {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(&mut streams, |output_stream, facts_proof| {
-                let input_variant_id = output_stream.input_variant_id();
-                let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                let datum = output_stream_def
-                    .get_variant_datum_definition_by_name(input_variant_id, "words")
+            .update()
+            .root(&mut streams, |stream, facts_proof| {
+                let mut record_definition = graph
+                    .get_stream(stream.record_type())
+                    .with_trace_element(trace_element!())?
+                    .borrow_mut();
+
+                let datum = record_definition
+                    .get_variant_datum_definition_by_name(stream.variant_id(), "words")
                     .unwrap_or_else(|| panic!(r#"datum "{}""#, "words"));
                 let datum_id = datum.id();
-                output_stream_def
+
+                record_definition
                     .remove_datum(datum_id)
                     .map_err(|err| ChainError::Other { msg: err })
                     .with_trace_element(trace_element!())?;
-                output_stream_def
+
+                record_definition
                     .add_datum(
                         "word",
                         QuirkyDatumType::Simple {
@@ -51,7 +57,8 @@ impl Tokenize {
                     )
                     .map_err(|err| ChainError::Other { msg: err })
                     .with_trace_element(trace_element!())?;
-                output_stream_def
+
+                record_definition
                     .add_datum(
                         "first_char",
                         QuirkyDatumType::Simple {
@@ -60,6 +67,7 @@ impl Tokenize {
                     )
                     .map_err(|err| ChainError::Other { msg: err })
                     .with_trace_element(trace_element!())?;
+
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 

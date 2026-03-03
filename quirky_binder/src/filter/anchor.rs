@@ -40,9 +40,14 @@ impl Anchor {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .update(&mut streams, |output_stream, facts_proof| {
-                let mut output_stream_def = output_stream.record_definition().borrow_mut();
-                output_stream_def
+            .update()
+            .root(&mut streams, |stream, facts_proof| {
+                let mut record_definition = graph
+                    .get_stream(stream.record_type())
+                    .with_trace_element(trace_element!())?
+                    .borrow_mut();
+
+                record_definition
                     .add_datum(
                         valid_anchor_field.name(),
                         QuirkyDatumType::Simple {
@@ -53,6 +58,7 @@ impl Anchor {
                     )
                     .map_err(|err| ChainError::Other { msg: err })
                     .with_trace_element(trace_element!())?;
+
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 

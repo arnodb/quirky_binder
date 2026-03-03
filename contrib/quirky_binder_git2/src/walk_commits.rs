@@ -47,8 +47,13 @@ impl WalkCommits {
         streams
             .new_main_output(graph)
             .with_trace_element(trace_element!())?
-            .update(&mut streams, |output_stream, facts_proof| {
-                let mut output_stream_def = output_stream.record_definition().borrow_mut();
+            .update()
+            .root(&mut streams, |stream, facts_proof| {
+                let mut record_definition = graph
+                    .get_stream(stream.record_type())
+                    .with_trace_element(trace_element!())?
+                    .borrow_mut();
+
                 let mut seen = BTreeSet::<&str>::new();
                 for field in valid_fields.iter() {
                     let name = field.name();
@@ -78,7 +83,7 @@ impl WalkCommits {
                             .with_trace_element(trace_element!());
                         }
                     };
-                    output_stream_def
+                    record_definition
                         .add_datum(
                             name,
                             QuirkyDatumType::Simple {
@@ -89,6 +94,7 @@ impl WalkCommits {
                         .with_trace_element(trace_element!())?;
                     seen.insert(name);
                 }
+
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
 

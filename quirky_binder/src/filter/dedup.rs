@@ -24,8 +24,15 @@ impl Dedup {
         streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .pass_through(&mut streams, |output_stream, facts_proof| {
-                output_stream.set_distinct_fact_all_fields();
+            .pass_through()
+            .root(&mut streams, |stream, facts_proof| {
+                let record_definition = graph
+                    .get_stream(stream.record_type())
+                    .with_trace_element(trace_element!())?
+                    .borrow();
+
+                set_distinct_fact_all_fields(stream.facts_mut(), &record_definition);
+
                 Ok(facts_proof.order_facts_updated().distinct_facts_updated())
             })?;
         let outputs = streams.build().with_trace_element(trace_element!())?;
@@ -117,13 +124,20 @@ impl SubDedup {
         let path_streams = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
-            .pass_through_path(
+            .pass_through()
+            .path(
                 graph,
                 &mut streams,
                 valid_path_fields,
-                |sub_output_stream| {
-                    sub_output_stream.set_distinct_fact_all_fields();
-                    Ok(())
+                |stream, facts_proof| {
+                    let record_definition = graph
+                        .get_stream(stream.record_type())
+                        .with_trace_element(trace_element!())?
+                        .borrow();
+
+                    set_distinct_fact_all_fields(stream.facts_mut(), &record_definition);
+
+                    Ok(facts_proof.order_facts_updated().distinct_facts_updated())
                 },
             )?;
 
