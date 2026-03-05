@@ -41,9 +41,7 @@ impl Join {
             .secondary_fields
             .validate_on_stream(&inputs[1], graph)?;
 
-        let mut joined_fields = None;
-
-        streams
+        let (_, joined_fields) = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
             .update()
@@ -93,35 +91,34 @@ impl Join {
                     .borrow();
                 let variant = &secondary_stream_def[inputs[1].variant_id()];
 
-                joined_fields = Some(
-                    variant
-                        .data()
-                        .filter_map(|d| {
-                            let datum = &secondary_stream_def[d];
-                            if !valid_secondary_fields
-                                .iter()
-                                .any(|field| field.name() == datum.name())
+                let joined_fields = variant
+                    .data()
+                    .filter_map(|d| {
+                        let datum = &secondary_stream_def[d];
+                        if !valid_secondary_fields
+                            .iter()
+                            .any(|field| field.name() == datum.name())
+                        {
+                            if let Err(err) = output_record_definition
+                                .add_datum(datum.name(), datum.details().clone())
+                                .map_err(|err| ChainError::Other { msg: err })
+                                .with_trace_element(trace_element!())
                             {
-                                if let Err(err) = output_record_definition
-                                    .add_datum(datum.name(), datum.details().clone())
-                                    .map_err(|err| ChainError::Other { msg: err })
-                                    .with_trace_element(trace_element!())
-                                {
-                                    return Some(Err(err));
-                                };
-                                Some(Ok(datum.name().to_owned()))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<Result<Vec<String>, _>>()?,
-                );
+                                return Some(Err(err));
+                            };
+                            Some(Ok(datum.name().to_owned()))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Result<Vec<String>, _>>()?;
 
                 // XXX That is actually not true, let's see what we can do later.
-                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+                Ok(facts_proof
+                    .order_facts_updated()
+                    .distinct_facts_updated()
+                    .with_output(joined_fields))
             })?;
-
-        let joined_fields = joined_fields.expect("joined_fields");
 
         let outputs = streams.build().with_trace_element(trace_element!())?;
 

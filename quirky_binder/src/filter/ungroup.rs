@@ -40,9 +40,7 @@ impl Ungroup {
             .new_named_stream("group", graph)
             .with_trace_element(trace_element!())?;
 
-        let mut group_stream_and_grouped_fields = None;
-
-        streams
+        let (_, (group_stream, grouped_fields)) = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
             .update()
@@ -93,13 +91,11 @@ impl Ungroup {
                 set_distinct_fact::<_, &str>(stream.facts_mut(), [], &record_definition)
                     .with_trace_element(trace_element!())?;
 
-                group_stream_and_grouped_fields = Some((group_stream, grouped_fields));
-
-                Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+                Ok(facts_proof
+                    .order_facts_updated()
+                    .distinct_facts_updated()
+                    .with_output((group_stream, grouped_fields)))
             })?;
-
-        let (group_stream, grouped_fields) =
-            group_stream_and_grouped_fields.expect("group_stream_and_grouped_fields");
 
         let outputs = streams.build().with_trace_element(trace_element!())?;
 
@@ -220,9 +216,7 @@ impl SubUngroup {
             .new_named_stream("group", graph)
             .with_trace_element(trace_element!())?;
 
-        let mut group_stream_and_grouped_fields = None;
-
-        let path_streams = streams
+        let (path_streams, (group_stream, grouped_fields)) = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
             .update()
@@ -278,14 +272,12 @@ impl SubUngroup {
                     set_distinct_fact::<_, &str>(stream.facts_mut(), [], &record_definition)
                         .with_trace_element(trace_element!())?;
 
-                    group_stream_and_grouped_fields = Some((group_stream, grouped_fields));
-
-                    Ok(facts_proof.order_facts_updated().distinct_facts_updated())
+                    Ok(facts_proof
+                        .order_facts_updated()
+                        .distinct_facts_updated()
+                        .with_output((group_stream, grouped_fields)))
                 },
             )?;
-
-        let (group_stream, grouped_fields) =
-            group_stream_and_grouped_fields.expect("group_stream_and_grouped_fields");
 
         let outputs = streams.build().with_trace_element(trace_element!())?;
 

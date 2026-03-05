@@ -14,35 +14,35 @@ pub struct OutputBuilderForUpdate<'g> {
 }
 
 impl<'g> OutputBuilderForUpdate<'g> {
-    pub fn root<UpdateStream>(
+    pub fn root<UpdateStream, Output>(
         mut self,
         streams: &mut StreamsBuilder,
         update_stream: UpdateStream,
-    ) -> ChainResultWithTrace<StreamInfo>
+    ) -> ChainResultWithTrace<(StreamInfo, Output)>
     where
         UpdateStream: FnOnce(
             &mut NodeStream,
             NoFactsUpdated<()>,
-        ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
+        ) -> ChainResultWithTrace<FactsFullyUpdated<Output>>,
     {
-        update_stream(&mut self.stream, NoFactsUpdated(()))?;
+        let output = update_stream(&mut self.stream, NoFactsUpdated(()))?.unwrap();
         let stream_info = StreamInfo::from(&self.stream);
         self.build(streams);
-        Ok(stream_info)
+        Ok((stream_info, output))
     }
 
-    pub fn path<UpdateLeafSubStream>(
+    pub fn path<UpdateLeafSubStream, Output>(
         mut self,
         graph: &'g GraphBuilder,
         streams: &mut StreamsBuilder,
         path_fields: Vec<ValidFieldName>,
         update_leaf_sub_stream: UpdateLeafSubStream,
-    ) -> ChainResultWithTrace<Vec<UpdatePathElement>>
+    ) -> ChainResultWithTrace<(Vec<UpdatePathElement>, Output)>
     where
         UpdateLeafSubStream: FnOnce(
             &mut NodeSubStream,
             NoFactsUpdated<()>,
-        ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
+        ) -> ChainResultWithTrace<FactsFullyUpdated<Output>>,
     {
         let mut path_fields = VecDeque::from(path_fields);
 
@@ -68,41 +68,46 @@ impl<'g> OutputBuilderForUpdate<'g> {
             }
         };
 
-        fn recurse<UpdateLeafSubStream>(
+        fn recurse<UpdateLeafSubStream, Output>(
             graph: &GraphBuilder,
             mut b: SubStreamBuilderForUpdate,
             mut path_fields: VecDeque<ValidFieldName>,
             update_leaf_sub_stream: UpdateLeafSubStream,
             path_streams: &mut Vec<UpdatePathElement>,
-        ) -> ChainResultWithTrace<()>
+        ) -> ChainResultWithTrace<Output>
         where
             UpdateLeafSubStream: FnOnce(
                 &mut NodeSubStream,
                 NoFactsUpdated<()>,
-            ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
+            )
+                -> ChainResultWithTrace<FactsFullyUpdated<Output>>,
         {
-            let path_element = if !path_fields.is_empty() {
+            let (path_element, output) = if !path_fields.is_empty() {
                 let sub_b = b.sub_stream(graph, path_fields.pop_front().unwrap())?;
-                recurse(
+                let output = recurse(
                     graph,
                     sub_b,
                     path_fields,
                     update_leaf_sub_stream,
                     path_streams,
                 )?;
-                b.build(graph, |_, facts_proof| {
-                    Ok(facts_proof.order_facts_updated().distinct_facts_updated())
-                })?
+                let (elt, ()) = b.build(graph, |_, facts_proof| {
+                    Ok(facts_proof
+                        .order_facts_updated()
+                        .distinct_facts_updated()
+                        .with_output(()))
+                })?;
+                (elt, output)
             } else {
                 b.build(graph, update_leaf_sub_stream)?
             };
             path_streams.push(path_element);
-            Ok(())
+            Ok(output)
         }
 
         let mut path_streams = Vec::with_capacity(path_fields.len());
 
-        recurse(
+        let output = recurse(
             graph,
             b,
             path_fields,
@@ -114,7 +119,7 @@ impl<'g> OutputBuilderForUpdate<'g> {
 
         path_streams.reverse();
 
-        Ok(path_streams)
+        Ok((path_streams, output))
     }
 
     fn build(mut self, streams: &mut StreamsBuilder) {
@@ -173,16 +178,16 @@ impl<'a> SubStreamBuilderForUpdate<'a> {
         })
     }
 
-    fn build<Update>(
+    fn build<Update, Output>(
         self,
         graph: &GraphBuilder,
         update: Update,
-    ) -> ChainResultWithTrace<UpdatePathElement>
+    ) -> ChainResultWithTrace<(UpdatePathElement, Output)>
     where
         Update: FnOnce(
             &mut NodeSubStream,
             NoFactsUpdated<()>,
-        ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
+        ) -> ChainResultWithTrace<FactsFullyUpdated<Output>>,
     {
         let mut sub_stream = self.sub_streams.remove(&self.datum_id).unwrap();
 
@@ -192,7 +197,7 @@ impl<'a> SubStreamBuilderForUpdate<'a> {
             .get_stream(sub_stream.record_type())
             .with_trace_element(trace_element!())?;
 
-        update(&mut sub_stream, NoFactsUpdated(()))?;
+        let output = update(&mut sub_stream, NoFactsUpdated(()))?;
 
         let new_variant_id = record_definition
             .borrow_mut()
@@ -218,6 +223,6 @@ impl<'a> SubStreamBuilderForUpdate<'a> {
             sub_output_stream,
         };
 
-        Ok(path_update_element)
+        Ok((path_update_element, output.unwrap()))
     }
 }

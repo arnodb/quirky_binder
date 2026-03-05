@@ -79,10 +79,8 @@ impl<Spec: TransformSpec> Transform<Spec> {
             },
         )?;
 
-        let mut new_variant = false;
-
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        streams
+        let (_, new_variant) = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
             .update()
@@ -110,16 +108,17 @@ impl<Spec: TransformSpec> Transform<Spec> {
                         )
                         .map_err(|err| ChainError::Other { msg: err })
                         .with_trace_element(trace_element!())?;
-                    new_variant = true;
                 }
 
-                spec.update_facts(
-                    stream,
-                    &record_definition,
-                    &valid_update_fields,
-                    &valid_type_update_fields,
-                    facts_proof,
-                )
+                Ok(spec
+                    .update_facts(
+                        stream,
+                        &record_definition,
+                        &valid_update_fields,
+                        &valid_type_update_fields,
+                        facts_proof,
+                    )?
+                    .with_output(!valid_type_update_fields.is_empty()))
             })?;
 
         let outputs = streams.build().with_trace_element(trace_element!())?;
@@ -353,10 +352,8 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
             },
         )?;
 
-        let mut new_variant = false;
-
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        let path_streams = streams
+        let (path_streams, new_variant) = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
             .update()
@@ -388,16 +385,17 @@ impl<Spec: SubTransformSpec> SubTransform<Spec> {
                             )
                             .map_err(|err| ChainError::Other { msg: err })
                             .with_trace_element(trace_element!())?;
-                        new_variant = true;
                     }
 
-                    spec.update_facts(
-                        stream,
-                        &record_definition,
-                        &valid_update_fields,
-                        &valid_type_update_fields,
-                        facts_proof,
-                    )
+                    Ok(spec
+                        .update_facts(
+                            stream,
+                            &record_definition,
+                            &valid_update_fields,
+                            &valid_type_update_fields,
+                            facts_proof,
+                        )?
+                        .with_output(!valid_type_update_fields.is_empty()))
                 },
             )?;
 

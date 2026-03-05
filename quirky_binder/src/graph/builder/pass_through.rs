@@ -14,35 +14,36 @@ pub struct OutputBuilderForPassThrough<'g> {
 }
 
 impl<'g> OutputBuilderForPassThrough<'g> {
-    pub fn root<PassThroughStream>(
+    pub fn root<PassThroughStream, Output>(
         mut self,
         streams: &mut StreamsBuilder,
         pass_through_stream: PassThroughStream,
-    ) -> ChainResultWithTrace<StreamInfo>
+    ) -> ChainResultWithTrace<(StreamInfo, Output)>
     where
         PassThroughStream: FnOnce(
             &mut NodeStream,
             NoFactsUpdated<()>,
-        ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
+        ) -> ChainResultWithTrace<FactsFullyUpdated<Output>>,
     {
-        pass_through_stream(&mut self.stream, NoFactsUpdated(()))?;
+        let output = pass_through_stream(&mut self.stream, NoFactsUpdated(()))?.unwrap();
         let stream_info = StreamInfo::from(&self.stream);
         self.build(streams);
-        Ok(stream_info)
+        Ok((stream_info, output))
     }
 
-    pub fn path<PassThroughLeafSubStream>(
+    pub fn path<PassThroughLeafSubStream, Output>(
         mut self,
         graph: &'g GraphBuilder,
         streams: &mut StreamsBuilder,
         path_fields: Vec<ValidFieldName>,
         pass_through_leaf_sub_stream: PassThroughLeafSubStream,
-    ) -> ChainResultWithTrace<Vec<PassThroughPathElement>>
+    ) -> ChainResultWithTrace<(Vec<PassThroughPathElement>, Output)>
     where
         PassThroughLeafSubStream: FnOnce(
             &mut NodeSubStream,
             NoFactsUpdated<()>,
-        ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
+        )
+            -> ChainResultWithTrace<FactsFullyUpdated<Output>>,
     {
         let mut path_fields = VecDeque::from(path_fields);
 
@@ -68,42 +69,46 @@ impl<'g> OutputBuilderForPassThrough<'g> {
             }
         };
 
-        fn recurse<PassThroughLeafSubStream>(
+        fn recurse<PassThroughLeafSubStream, Output>(
             graph: &GraphBuilder,
             mut b: SubStreamBuilderForPassThrough,
             mut path_fields: VecDeque<ValidFieldName>,
             pass_through_leaf_sub_stream: PassThroughLeafSubStream,
             path_streams: &mut Vec<PassThroughPathElement>,
-        ) -> ChainResultWithTrace<()>
+        ) -> ChainResultWithTrace<Output>
         where
             PassThroughLeafSubStream: FnOnce(
                 &mut NodeSubStream,
                 NoFactsUpdated<()>,
             )
-                -> ChainResultWithTrace<FactsFullyUpdated<()>>,
+                -> ChainResultWithTrace<FactsFullyUpdated<Output>>,
         {
-            let path_element = if !path_fields.is_empty() {
+            let (path_element, output) = if !path_fields.is_empty() {
                 let sub_b = b.sub_stream(graph, path_fields.pop_front().unwrap())?;
-                recurse(
+                let output = recurse(
                     graph,
                     sub_b,
                     path_fields,
                     pass_through_leaf_sub_stream,
                     path_streams,
                 )?;
-                b.build(|_, facts_proof| {
-                    Ok(facts_proof.order_facts_updated().distinct_facts_updated())
-                })?
+                let (elt, ()) = b.build(|_, facts_proof| {
+                    Ok(facts_proof
+                        .order_facts_updated()
+                        .distinct_facts_updated()
+                        .with_output(()))
+                })?;
+                (elt, output)
             } else {
                 b.build(pass_through_leaf_sub_stream)?
             };
             path_streams.push(path_element);
-            Ok(())
+            Ok(output)
         }
 
         let mut path_streams = Vec::with_capacity(path_fields.len());
 
-        recurse(
+        let output = recurse(
             graph,
             b,
             path_fields,
@@ -115,7 +120,7 @@ impl<'g> OutputBuilderForPassThrough<'g> {
 
         path_streams.reverse();
 
-        Ok(path_streams)
+        Ok((path_streams, output))
     }
 
     pub fn build(self, streams: &mut StreamsBuilder) {
@@ -164,25 +169,28 @@ impl<'a> SubStreamBuilderForPassThrough<'a> {
         })
     }
 
-    fn build<PassThrough>(
+    fn build<PassThrough, Output>(
         self,
         pass_through: PassThrough,
-    ) -> ChainResultWithTrace<PassThroughPathElement>
+    ) -> ChainResultWithTrace<(PassThroughPathElement, Output)>
     where
         PassThrough: FnOnce(
             &mut NodeSubStream,
             NoFactsUpdated<()>,
-        ) -> ChainResultWithTrace<FactsFullyUpdated<()>>,
+        ) -> ChainResultWithTrace<FactsFullyUpdated<Output>>,
     {
         let sub_stream = self.sub_streams.get_mut(&self.datum_id).unwrap();
 
-        pass_through(sub_stream, NoFactsUpdated(()))?;
+        let output = pass_through(sub_stream, NoFactsUpdated(()))?.unwrap();
 
         let stream_info = StreamInfo::from(&*sub_stream);
 
-        Ok(PassThroughPathElement {
-            field: self.field,
-            sub_stream: stream_info,
-        })
+        Ok((
+            PassThroughPathElement {
+                field: self.field,
+                sub_stream: stream_info,
+            },
+            output,
+        ))
     }
 }

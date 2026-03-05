@@ -121,7 +121,7 @@ impl SubDedup {
             .with_trace_element(trace_element!())?;
 
         let mut streams = StreamsBuilder::new(&name, &inputs);
-        let path_streams = streams
+        let (path_streams, ()) = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
             .pass_through()

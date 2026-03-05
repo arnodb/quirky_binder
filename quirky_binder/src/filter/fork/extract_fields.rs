@@ -34,7 +34,7 @@ impl ExtractFields {
             .new_named_stream("extracted", graph)
             .with_trace_element(trace_element!())?;
 
-        let stream_info = streams
+        let (stream_info, ()) = streams
             .output_from_input(0, true, graph)
             .with_trace_element(trace_element!())?
             .pass_through()
