@@ -337,7 +337,7 @@ impl<PortKey: Ord + Copy + Debug, PathKey: Eq + Ord + Copy + Debug>
             i += 1;
         }
         let mut a = from;
-        for input_output in inputs.into_iter().zip_longest(outputs.into_iter()) {
+        for input_output in inputs.into_iter().zip_longest(outputs) {
             match input_output {
                 EitherOrBoth::Both(input, output) => {
                     let (input_path, input_port_size, edge_tail) = match &self.columns[input] {

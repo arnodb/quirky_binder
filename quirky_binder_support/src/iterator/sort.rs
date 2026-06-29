@@ -99,17 +99,12 @@ where
                     },
                 )
                 .filter_map(Result::transpose)
-                .chain(
-                    current_slice
-                        .pop()
-                        .map(|record| {
-                            Ok(SourcedRecord {
-                                record,
-                                source_index: slice_buffers_len,
-                            })
-                        })
-                        .into_iter(),
-                )
+                .chain(current_slice.pop().map(|record| {
+                    Ok(SourcedRecord {
+                        record,
+                        source_index: slice_buffers_len,
+                    })
+                }))
                 .collect::<Result<Vec<SourcedRecord<Record>>, _>>()?;
             self.state = State::Reading {
                 slice_buffers,
